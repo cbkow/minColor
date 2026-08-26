@@ -37,11 +37,12 @@ Build (or download) the distributable, then copy **both** items into your After 
 python3 build/build.py
 # then copy dist-panel/minColor.jsx and dist-panel/minColor-data/ into:
 #   macOS:   ~/Library/Preferences/Adobe/After Effects/<version>/Scripts/ScriptUI Panels/
-#   Windows: Documents\Adobe\After Effects <version>\Scripts\ScriptUI Panels\
+#   Windows: %APPDATA%\Adobe\After Effects\<version>\Scripts\ScriptUI Panels\
 ```
 
-(`build/install.command` does this for you on macOS.) Restart After Effects; the panel
-appears under **Window ▸ minColor.jsx**. The data folder is invisible to AE's Window menu.
+Restart After Effects; the panel appears under **Window ▸ minColor.jsx**. The data
+folder is invisible to AE's Window menu. That copy is the whole install — nothing else
+runs or writes outside AE.
 
 The panel finds its data next to itself first; a machine-wide copy at
 `/Users/Shared/minColor` (or `C:\ProgramData\minColor`) acts as a facility-managed

@@ -68,9 +68,10 @@ var MinColor = (function () {
       var key = app.project.file ? app.project.file.displayName : null;
       var ent = (j.projects && key && j.projects[key]) ? j.projects[key] : null;
       if (!ent) {                                                    // unlisted: claim the project ONLY if it is already pinned into this sidecar
-        var cfg = app.project.ocioConfigurationFile || "";
-        if (cfg.indexOf(sd + "/") !== 0) return null;
-        var base = cfg.substring(sd.length + 1);
+        var cfg = (app.project.ocioConfigurationFile || "").replace(/\\/g, "/");   // separator-agnostic (Windows returns backslashes)
+        var sdN = sd.replace(/\\/g, "/");
+        if (cfg.indexOf(sdN + "/") !== 0) return null;
+        var base = cfg.substring(sdN.length + 1);
         var m = base.match(/^config-([A-Za-z0-9]+)-[0-9a-f]+\.ocio$/);
         ent = { preset: m ? m[1] : (j.preset || "?"), config: base };
       }
