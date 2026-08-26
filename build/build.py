@@ -6,7 +6,7 @@
                                settings/extension-defaults.json
 Run install.command afterwards (or copy by hand).
 """
-import os, re, shutil
+import os, re, shutil, zipfile
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 SRC = os.path.join(ROOT, "src")
@@ -26,7 +26,9 @@ def main():
     panel = open(os.path.join(SRC, "minColor Panel.jsx"), encoding="utf-8").read()
     open(os.path.join(OUT, "minColor.jsx"), "w", encoding="utf-8").write(inline(panel))
     open(os.path.join(OUT, "README.txt"), "w", encoding="utf-8").write(
-        "minColor — install\n\n"
+        "minColor — install\n"
+        "version: " + re.search(r'var VERSION = \"([^\"]+)\"', open(os.path.join(SRC, "minColor.jsxinc")).read()).group(1) + "\n"
+        "requires: After Effects 2025 or later\n\n"
         "Copy BOTH items into your After Effects ScriptUI Panels folder:\n\n"
         "    minColor.jsx\n    minColor-data/\n\n"
         "macOS:   ~/Library/Preferences/Adobe/After Effects/<version>/Scripts/ScriptUI Panels/\n"
@@ -45,8 +47,16 @@ def main():
         else:
             shutil.copy(srcp, cfgs)
     shutil.copy(os.path.join(ROOT, "config", "extension-defaults.json"), os.path.join(pay, "settings"))
+    ver = re.search(r'var VERSION = "([^"]+)"', open(os.path.join(SRC, "minColor.jsxinc")).read()).group(1)
+    zpath = os.path.join(OUT, "minColor-v%s.zip" % ver)
+    with zipfile.ZipFile(zpath, "w", zipfile.ZIP_DEFLATED) as z:
+        for dp, _, fs in os.walk(OUT):
+            for f in fs:
+                p = os.path.join(dp, f)
+                if p == zpath: continue
+                z.write(p, os.path.relpath(p, OUT))
     total = sum(os.path.getsize(os.path.join(dp, f)) for dp, _, fs in os.walk(OUT) for f in fs)
-    print("dist-panel ready (%.1f MB)" % (total / 1e6))
+    print("dist-panel ready: v%s (%.1f MB, %s)" % (ver, total / 1e6, os.path.basename(zpath)))
 
 if __name__ == "__main__":
     main()

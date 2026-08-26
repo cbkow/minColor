@@ -259,7 +259,8 @@
 
   // ---- footer ----
   var rowF = win.add("group");
-  var status = rowF.add("statictext", undefined, "ready", { truncate: "end" }); status.alignment = ["fill", "center"];
+  var status = rowF.add("statictext", undefined, "ready \u00b7 v" + (MinColor.VERSION || "?"), { truncate: "end" }); status.alignment = ["fill", "center"];
+  status.helpTip = "minColor v" + (MinColor.VERSION || "?");
 
   if (payloadError) { docText.text = "minColor payload not found — run the installer. (" + payloadError + ")"; }
   else refreshDoctor();

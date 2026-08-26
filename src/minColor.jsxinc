@@ -3,6 +3,7 @@
 // Facts and constraints this encodes are documented in ../PREPLAN.md and ../probes/RESULTS.md.
 
 var MinColor = (function () {
+  var VERSION = "0.5.0";
   var ROOT = new File($.fileName).parent.parent.fsName;            // repo root (src/..)
   var DIST = ROOT + "/config/dist";
   var STICKY_SEC = "After Effects Sticky Prefs", STICKY_KEY = "AE Last Project Settings";
@@ -52,10 +53,10 @@ var MinColor = (function () {
     // two unrelated projects in one folder (e.g. Desktop) must never claim each other's setup
     var j = {}; try { j = readJSON(sd + "/minColor.json"); } catch (eJ) {}
     var projects = j.projects || {};
-    projects[app.project.file.displayName] = { preset: presetKey, config: pr.config };
+    projects[app.project.file.displayName] = { preset: presetKey, config: pr.config, panel: VERSION };
     function esc(s) { return String(s).replace(/\\/g, "\\\\").replace(/"/g, '\\"'); }
     var parts = [];
-    for (var pk in projects) if (projects[pk] && projects[pk].config) parts.push('"' + esc(pk) + '": { "preset": "' + esc(projects[pk].preset) + '", "config": "' + esc(projects[pk].config) + '" }');
+    for (var pk in projects) if (projects[pk] && projects[pk].config) parts.push('"' + esc(pk) + '": { "preset": "' + esc(projects[pk].preset) + '", "config": "' + esc(projects[pk].config) + '", "panel": "' + esc(projects[pk].panel || VERSION) + '" }');
     var mf = new File(sd + "/minColor.json"); mf.open("w");
     mf.write('{ "projects": {\n  ' + parts.join(",\n  ") + '\n} }'); mf.close();
     return cfgTarget.fsName;
@@ -522,7 +523,7 @@ var MinColor = (function () {
   function addViewGuideLayer(comp, viewColorspace) { return upsertUtilityLayer(comp, "view", viewColorspace || "sRGB"); }
   function addRenderLayer(comp, renderSpace) { return upsertUtilityLayer(comp, "render", renderSpace || "Gamma 2.4 Encoded Rec.709"); }
 
-  return { presets: presets, menuLists: menuLists, preflight: preflight, payloadRoot: payloadRoot, ensureSidecar: ensureSidecar, sidecarInfo: sidecarInfo, doctor: doctor, repair: repair, migrateProject: migrateProject, interpretPass: interpretPass, extDefaults: extDefaults, saveExtDefaults: saveExtDefaults, suggestionFor: suggestionFor, collectDetected: collectDetected, readHarvest: readHarvest, harvestPath: harvestPath, seedStickyPref: seedStickyPref, newProject: newProject,
+  return { VERSION: VERSION, presets: presets, menuLists: menuLists, preflight: preflight, payloadRoot: payloadRoot, ensureSidecar: ensureSidecar, sidecarInfo: sidecarInfo, doctor: doctor, repair: repair, migrateProject: migrateProject, interpretPass: interpretPass, extDefaults: extDefaults, saveExtDefaults: saveExtDefaults, suggestionFor: suggestionFor, collectDetected: collectDetected, readHarvest: readHarvest, harvestPath: harvestPath, seedStickyPref: seedStickyPref, newProject: newProject,
            assertProject: assertProject, applyPresetToCurrent: applyPresetToCurrent,
            syncReport: syncReport, syncApply: syncApply, uiState: uiState, saveUiState: saveUiState,
            setPopupByName: setPopupByName, addInputTransform: addInputTransform, addViewGuideLayer: addViewGuideLayer, addRenderLayer: addRenderLayer, findUtilityLayer: findUtilityLayer };
