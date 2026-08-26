@@ -25,15 +25,24 @@ native OCIO mode, its native Color Space Transform effect, and a dockable Script
 - `src/` — panel + libraries (`minColor.jsxinc` core, `AEPPatch.jsxinc` RIFX .aep reader/patcher)
 - `config/` — `generate.py` builds `config/dist/` (per-preset configs, content-hashed filenames)
   from the vendored master in `config/master/`
-- `build/build.py` — single-file panel + payload in `dist-panel/`
-- `build/install.command` — macOS install: payload → `/Users/Shared/minColor`,
-  panel → the user-level ScriptUI Panels folder
+- `build/build.py` — builds the distributable in `dist-panel/`: a single-file `minColor.jsx`
+  plus its `minColor-data/` folder (configs, LUTs, presets, settings)
 
-## Install (macOS)
+## Install
+
+Build (or download) the distributable, then copy **both** items into your After Effects
+**ScriptUI Panels** folder:
 
 ```
 python3 build/build.py
-build/install.command
+# then copy dist-panel/minColor.jsx and dist-panel/minColor-data/ into:
+#   macOS:   ~/Library/Preferences/Adobe/After Effects/<version>/Scripts/ScriptUI Panels/
+#   Windows: Documents\Adobe\After Effects <version>\Scripts\ScriptUI Panels\
 ```
 
-Restart After Effects; the panel appears under **Window ▸ minColor.jsx**.
+(`build/install.command` does this for you on macOS.) Restart After Effects; the panel
+appears under **Window ▸ minColor.jsx**. The data folder is invisible to AE's Window menu.
+
+The panel finds its data next to itself first; a machine-wide copy at
+`/Users/Shared/minColor` (or `C:\ProgramData\minColor`) acts as a facility-managed
+fallback for studios that prefer centrally updated configs.

@@ -17,8 +17,15 @@ var MinColor = (function () {
 
   // ---------- payload discovery / sidecar / doctor ----------
   var SHARED_ROOT = ($.os.indexOf("Windows") >= 0) ? "C:/ProgramData/minColor" : "/Users/Shared/minColor";
+  // Distribution shape: the panel looks for its data NEXT TO ITSELF first ("copy minColor.jsx and
+  // minColor-data/ into your ScriptUI Panels folder" — AE's Window menu ignores jsx-less folders),
+  // then the machine-wide root (facility installs), then the dev repo. Script-adjacent wins so a
+  // shipped panel and its data can never version-skew.
+  var SCRIPT_DATA = (function () { try { var d = new File($.fileName).parent.fsName + "/minColor-data"; return new Folder(d).exists ? d : null; } catch (eD) { return null; } })();
   function payloadRoot() {                                           // where template configs come FROM
-    var cands = [SHARED_ROOT + "/configs", DIST];                    // settings override can be inserted later
+    var cands = [];
+    if (SCRIPT_DATA) cands.push(SCRIPT_DATA + "/configs");
+    cands.push(SHARED_ROOT + "/configs", DIST);
     for (var i = 0; i < cands.length; i++) if (new File(cands[i] + "/presets.json").exists) return cands[i];
     throw new Error("minColor payload not found (looked in " + cands.join(", ") + ")");
   }
@@ -269,7 +276,14 @@ var MinColor = (function () {
 
   // ---------- suggestions & interpret passes (single-authority model: effects only) ----------
   var FX_PREFIX = "minColor: ";
-  function settingsDir() { var d = new Folder(SHARED_ROOT + "/settings"); if (d.exists) return d.fsName; var dev = new Folder(ROOT + "/config"); return dev.exists ? dev.fsName : (d.create() ? d.fsName : Folder.temp.fsName); }
+  function settingsDir() {
+    var cands = [];
+    if (SCRIPT_DATA) cands.push(SCRIPT_DATA + "/settings");
+    cands.push(SHARED_ROOT + "/settings", ROOT + "/config");
+    for (var i = 0; i < cands.length; i++) if (new Folder(cands[i]).exists) return new Folder(cands[i]).fsName;
+    var mk = new Folder(SCRIPT_DATA ? SCRIPT_DATA + "/settings" : SHARED_ROOT + "/settings");
+    return mk.create() ? mk.fsName : Folder.temp.fsName;
+  }
   function extDefaults() { try { return readJSON(settingsDir() + "/extension-defaults.json").defaults; } catch (e) { return {}; } }
   function saveExtDefaults(map) {
     var keys = [], k; for (k in map) keys.push(k); keys.sort();

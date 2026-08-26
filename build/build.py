@@ -25,7 +25,16 @@ def main():
     os.makedirs(OUT)
     panel = open(os.path.join(SRC, "minColor Panel.jsx"), encoding="utf-8").read()
     open(os.path.join(OUT, "minColor.jsx"), "w", encoding="utf-8").write(inline(panel))
-    pay = os.path.join(OUT, "payload")
+    open(os.path.join(OUT, "README.txt"), "w", encoding="utf-8").write(
+        "minColor — install\n\n"
+        "Copy BOTH items into your After Effects ScriptUI Panels folder:\n\n"
+        "    minColor.jsx\n    minColor-data/\n\n"
+        "macOS:   ~/Library/Preferences/Adobe/After Effects/<version>/Scripts/ScriptUI Panels/\n"
+        "         (or the app's Scripts/ScriptUI Panels folder)\n"
+        "Windows: Documents\\Adobe\\After Effects <version>\\Scripts\\ScriptUI Panels\\\n"
+        "         (or Program Files\\Adobe\\...\\Support Files\\Scripts\\ScriptUI Panels\\)\n\n"
+        "Restart After Effects; the panel appears under Window > minColor.jsx.\n")
+    pay = os.path.join(OUT, "minColor-data")
     os.makedirs(os.path.join(pay, "settings"))
     cfgs = os.path.join(pay, "configs")
     os.makedirs(cfgs)
