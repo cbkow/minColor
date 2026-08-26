@@ -386,6 +386,17 @@ var MinColor = (function () {
       if (scope.mode === "extension") { var m = item.mainSource.file.name.match(/\.([A-Za-z0-9]+)$/); return m && m[1].toLowerCase() === scope.ext.toLowerCase(); }
       return true;
     };
+    // channel-plumbing effects (EXR extractors etc.) replace pixel data from file channels —
+    // the CST must sit AFTER the last of them, not at slot 1
+    var PRE_CST = /EXtractoR|IDentifier|ProEXR|Cryptomatte/i;
+    function cstTargetIndex(fxp) {
+      var idx = 1;
+      for (var ci = 1; ci <= fxp.numProperties; ci++) {
+        var cp = fxp.property(ci);
+        if (PRE_CST.test(cp.matchName) || PRE_CST.test(cp.name)) idx = ci + 1;
+      }
+      return idx;
+    }
     function doLayer(layer) {
       var src = null; try { src = layer.source; } catch (eSrc) { return; }   // camera/light layers have no source
       if (!src || !inScope(src)) return;
@@ -403,13 +414,14 @@ var MinColor = (function () {
             haveIdx = -1;
           }
         }
-        if (haveIdx > 1) {                                            // already interpreted but stranded below other effects: repair position
+        var tgt = cstTargetIndex(fxp0);
+        if (haveIdx > 0 && haveIdx !== tgt) {                         // already interpreted but misplaced: repair position (respecting extractors)
           var wasLocked0 = layer.locked; if (wasLocked0) layer.locked = false;
-          try { fxp0.property(haveIdx).moveTo(1); } finally { if (wasLocked0) layer.locked = true; }   // moveTo INVALIDATES the reference; never touch it again
-          report.added.push(label + " (existing CST moved to top)");
+          try { fxp0.property(haveIdx).moveTo(haveIdx < tgt ? tgt - 1 : tgt); } finally { if (wasLocked0) layer.locked = true; }   // moveTo INVALIDATES the reference; never touch it again
+          report.added.push(label + (tgt > 1 ? " (existing CST moved after channel extractor)" : " (existing CST moved to top)"));
           return;
         }
-        if (haveIdx === 1) { report.skipped.push(label + " (already interpreted)"); return; }
+        if (haveIdx > 0) { report.skipped.push(label + " (already interpreted)"); return; }
         var pick = space ? { space: space, why: "explicit" } : suggestionFor(src, detected, harvest, ctx);
         if (!pick.space) {
           if (pick.why === "extension default: identity") report.identity.push(label);   // correct as-is: working-space native, no CST wanted
@@ -418,10 +430,11 @@ var MinColor = (function () {
         }
         var wasLocked = layer.locked; if (wasLocked) layer.locked = false;
         try {
-          var hadFx = layer.property("ADBE Effect Parade").numProperties > 0;
-          if (hadFx) report.flagged.push(label + " — existing effects present; CST placed at the top, review order");
+          var fxpN = layer.property("ADBE Effect Parade");
+          var tgt2 = cstTargetIndex(fxpN);
+          if (fxpN.numProperties > 0) report.flagged.push(label + " — existing effects present; CST placed " + (tgt2 > 1 ? "after the channel extractor" : "at the top") + ", review order");
           var fx = addInputTransform(layer, pick.space);
-          if (fx.propertyIndex > 1) fx.moveTo(1);                     // single move; fx is INVALID afterwards (AE quirk), do not touch it
+          if (fx.propertyIndex > tgt2) fx.moveTo(tgt2);               // single move; fx is INVALID afterwards (AE quirk), do not touch it
         } finally { if (wasLocked) layer.locked = true; }
         report.added.push(label + " \u2190 " + pick.space + " [" + pick.why + "]");
       } catch (e) { report.failed.push(label + " \u2014 " + e.toString()); }
@@ -474,14 +487,24 @@ var MinColor = (function () {
     prop.setValue(idx + 1);
     return prop.valueText;
   }
+  function setPopupRetrying(fx, idx, wanted, comp) {                 // a popup can enumerate near-empty if the viewer context did not take (RESULTS 14) — reopen and retry once
+    try { return setPopupByName(fx.property(idx), wanted); }
+    catch (e) {
+      if (!/among [01] entries/.test(String(e))) throw e;
+      $.global.__minColorViewerId = null;
+      comp.openInViewer();
+      $.global.__minColorViewerId = comp.id;
+      return setPopupByName(fx.property(idx), wanted);
+    }
+  }
   function addInputTransform(layer, sourceSpace) {                  // native CST: source -> working
     var comp = layer.containingComp;                                 // popups only populate with a viewer/ECW context (RESULTS section 14);
     if ($.global.__minColorViewerId !== comp.id) { comp.openInViewer(); $.global.__minColorViewerId = comp.id; }   // ...but switch the viewer once per comp, not per layer
     var fx = layer.property("ADBE Effect Parade").addProperty("ADBE OCIO Color Space Transform");
     try {
       fx.name = "minColor: " + sourceSpace + " → working";
-      setPopupByName(fx.property(1), sourceSpace);
-      setPopupByName(fx.property(2), "default");                    // `default` role == working in EVERY preset (scene_linear differs in the SDR preset)
+      setPopupRetrying(fx, 1, sourceSpace, comp);
+      setPopupRetrying(fx, 2, "default", comp);                     // `default` role == working in EVERY preset (scene_linear differs in the SDR preset)
     } catch (e) { try { fx.remove(); } catch (e2) {} throw e; }      // never strand a half-configured CST
     return fx;
   }
@@ -513,8 +536,8 @@ var MinColor = (function () {
     }
     sol.guideLayer = isView;                                         // view never renders; render always does
     fx.name = FX_PREFIX + kind + " " + space;
-    setPopupByName(fx.property(1), "default");                       // working space via role
-    setPopupByName(fx.property(2), space);
+    setPopupRetrying(fx, 1, "default", comp);                        // working space via role
+    setPopupRetrying(fx, 2, space, comp);
     var other = findUtilityLayer(comp, isView ? "render" : "view");
     if (other && other.layer.enabled) { other.layer.enabled = false; res.disabledOther = true; }
     res.layer = sol;
