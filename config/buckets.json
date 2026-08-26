@@ -1,0 +1,45 @@
+{
+ "_comment": "RETIRED 2026-08-26 (single-authority model, PREPLAN 3.6b): imports are never interpreted; interpretation lives on layers as CST effects. This table is no longer read by the generator or the panel. Kept only as a historical reference / possible future seed for an extension-suggestion table.",
+ "buckets": [
+  {
+   "token": "bucket_acescg",
+   "colorspace": "ACEScg"
+  },
+  {
+   "token": "bucket_ap0",
+   "colorspace": "ACES2065-1"
+  },
+  {
+   "token": "bucket_lin709",
+   "colorspace": "Linear Rec.709"
+  },
+  {
+   "token": "bucket_lin2020",
+   "colorspace": "Linear Rec.2020"
+  },
+  {
+   "token": "bucket_srgb",
+   "colorspace": "sRGB"
+  },
+  {
+   "token": "bucket_rec709",
+   "colorspace": "Gamma 2.4 Encoded Rec.709"
+  },
+  {
+   "token": "bucket_logc3",
+   "colorspace": "ARRI LogC3 (EI800)"
+  },
+  {
+   "token": "bucket_logc4",
+   "colorspace": "ARRI LogC4"
+  },
+  {
+   "token": "bucket_slog3",
+   "colorspace": "S-Log3 S-Gamut3.Cine"
+  },
+  {
+   "token": "bucket_data",
+   "colorspace": "Non-Color"
+  }
+ ]
+}

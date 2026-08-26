@@ -1,0 +1,505 @@
+// minColor.jsxinc — core v0 library (no compiled code; AE 26.x, OCIO mode).
+// Depends on AEPPatch.jsxinc being included first.
+// Facts and constraints this encodes are documented in ../PREPLAN.md and ../probes/RESULTS.md.
+
+var MinColor = (function () {
+  var ROOT = new File($.fileName).parent.parent.fsName;            // repo root (src/..)
+  var DIST = ROOT + "/config/dist";
+  var STICKY_SEC = "After Effects Sticky Prefs", STICKY_KEY = "AE Last Project Settings";
+
+  function readJSON(path) {
+    var f = new File(path); if (!f.open("r")) throw new Error("cannot read " + path);
+    var s = f.read(); f.close();
+    return eval("(" + s + ")");                                     // ES3: no JSON.parse; our own trusted files only
+  }
+  function presets() { return readJSON(payloadRoot() + "/presets.json").presets; }
+  function menuLists() { var j = readJSON(payloadRoot() + "/presets.json"); return { inputSpaces: j.inputSpaces || [], viewSpaces: j.viewSpaces || [] }; }
+
+  // ---------- payload discovery / sidecar / doctor ----------
+  var SHARED_ROOT = ($.os.indexOf("Windows") >= 0) ? "C:/ProgramData/minColor" : "/Users/Shared/minColor";
+  function payloadRoot() {                                           // where template configs come FROM
+    var cands = [SHARED_ROOT + "/configs", DIST];                    // settings override can be inserted later
+    for (var i = 0; i < cands.length; i++) if (new File(cands[i] + "/presets.json").exists) return cands[i];
+    throw new Error("minColor payload not found (looked in " + cands.join(", ") + ")");
+  }
+  function copyTree(srcFolder, dstFolder) {
+    var src = new Folder(srcFolder), dst = new Folder(dstFolder);
+    if (!dst.exists) dst.create();
+    var kids = src.getFiles();
+    for (var i = 0; i < kids.length; i++) {
+      if (kids[i] instanceof Folder) copyTree(kids[i].fsName, dstFolder + "/" + kids[i].name);
+      else { var target = new File(dstFolder + "/" + kids[i].name); if (!target.exists) kids[i].copy(target.fsName); }
+    }
+  }
+  function sidecarDir() { var p2 = app.project; if (!p2.file) return null; return p2.file.parent.fsName + "/_minColor"; }
+  function ensureSidecar(presetKey) {                                // copy config (+luts) next to the project; returns pinned path
+    var sd = sidecarDir(); if (!sd) throw new Error("save the project first");
+    var pr = presets()[presetKey]; if (!pr) throw new Error("unknown preset " + presetKey);
+    var root = payloadRoot();
+    var dst = new Folder(sd); if (!dst.exists) dst.create();
+    for (var d = 0, dirs = ["luts", "filmic", "icc"]; d < dirs.length; d++)
+      if (new Folder(root + "/" + dirs[d]).exists) copyTree(root + "/" + dirs[d], sd + "/" + dirs[d]);
+    var cfgTarget = new File(sd + "/" + pr.config);
+    if (!cfgTarget.exists) { if (!new File(root + "/" + pr.config).copy(cfgTarget.fsName)) throw new Error("config copy failed"); }
+    // minColor.json v2: sidecars are shared by the FOLDER but entries are per PROJECT file —
+    // two unrelated projects in one folder (e.g. Desktop) must never claim each other's setup
+    var j = {}; try { j = readJSON(sd + "/minColor.json"); } catch (eJ) {}
+    var projects = j.projects || {};
+    projects[app.project.file.displayName] = { preset: presetKey, config: pr.config };
+    function esc(s) { return String(s).replace(/\\/g, "\\\\").replace(/"/g, '\\"'); }
+    var parts = [];
+    for (var pk in projects) if (projects[pk] && projects[pk].config) parts.push('"' + esc(pk) + '": { "preset": "' + esc(projects[pk].preset) + '", "config": "' + esc(projects[pk].config) + '" }');
+    var mf = new File(sd + "/minColor.json"); mf.open("w");
+    mf.write('{ "projects": {\n  ' + parts.join(",\n  ") + '\n} }'); mf.close();
+    return cfgTarget.fsName;
+  }
+  function sidecarInfo() {                                           // this project's entry in the sidecar, or null
+    var sd = sidecarDir(); if (!sd) return null;
+    var mf = new File(sd + "/minColor.json"); if (!mf.exists) return null;
+    try {
+      var j = readJSON(sd + "/minColor.json");
+      var key = app.project.file ? app.project.file.displayName : null;
+      var ent = (j.projects && key && j.projects[key]) ? j.projects[key] : null;
+      if (!ent) {                                                    // unlisted: claim the project ONLY if it is already pinned into this sidecar
+        var cfg = app.project.ocioConfigurationFile || "";
+        if (cfg.indexOf(sd + "/") !== 0) return null;
+        var base = cfg.substring(sd.length + 1);
+        var m = base.match(/^config-([A-Za-z0-9]+)-[0-9a-f]+\.ocio$/);
+        ent = { preset: m ? m[1] : (j.preset || "?"), config: base };
+      }
+      var cf = new File(sd + "/" + ent.config);
+      return { preset: ent.preset, configPath: cf.exists ? cf.fsName : null, config: ent.config };
+    } catch (e) { return null; }
+  }
+  function doctor() {                                                // diagnose; returns {status:"green"|"yellow"|"red"|"unmanaged", text, canRepair}
+    var p2 = app.project, info = sidecarInfo();
+    if (!info) return { status: "unmanaged", text: p2.file ? "not a minColor project (no _minColor sidecar)" : "unsaved project", canRepair: false };
+    var pr = presets()[info.preset] || null;
+    var cfgOk = new File(p2.ocioConfigurationFile).exists && p2.ocioConfigurationFile === info.configPath;
+    var cmsOk = (p2.colorManagementSystem === 1);
+    var wsOk = pr ? (p2.workingSpace === pr.workingSpaceLabel) : (p2.workingSpace !== "None");
+    if (cmsOk && cfgOk && wsOk) {
+      // guard the single-authority invariant too: footage level must stay NOTHING (reads the last-saved
+      // file — no forced save; a manual assignment shows up after the next save at the latest)
+      try {
+        if (p2.file && p2.file.exists) {
+          var a = AEPPatch.readAssignments(p2.file.fsName);
+          var byId = {}; for (var ai = 0; ai < a.items.length; ai++) if (a.items[ai].id !== null) byId[a.items[ai].id] = a.items[ai];
+          var wn = a.working ? a.working.replace(/^[^\/]*\//, "") : "?";
+          var bad = 0;
+          for (var pj = 1; pj <= p2.numItems; pj++) {
+            var pit = p2.item(pj);
+            if (!(pit instanceof FootageItem) || !(pit.mainSource instanceof FileSource) || !pit.mainSource.file) continue;
+            var rec = byId[pit.id]; if (!rec) continue;
+            var cn = rec.colorspace.replace(/^[^\/]*\//, "");
+            if (cn !== wn && cn !== "default") bad++;
+          }
+          if (bad > 0) return { status: "red", text: bad + " footage item(s) carry footage-level assignments — run Set Up / Migrate to strip", canRepair: false };
+        }
+      } catch (eAud) {}
+      return { status: "green", text: info.preset + " · " + p2.workingSpace, canRepair: false };
+    }
+    if (!wsOk) return { status: "red", text: "working space is " + p2.workingSpace + " (want " + (pr ? pr.workingSpaceLabel : "?") + ") — run Set Up / Migrate", canRepair: false };
+    return { status: "yellow", text: (!cmsOk ? "engine fell back to Adobe mode; " : "") + (!cfgOk ? "config path needs re-pointing" : ""), canRepair: info.configPath !== null };
+  }
+  function repair() {                                                // the one-click fix for yellow states
+    var p2 = app.project, info = sidecarInfo();
+    if (!info || !info.configPath) throw new Error("no repairable sidecar config found");
+    if (p2.colorManagementSystem !== 1) p2.colorManagementSystem = 1;
+    p2.ocioConfigurationFile = info.configPath;
+    var d2 = doctor();
+    return d2.status + " — " + d2.text;
+  }
+
+  // ---------- pre-flight ----------
+  function preflight() {
+    var r = { ok: true, notes: [] };
+    function need(cond, msg) { if (!cond) { r.ok = false; r.notes.push("FAIL " + msg); } }
+    var p = app.project;
+    need(typeof p.colorManagementSystem !== "undefined", "colorManagementSystem missing (AE build change?)");
+    need(typeof p.ocioConfigurationFile !== "undefined", "ocioConfigurationFile missing (AE build change?)");
+    try { need(app.effects.length > 0, "app.effects unavailable"); } catch (e) { need(false, "app.effects threw"); }
+    var haveCST = false;
+    for (var i = 0; i < app.effects.length; i++) if (app.effects[i].matchName === "ADBE OCIO Color Space Transform") haveCST = true;
+    need(haveCST, "native OCIO Color Space Transform not installed");
+    if (p.colorManagementSystem === 1) need(p.workingSpace !== "None", "OCIO mode but working space is None (colour management effectively off)");
+    return r;
+  }
+
+  // ---------- sticky pref / new project ----------
+  function seedStickyPref(presetKey) {
+    var pr = presets()[presetKey]; if (!pr) throw new Error("unknown preset " + presetKey);
+    var orig = app.preferences.getPrefAsString(STICKY_SEC, STICKY_KEY, PREFType.PREF_Type_MACHINE_INDEPENDENT);
+    var neu = orig.replace(/(<PwCs bdata="01"\/>\s*<string>)\{[^<]*\}(<\/string>)/, "$1" + pr.pwcsJSON + "$2");
+    neu = neu.replace(/(<pcms bdata="01"\/>\s*<string>)[^<]*(<\/string>)/,
+      '$1{"colorManagementSystem":1,"ocioConfigurationFile":"' + (payloadRoot() + "/" + pr.config) + '"}$2');
+    if (neu === orig && orig.indexOf(pr.pwcsJSON) < 0) throw new Error("sticky pref shape not recognized — AE build change? aborting");
+    app.preferences.savePrefAsString(STICKY_SEC, STICKY_KEY, neu, PREFType.PREF_Type_MACHINE_INDEPENDENT);
+    app.preferences.saveToDisk();
+    return pr;
+  }
+  function newProject(presetKey, opts) {
+    var p0 = app.project;
+    if (p0.dirty) {                                                 // never let app.newProject() raise a modal save prompt
+      if (p0.file) p0.save();
+      else throw new Error("the current untitled project has unsaved changes — save or close it first");
+    }
+    var pr = seedStickyPref(presetKey);
+    app.newProject();
+    var p = app.project;
+    if (p.colorManagementSystem !== 1) p.colorManagementSystem = 1;
+    p.ocioConfigurationFile = payloadRoot() + "/" + pr.config;      // bootstrap config (not carried by the pref); re-pinned to sidecar below
+    try { p.bitsPerChannel = 32; } catch (e) {}                     // 16 must be set in the UI (setter quirk)
+    p.compensateForSceneReferredProfiles = false;
+    // a minColor project needs a file (sidecar home); ask where it lives, then pin the sidecar config
+    if (!p.file) {
+      if (opts && opts.interactive) { if (!p.saveWithDialog()) throw new Error("save cancelled — project not set up"); }
+      else p.save(new File(Folder.temp.fsName + "/minColor_new_" + (new Date()).getTime() + ".aep"));
+      p = app.project;
+    }
+    var pinned = ensureSidecar(presetKey);
+    p.ocioConfigurationFile = pinned;
+    if (p.workingSpace !== pr.workingSpaceLabel) {
+      // AE resolved the seeded working space against its DEFAULT config and dropped it (RESULTS 15):
+      // recover via save -> patch -> reopen against the sidecar-pinned project
+      p.save();
+      AEPPatch.patchFile(p.file.fsName, { working: { name: pr.working, family: pr.family } });
+      app.beginSuppressDialogs(); app.open(new File(p.file.fsName)); app.endSuppressDialogs(false);
+      p = app.project;
+    }
+    return { preset: presetKey, working: p.workingSpace, config: p.ocioConfigurationFile, file: p.file ? p.file.fsName : null };
+  }
+  function assertProject(presetKey) {                               // re-assert on open; never touches workingSpace
+    var pr = presets()[presetKey]; var p = app.project; var fixed = [];
+    if (p.colorManagementSystem !== 1) { p.colorManagementSystem = 1; fixed.push("cms"); }
+    var info = sidecarInfo();
+    var want = info && info.configPath ? info.configPath : (payloadRoot() + "/" + pr.config);
+    if (p.ocioConfigurationFile !== want) { p.ocioConfigurationFile = want; fixed.push("config"); }
+    if (p.workingSpace !== pr.workingSpaceLabel) fixed.push("WORKING SPACE MISMATCH: " + p.workingSpace + " (want " + pr.workingSpaceLabel + " — use Sync Apply or the dialog)");
+    return fixed;
+  }
+
+  // ---------- apply preset to an existing project (save -> backup -> patch -> reopen) ----------
+  function applyPresetToCurrent(presetKey) {
+    var pr = presets()[presetKey]; var p = app.project;
+    if (!p.file) throw new Error("save the project first");
+    p.ocioConfigurationFile = ensureSidecar(presetKey);
+    p.save();
+    var bdir = new Folder(p.file.parent.fsName + "/_minColor/backups"); if (!bdir.exists) bdir.create();
+    var bpath = bdir.fsName + "/" + p.file.name.replace(/\.aep$/i, "") + "_" + (new Date()).getTime() + ".aep";
+    if (!p.file.copy(bpath)) throw new Error("backup copy failed");
+    AEPPatch.patchFile(p.file.fsName, { working: { name: pr.working, family: pr.family } });
+    app.beginSuppressDialogs(); app.open(new File(p.file.fsName)); app.endSuppressDialogs(false);
+    return { working: app.project.workingSpace, backup: bpath };
+  }
+
+  // ---------- sync (report + apply) ----------
+  function syncReport() {                                           // migration report: footage state vs NOTHING (single-authority model)
+    var p = app.project; if (!p.file) throw new Error("save the project first");
+    p.save();
+    var a = AEPPatch.readAssignments(p.file.fsName);
+    var byId = {};
+    for (var i = 0; i < a.items.length; i++) if (a.items[i].id !== null) byId[a.items[i].id] = a.items[i];
+    var workName = a.working ? a.working.replace(/^[^\/]*\//, "") : "?";
+    var rows = [];
+    for (var j = 1; j <= p.numItems; j++) {
+      var it = p.item(j);
+      if (!(it instanceof FootageItem) || !(it.mainSource instanceof FileSource) || !it.mainSource.file) continue;
+      var rec = byId[it.id];
+      var cur = rec ? (rec.colorspace + (rec.view ? " (view: " + rec.view + ")" : "")) : "(none)";
+      var curName = rec ? rec.colorspace.replace(/^[^\/]*\//, "") : null;
+      var isNothing = (!rec) || curName === workName || curName === "default";
+      rows.push({ item: it.name, id: it.id, path: it.mainSource.file.fsName, current: cur, wanted: workName,
+                  okFlag: isNothing, note: isNothing ? "" : "will be STRIPPED (interpretation belongs on layers)" });
+    }
+    return { working: a.working, rows: rows };
+  }
+  function syncApply(rows) {                                        // THE STRIP: set flagged items to the working space (nothing)
+    var p = app.project; if (!p.file) throw new Error("save the project first");
+    var fixes = [];
+    for (var i = 0; i < rows.length; i++) if (!rows[i].okFlag)
+      fixes.push({ id: rows[i].id, item: rows[i].item, name: rows[i].wanted, family: familyOf(rows[i].wanted) });
+    if (!fixes.length) return { applied: 0 };
+    p.save();
+    var bdir = new Folder(p.file.parent.fsName + "/_minColor/backups"); if (!bdir.exists) bdir.create();
+    var bpath = bdir.fsName + "/" + p.file.name.replace(/\.aep$/i, "") + "_" + (new Date()).getTime() + ".aep";
+    if (!p.file.copy(bpath)) throw new Error("backup copy failed");
+    AEPPatch.patchFile(p.file.fsName, { footage: fixes });
+    app.beginSuppressDialogs(); app.open(new File(p.file.fsName)); app.endSuppressDialogs(false);
+    return { applied: fixes.length, backup: bpath };
+  }
+  function familyOf(cs) {
+    if (/^(ACES|Linear)/.test(cs)) return "Linear";
+    if (/Encoded|Gamma/.test(cs)) return "Utility";
+    if (/Log|ADX|S-Log|LogC|V-Log|D-Log|CanonLog|BMDFilm|DaVinci|Apple Log/.test(cs)) return "Input";
+    if (/Non-Color/.test(cs)) return "Data";
+    return "Display";
+  }
+
+  // ---------- migration ceremony (one reopen; single-authority: strip footage to nothing) ----------
+  function migrateProject(presetKey) {                               // call AFTER the user confirmed the report
+    var pr = presets()[presetKey]; if (!pr) throw new Error("unknown preset " + presetKey);
+    var p = app.project; if (!p.file) throw new Error("save the project first");
+    var rep = syncReport();                                          // also saves; rows carry current assignments
+    // persist the harvest BEFORE stripping (suggestions for the interpret passes)
+    var hdir = new Folder(p.file.parent.fsName + "/_minColor"); if (!hdir.exists) hdir.create();
+    var items = {}, strip = [];
+    for (var i = 0; i < rep.rows.length; i++) {
+      var r = rep.rows[i];
+      if (!r.okFlag) { items[String(r.id)] = { name: r.current }; strip.push({ id: r.id, item: r.item, name: pr.working, family: pr.family }); }
+    }
+    var hf = new File(hdir.fsName + "/harvest.json"); hf.open("w");
+    hf.write('{ "migrated": "' + presetKey + '", "items": {');
+    var first = true, out = "";
+    for (var k in items) { out += (first ? "" : ",") + '"' + k + '":{"name":"' + items[k].name.replace(/"/g, "") + '"}'; first = false; }
+    hf.write(out + "} }"); hf.close();
+    // one ceremony: sidecar + config + working space + strip, single patch/reopen
+    p.ocioConfigurationFile = ensureSidecar(presetKey);
+    p.save();
+    var bdir = new Folder(hdir.fsName + "/backups"); if (!bdir.exists) bdir.create();
+    var bpath = bdir.fsName + "/" + p.file.name.replace(/\.aep$/i, "") + "_premigrate_" + (new Date()).getTime() + ".aep";
+    if (!p.file.copy(bpath)) throw new Error("backup copy failed");
+    AEPPatch.patchFile(p.file.fsName, { working: { name: pr.working, family: pr.family }, footage: strip });
+    app.beginSuppressDialogs(); app.open(new File(p.file.fsName)); app.endSuppressDialogs(false);
+    // post-audit
+    var audit = syncReport(), bad = 0;
+    for (var a2 = 0; a2 < audit.rows.length; a2++) if (!audit.rows[a2].okFlag) bad++;
+    return { preset: presetKey, working: app.project.workingSpace, stripped: strip.length, residual: bad, backup: bpath, harvested: strip.length };
+  }
+
+  // ---------- suggestions & interpret passes (single-authority model: effects only) ----------
+  var FX_PREFIX = "minColor: ";
+  function settingsDir() { var d = new Folder(SHARED_ROOT + "/settings"); if (d.exists) return d.fsName; var dev = new Folder(ROOT + "/config"); return dev.exists ? dev.fsName : (d.create() ? d.fsName : Folder.temp.fsName); }
+  function extDefaults() { try { return readJSON(settingsDir() + "/extension-defaults.json").defaults; } catch (e) { return {}; } }
+  function saveExtDefaults(map) {
+    var keys = [], k; for (k in map) keys.push(k); keys.sort();
+    var parts = [];
+    for (var i = 0; i < keys.length; i++) parts.push('"' + keys[i] + '": "' + map[keys[i]] + '"');
+    var f = new File(settingsDir() + "/extension-defaults.json");
+    if (!f.open("w")) throw new Error("cannot write extension-defaults.json");
+    f.write('{\n "_comment": "Extension -> suggested source colourspace for the interpret pass. Edited via the minColor panel. \'working\' means identity/no effect. Unlisted extensions are skipped and reported, never guessed.",\n "defaults": {\n  ' + parts.join(",\n  ") + '\n }\n}\n');
+    f.close();
+    return keys.length;
+  }
+  function suggestFromDetected(label, isStill) {                     // AE-recorded metadata (mcsp) -> suggested space
+    if (!label) return null;
+    if (label.indexOf("BT.2100 PQ") === 0) return "Rec.2100-PQ";
+    if (label.indexOf("BT.2100 HLG") === 0) return "Rec.2100-HLG";
+    if (label.indexOf("sRGB") === 0) return "sRGB";
+    if (label.indexOf("Display P3") === 0) return "Display P3";
+    // "BT.709 …" labels: video means broadcast (BT.1886 semantics); a STILL so labelled is in
+    // practice an sRGB-authored graphic (JPEG/PNG family) — discriminate by item type.
+    if (label.indexOf("BT.709") === 0 || label.indexOf("1,1,1") === 0) return isStill ? "sRGB" : "Gamma 2.4 Encoded Rec.709";
+    return null;
+  }
+  function harvestPath() { var p = app.project; return p.file ? p.file.parent.fsName + "/_minColor/harvest.json" : null; }
+  function readHarvest() { try { var hp = harvestPath(); if (!hp) return {}; var f = new File(hp); if (!f.exists) return {}; return readJSON(hp).items || {}; } catch (e) { return {}; } }
+  var LEGACY_SPACE_MAP = {                                           // old-config / ICC-era names -> this config family
+    "sRGB IEC61966-2.1": "sRGB",
+    "Standard": "Gamma 2.4 Encoded Rec.709",                         // old Rec.1886/Standard footage assignment
+    "Rec.1886": "Gamma 2.4 Encoded Rec.709"
+  };
+  function normalizeSpace(name, valid) {
+    if (!name) return null;
+    if (valid[name]) return name;
+    var m = LEGACY_SPACE_MAP[name];
+    return (m && valid[m]) ? m : null;
+  }
+  function suggestCtx() {                                            // built ONCE per pass: valid input-space set + ext table
+    var valid = {}, ml = menuLists();
+    for (var i = 0; i < ml.inputSpaces.length; i++) valid[ml.inputSpaces[i]] = true;
+    return { valid: valid, extMap: extDefaults() };
+  }
+  function suggestionFor(item, detectedMap, harvest, ctx) {          // ranked: harvest > detected metadata > extension default
+    ctx = ctx || suggestCtx();
+    var h = harvest[String(item.id)];
+    if (h && h.name) {
+      var raw = h.name.replace(/^[^\/]*\//, "");
+      var norm = normalizeSpace(raw, ctx.valid);
+      if (norm) return { space: norm, why: norm === raw ? "previously assigned" : "previously assigned: '" + raw + "' mapped" };
+      return { space: null, why: "previously assigned '" + raw + "' has no equivalent in this config — skipped" };
+    }
+    var det = normalizeSpace(suggestFromDetected(detectedMap[String(item.id)], item.mainSource && item.mainSource.isStill), ctx.valid);
+    if (det) return { space: det, why: "detected metadata" };
+    if (item.mainSource && item.mainSource.file) {
+      var m = item.mainSource.file.name.match(/\.([A-Za-z0-9]+)$/);
+      var ed = m ? ctx.extMap[m[1].toLowerCase()] : null;
+      if (ed === "working") return { space: null, why: "extension default: identity" };
+      if (ed) { var en = normalizeSpace(ed, ctx.valid); if (en) return { space: en, why: "extension default" }; return { space: null, why: "extension default '" + ed + "' not in config — skipped" }; }
+    }
+    return { space: null, why: "no suggestion — skipped" };
+  }
+  function hasMinColorFx(layer) {
+    var fxp = layer.property("ADBE Effect Parade");
+    for (var i = 1; i <= fxp.numProperties; i++) if (fxp.property(i).name.indexOf(FX_PREFIX) === 0 && fxp.property(i).matchName === "ADBE OCIO Color Space Transform") return true;
+    return false;
+  }
+  function collectDetected() {                                       // requires saved project (reads the .aep)
+    var p = app.project; if (!p.file) return {};
+    var key = p.file.fsName + "#" + p.numItems;                      // mcsp only changes when footage is added
+    var c = $.global.__minColorDetected;
+    if (c && c.key === key) return c.map;                            // cache: the ExtendScript RIFX parse is expensive
+    p.save();
+    var a = AEPPatch.readAssignments(p.file.fsName);
+    $.global.__minColorDetected = { key: key, map: a.detected || {} };
+    return $.global.__minColorDetected.map;
+  }
+  // scope: {mode:"selection"} (selected layers) | {mode:"comp"} (active comp, RECURSIVE into precomps)
+  //      | {mode:"footage"} (footage items selected in the Project panel, wherever used)
+  //      | {mode:"extension", ext} | {mode:"all"} (every comp, non-recursive per-comp walk)
+  // space: explicit colourspace name, or null => use suggestions.
+  // Robust: one bad layer (locked, camera/light, unknown colourspace name) lands in report.failed, never aborts the pass.
+  function interpretPass(scope, space) {
+    var p = app.project;
+    var detected = (space ? {} : collectDetected());
+    var harvest = (space ? {} : readHarvest());
+    var report = { added: [], skipped: [], flagged: [], failed: [], identity: [] };
+    var ctx = suggestCtx();
+    $.global.__minColorViewerId = null;
+    var inScope = function (item) {
+      if (!(item instanceof FootageItem) || !(item.mainSource instanceof FileSource) || !item.mainSource.file) return false;
+      if (scope.mode === "extension") { var m = item.mainSource.file.name.match(/\.([A-Za-z0-9]+)$/); return m && m[1].toLowerCase() === scope.ext.toLowerCase(); }
+      return true;
+    };
+    function doLayer(layer) {
+      var src = null; try { src = layer.source; } catch (eSrc) { return; }   // camera/light layers have no source
+      if (!src || !inScope(src)) return;
+      var label = layer.containingComp.name + "/" + layer.name;
+      try {
+        var fxp0 = layer.property("ADBE Effect Parade"), haveIdx = -1;
+        for (var fi = 1; fi <= fxp0.numProperties; fi++) if (fxp0.property(fi).name.indexOf(FX_PREFIX) === 0 && fxp0.property(fi).matchName === "ADBE OCIO Color Space Transform") { haveIdx = fi; break; }
+        if (haveIdx > 0) {                                            // self-heal: a CST named for a space this config doesn't have is a stranded failed add — remove and redo
+          var exName = fxp0.property(haveIdx).name.substring(FX_PREFIX.length);
+          var ai = exName.indexOf(" \u2192 working"); if (ai > 0) exName = exName.substring(0, ai);
+          if (!ctx.valid[exName]) {
+            var wl0 = layer.locked; if (wl0) layer.locked = false;
+            try { fxp0.property(haveIdx).remove(); } finally { if (wl0) layer.locked = true; }
+            report.flagged.push(label + " \u2014 removed stale CST '" + exName + "' (not in this config)");
+            haveIdx = -1;
+          }
+        }
+        if (haveIdx > 1) {                                            // already interpreted but stranded below other effects: repair position
+          var wasLocked0 = layer.locked; if (wasLocked0) layer.locked = false;
+          try { fxp0.property(haveIdx).moveTo(1); } finally { if (wasLocked0) layer.locked = true; }   // moveTo INVALIDATES the reference; never touch it again
+          report.added.push(label + " (existing CST moved to top)");
+          return;
+        }
+        if (haveIdx === 1) { report.skipped.push(label + " (already interpreted)"); return; }
+        var pick = space ? { space: space, why: "explicit" } : suggestionFor(src, detected, harvest, ctx);
+        if (!pick.space) {
+          if (pick.why === "extension default: identity") report.identity.push(label);   // correct as-is: working-space native, no CST wanted
+          else report.skipped.push(label + " (" + pick.why + ")");
+          return;
+        }
+        var wasLocked = layer.locked; if (wasLocked) layer.locked = false;
+        try {
+          var hadFx = layer.property("ADBE Effect Parade").numProperties > 0;
+          if (hadFx) report.flagged.push(label + " — existing effects present; CST placed at the top, review order");
+          var fx = addInputTransform(layer, pick.space);
+          if (fx.propertyIndex > 1) fx.moveTo(1);                     // single move; fx is INVALID afterwards (AE quirk), do not touch it
+        } finally { if (wasLocked) layer.locked = true; }
+        report.added.push(label + " \u2190 " + pick.space + " [" + pick.why + "]");
+      } catch (e) { report.failed.push(label + " \u2014 " + e.toString()); }
+    }
+    function walkComp(comp, recursive, seen) {
+      if (seen[comp.id]) return; seen[comp.id] = true;
+      for (var L = 1; L <= comp.numLayers; L++) {
+        var ly = comp.layer(L), src = null;
+        try { src = ly.source; } catch (e) {}
+        if (src instanceof CompItem) { if (recursive) walkComp(src, true, seen); }
+        else if (src instanceof FootageItem) doLayer(ly);
+      }
+    }
+    var homeComp = (app.project.activeItem instanceof CompItem) ? app.project.activeItem : null;
+    app.beginUndoGroup("minColor interpret");
+    try {
+      if (scope.mode === "selection") {
+        var comp = p.activeItem; if (!(comp instanceof CompItem)) throw new Error("open a comp");
+        var sel = comp.selectedLayers; if (!sel.length) throw new Error("select layer(s)");
+        for (var s = 0; s < sel.length; s++) doLayer(sel[s]);
+      } else if (scope.mode === "comp") {
+        var c2 = p.activeItem; if (!(c2 instanceof CompItem)) throw new Error("open a comp (timeline pass starts from the active comp)");
+        walkComp(c2, true, {});
+      } else if (scope.mode === "footage") {
+        var ids = {}, n = 0, sel2 = p.selection;
+        for (var si = 0; si < sel2.length; si++) if (sel2[si] instanceof FootageItem) { ids[sel2[si].id] = true; n++; }
+        if (!n) throw new Error("select footage item(s) in the Project panel");
+        var keep = inScope; inScope = function (item) { return ids[item.id] === true && keep(item); };
+        var seen2 = {};
+        for (var i2 = 1; i2 <= p.numItems; i2++) if (p.item(i2) instanceof CompItem) walkComp(p.item(i2), false, seen2);
+      } else {
+        var seen3 = {};
+        for (var i = 1; i <= p.numItems; i++) if (p.item(i) instanceof CompItem) walkComp(p.item(i), false, seen3);
+      }
+    } finally {
+      app.endUndoGroup();
+      if (homeComp && $.global.__minColorViewerId !== null && $.global.__minColorViewerId !== homeComp.id) { try { homeComp.openInViewer(); } catch (eV) {} }   // our per-comp viewer switches must not drift the user's active comp
+    }
+    return report;
+  }
+
+  // ---------- native effects ----------
+  function setPopupByName(prop, wanted) {
+    var pp = prop.propertyParameters, list = [], idx = -1, i;
+    for (var k in pp) { list.push(String(pp[k])); }
+    for (i = 0; i < list.length; i++) if (list[i] === wanted) idx = i;
+    if (idx < 0) for (i = 0; i < list.length; i++) { var s = list[i]; if (s.indexOf(wanted + ": ") === 0) { idx = i; break; } }   // role entries: "scene_linear: <name>"
+    if (idx < 0) for (i = 0; i < list.length; i++) { var s2 = list[i]; if (s2.length > wanted.length && (s2.substr(s2.length - wanted.length - 1) === "/" + wanted || s2.substr(s2.length - wanted.length - 2) === ": " + wanted)) { idx = i; break; } }
+    if (idx < 0) throw new Error("'" + wanted + "' not found among " + list.length + " entries");
+    prop.setValue(idx + 1);
+    return prop.valueText;
+  }
+  function addInputTransform(layer, sourceSpace) {                  // native CST: source -> working
+    var comp = layer.containingComp;                                 // popups only populate with a viewer/ECW context (RESULTS section 14);
+    if ($.global.__minColorViewerId !== comp.id) { comp.openInViewer(); $.global.__minColorViewerId = comp.id; }   // ...but switch the viewer once per comp, not per layer
+    var fx = layer.property("ADBE Effect Parade").addProperty("ADBE OCIO Color Space Transform");
+    try {
+      fx.name = "minColor: " + sourceSpace + " → working";
+      setPopupByName(fx.property(1), sourceSpace);
+      setPopupByName(fx.property(2), "default");                    // `default` role == working in EVERY preset (scene_linear differs in the SDR preset)
+    } catch (e) { try { fx.remove(); } catch (e2) {} throw e; }      // never strand a half-configured CST
+    return fx;
+  }
+  function findUtilityLayer(comp, kind) {                            // kind: "view" | "render" — our singleton adjustment layers, identified by their CST's name
+    var pre = FX_PREFIX + kind + " ";
+    for (var i = 1; i <= comp.numLayers; i++) {
+      var ly = comp.layer(i);
+      if (!ly.adjustmentLayer) continue;
+      var fxp = null; try { fxp = ly.property("ADBE Effect Parade"); } catch (e) { continue; }
+      if (!fxp) continue;
+      for (var j = 1; j <= fxp.numProperties; j++) if (fxp.property(j).name.indexOf(pre) === 0) return { layer: ly, fx: fxp.property(j) };
+    }
+    return null;
+  }
+  function upsertUtilityLayer(comp, kind, space) {                   // ONE view + ONE render per comp; activating one switches the other off
+    comp.openInViewer();                                             // popups only populate with a viewer/ECW context
+    var isView = (kind === "view");
+    var res = { action: "created", disabledOther: false };
+    var ex = findUtilityLayer(comp, kind), sol, fx;
+    if (ex) {
+      sol = ex.layer; fx = ex.fx;
+      sol.enabled = true;
+      if (sol.index > 1) sol.moveToBeginning();
+      res.action = "updated";
+    } else {
+      sol = comp.layers.addSolid([0, 0, 0], isView ? "minColor VIEW (guide)" : "minColor RENDER", comp.width, comp.height, comp.pixelAspect);
+      sol.adjustmentLayer = true; sol.label = isView ? 14 : 9; sol.moveToBeginning();
+      fx = sol.property("ADBE Effect Parade").addProperty("ADBE OCIO Color Space Transform");
+    }
+    sol.guideLayer = isView;                                         // view never renders; render always does
+    fx.name = FX_PREFIX + kind + " " + space;
+    setPopupByName(fx.property(1), "default");                       // working space via role
+    setPopupByName(fx.property(2), space);
+    var other = findUtilityLayer(comp, isView ? "render" : "view");
+    if (other && other.layer.enabled) { other.layer.enabled = false; res.disabledOther = true; }
+    res.layer = sol;
+    return res;
+  }
+  function addViewGuideLayer(comp, viewColorspace) { return upsertUtilityLayer(comp, "view", viewColorspace || "sRGB"); }
+  function addRenderLayer(comp, renderSpace) { return upsertUtilityLayer(comp, "render", renderSpace || "Gamma 2.4 Encoded Rec.709"); }
+
+  return { presets: presets, menuLists: menuLists, preflight: preflight, payloadRoot: payloadRoot, ensureSidecar: ensureSidecar, sidecarInfo: sidecarInfo, doctor: doctor, repair: repair, migrateProject: migrateProject, interpretPass: interpretPass, extDefaults: extDefaults, saveExtDefaults: saveExtDefaults, suggestionFor: suggestionFor, collectDetected: collectDetected, readHarvest: readHarvest, harvestPath: harvestPath, seedStickyPref: seedStickyPref, newProject: newProject,
+           assertProject: assertProject, applyPresetToCurrent: applyPresetToCurrent,
+           syncReport: syncReport, syncApply: syncApply,
+           setPopupByName: setPopupByName, addInputTransform: addInputTransform, addViewGuideLayer: addViewGuideLayer, addRenderLayer: addRenderLayer, findUtilityLayer: findUtilityLayer };
+})();

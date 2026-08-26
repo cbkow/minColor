@@ -1,0 +1,8 @@
+.DS_Store
+__pycache__/
+*.pyc
+# internal notes, plans, probe scripts and findings (client/job references) — local only
+private/
+# built artifact — regenerate with build/build.py (config/dist stays committed: its hashed
+# filenames are append-only and projects pin them)
+dist-panel/

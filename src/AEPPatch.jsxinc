@@ -1,0 +1,190 @@
+// AEPPatch.jsxinc — shared RIFX .aep reader/patcher for minColor (see probes/RESULTS.md sections 9-10).
+// patchFile(path, {working:{name,family}, footage:[{item,name,family}]}); readAssignments(path).
+var AEPPatch = (function () {
+  function u32(s, o) { return ((s.charCodeAt(o) << 24) | (s.charCodeAt(o + 1) << 16) | (s.charCodeAt(o + 2) << 8) | s.charCodeAt(o + 3)) >>> 0; }
+  function p32(n) { return String.fromCharCode((n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255); }
+  var B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  function b64(s) { var out = "", i = 0; while (i < s.length) { var a = s.charCodeAt(i++), b = i < s.length ? s.charCodeAt(i++) : NaN, c = i < s.length ? s.charCodeAt(i++) : NaN; var t = (a << 16) | ((b || 0) << 8) | (c || 0); out += B64.charAt((t >> 18) & 63) + B64.charAt((t >> 12) & 63) + (isNaN(b) ? "=" : B64.charAt((t >> 6) & 63)) + (isNaN(c) ? "=" : B64.charAt(t & 63)); } return out; }
+  function jsonStr(s) { return '"' + String(s).replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"'; }
+  function profileJSON(name, family) {
+    var data = b64('{"colorSpace1":' + jsonStr(name) + '}');
+    return '{"baseColorProfile":{"colorProfileData":"' + data + '","colorProfileName":' + jsonStr(family + "/" + name) + '},"baseProfileType":3}';
+  }
+  // parse -> array of nodes {start,end,tag,ltype,parent,depth}; node 0 = RIFX root.
+  // prune=true keeps the item/colour chain only: descends LISTs whose ltype is in PRUNE_KEEP and
+  // jumps over everything else (comp layer trees, keyframes, thumbnails) in constant time.
+  // The colour chunks (iide/ocsp/mcsp/PwCs) all live under Fold > [Sfdr >] Item > Pin  > CLRS.
+  var PRUNE_KEEP = { "Fold": 1, "Sfdr": 1, "Item": 1, "Pin ": 1, "CLRS": 1 };
+  function parse(d, prune) {
+    if (d.substr(0, 4) !== "RIFX" || d.substr(8, 4) !== "Egg!") throw new Error("not an AE RIFX project");
+    var nodes = [{ start: 0, end: 8 + u32(d, 4), tag: "RIFX", ltype: "Egg!", parent: null, depth: -1 }];
+    function walk(off, end, depth, parent) {
+      while (off + 8 <= end) {
+        var tag = d.substr(off, 4), size = u32(d, off + 4);
+        if (tag === "LIST") {
+          var lt = d.substr(off + 8, 4), idx = nodes.length;
+          nodes.push({ start: off, end: off + 8 + size, tag: tag, ltype: lt, parent: parent, depth: depth });
+          if (!prune || PRUNE_KEEP[lt] === 1) walk(off + 12, off + 8 + size, depth + 1, idx);
+        }
+        else nodes.push({ start: off, end: off + 8 + size, tag: tag, ltype: null, parent: parent, depth: depth });
+        off += 8 + size + (size & 1);
+      }
+    }
+    walk(12, nodes[0].end, 0, 0);
+    return nodes;
+  }
+  function body(d, n) { return d.substring(n.start + 8, n.end); }
+  function replaceBody(d, nodes, idx, newBody) {
+    var n = nodes[idx], oldSize = n.end - n.start - 8, oldPad = oldSize & 1, newSize = newBody.length, newPad = newSize & 1;
+    var out = d.substring(0, n.start) + n.tag + p32(newSize) + newBody + (newPad ? "\x00" : "") + d.substring(n.end + oldPad);
+    var delta = (8 + newSize + newPad) - (8 + oldSize + oldPad);
+    var p = n.parent;
+    while (p !== null) { var ps = nodes[p].start; out = out.substring(0, ps + 4) + p32(u32(out, ps + 4) + delta) + out.substring(ps + 8); p = nodes[p].parent; }
+    return out;
+  }
+  function prevSiblingTag(nodes, idx) { for (var j = idx - 1; j >= 0; j--) if (nodes[j].parent === nodes[idx].parent) return nodes[j].tag; return null; }
+  function findWorkingJSON(d, nodes) { for (var i = 0; i < nodes.length; i++) if (nodes[i].tag === "Utf8" && nodes[i].depth === 0 && prevSiblingTag(nodes, i) === "PwCs") return i; return -1; }
+  function findFootageJSONById(d, nodes, itemId) {
+    for (var i = 0; i < nodes.length; i++) {
+      if (nodes[i].tag !== "iide") continue;
+      var b = body(d, nodes[i]);
+      var id = (b.charCodeAt(0)) | (b.charCodeAt(1) << 8) | (b.charCodeAt(2) << 16) | (b.charCodeAt(3) << 24);
+      if (id !== itemId) continue;
+      var itemP = nodes[i].parent;                                   // the Item list
+      for (var j = i + 1; j < nodes.length && nodes[j].start < nodes[itemP].end; j++) {
+        if (nodes[j].tag === "ocsp") {
+          for (var k = j + 1; k < nodes.length; k++) if (nodes[k].tag === "Utf8" && nodes[k].parent === nodes[j].parent) return k;
+        }
+      }
+      return -1;
+    }
+    return -1;
+  }
+  function readBinary(path) { var f = new File(path); f.encoding = "BINARY"; if (!f.open("r")) throw new Error("cannot open " + path); var s = f.read(); f.close(); return s; }
+  function writeBinary(path, s) { var f = new File(path); f.encoding = "BINARY"; if (!f.open("w")) throw new Error("cannot write " + path); f.write(s); f.close(); }
+  function patchFile(path, spec) {
+    var d = readBinary(path), report = [], nodes = parse(d), riftEnd = nodes[0].end, xmpTail = d.substring(riftEnd);
+    if (spec.working) {
+      var wi = findWorkingJSON(d, nodes); if (wi < 0) throw new Error("PwCs working-space JSON not found");
+      var oldW = body(d, nodes[wi]); d = replaceBody(d, nodes, wi, profileJSON(spec.working.name, spec.working.family || "Linear"));
+      report.push("working: " + oldW.substr(0, 60) + " -> " + spec.working.family + "/" + spec.working.name); nodes = parse(d);
+    }
+    var fl = spec.footage || [];
+    for (var f = 0; f < fl.length; f++) {
+      var fi = findFootageJSONById(d, nodes, fl[f].id); if (fi < 0) throw new Error("footage id " + fl[f].id + " ('" + (fl[f].item || "?") + "') ocsp JSON not found");
+      var oldF = body(d, nodes[fi]); d = replaceBody(d, nodes, fi, profileJSON(fl[f].name, fl[f].family || "Linear"));
+      report.push(fl[f].item + ": " + oldF.substr(0, 60) + " -> " + (fl[f].family || "Linear") + "/" + fl[f].name); nodes = parse(d);
+    }
+    // invariants before writing: re-parse succeeded (above), RIFX end == start of XMP tail
+    if (d.substring(nodes[0].end) !== xmpTail) throw new Error("trailer mismatch after patch — aborting, file untouched");
+    writeBinary(path, d);
+    report.push("wrote " + d.length + " bytes");
+    return report;
+  }
+
+  function itemAncestor(nodes, i) {
+    var p = nodes[i].parent;
+    while (p !== null && !(nodes[p].tag === "LIST" && nodes[p].ltype === "Item")) p = nodes[p].parent;
+    return p;
+  }
+  function childrenOf(nodes, p) { var out = []; for (var i = 0; i < nodes.length; i++) if (nodes[i].parent === p) out.push(i); return out; }
+  function itemIdOf(d, nodes, p) {
+    var ch = childrenOf(nodes, p);
+    for (var c = 0; c < ch.length; c++) if (nodes[ch[c]].tag === "iide") {
+      var b = body(d, nodes[ch[c]]);
+      return (b.charCodeAt(0)) | (b.charCodeAt(1) << 8) | (b.charCodeAt(2) << 16) | (b.charCodeAt(3) << 24);
+    }
+    return null;
+  }
+  // Streaming reader: seeks past pruned subtrees and reads ONLY the colour chunks' bytes.
+  // On big / network-mounted projects this touches a few KB instead of the whole file.
+  function readAssignmentsStream(path) {
+    var f = new File(path); f.encoding = "BINARY";
+    if (!f.open("r")) throw new Error("cannot open " + path);
+    try {
+      var hdr = f.read(12);
+      if (hdr.substr(0, 4) !== "RIFX" || hdr.substr(8, 4) !== "Egg!") throw new Error("not an AE RIFX project");
+      function u32s(s) { return ((s.charCodeAt(0) << 24) | (s.charCodeAt(1) << 16) | (s.charCodeAt(2) << 8) | s.charCodeAt(3)) >>> 0; }
+      var rifxEnd = 8 + u32s(hdr.substr(4, 4));
+      var res = { working: null, items: [], detected: {} };
+      var pendingWorking = false;
+      var rawItems = [];                                             // {ctx, colorspace, view} — ids resolved after the walk (iide can follow ocsp)
+      function profName(s) { var m = s.match(/"colorProfileName":"([^"]*)"/); return m ? m[1] : null; }
+      function walk(end, depth, itemCtx) {
+        var pending = null;                                          // ocsp/mcsp apply to the NEXT Utf8 in the SAME list (sibling semantics)
+        while (f.tell() + 8 <= end) {
+          var start = f.tell(), h = f.read(8), tag = h.substr(0, 4), size = u32s(h.substr(4, 4));
+          var next = start + 8 + size + (size & 1);
+          if (tag === "LIST") {
+            var lt = f.read(4);
+            if (PRUNE_KEEP[lt] === 1) {
+              var ctx = (lt === "Item") ? { id: null, det: null } : itemCtx;
+              if (lt === "Item") ctx.__isItem = true;
+              walk(start + 8 + size, depth + 1, ctx);
+              if (lt === "Item") {
+                if (ctx.det !== null && ctx.id !== null && !res.detected[ctx.id]) res.detected[ctx.id] = ctx.det;
+              }
+            }
+          } else if (tag === "iide" && itemCtx) {
+            var b = f.read(4);
+            itemCtx.id = (b.charCodeAt(0)) | (b.charCodeAt(1) << 8) | (b.charCodeAt(2) << 16) | (b.charCodeAt(3) << 24);
+          } else if (tag === "ocsp" || tag === "mcsp" || tag === "Mcsp") {
+            pending = (tag === "ocsp") ? "ocsp" : "mcsp";
+          } else if (tag === "PwCs" && depth === 0) {
+            pendingWorking = true;
+          } else if (tag === "Utf8" && (pending || (pendingWorking && depth === 0))) {
+            var jb = f.read(size);
+            if (pendingWorking && depth === 0) {
+              res.working = profName(jb) || (jb === "{}" ? "(none)" : "?");
+              pendingWorking = false;
+            } else if (pending === "ocsp") {
+              var cs = profName(jb);
+              if (cs !== null) { var mv = jb.match(/"colorSpace2":"([^"]*)"/); rawItems.push({ ctx: itemCtx, colorspace: cs, view: mv ? mv[1] : null }); }
+            } else {
+              var dl = profName(jb);
+              if (dl !== null && itemCtx && itemCtx.det === null) itemCtx.det = dl;
+            }
+            pending = null;
+          }
+          f.seek(next, 0);                                           // absolute seek past whatever we did or didn't read
+        }
+      }
+      f.seek(12, 0);
+      walk(rifxEnd, 0, null);
+      for (var r = 0; r < rawItems.length; r++) res.items.push({ id: rawItems[r].ctx ? rawItems[r].ctx.id : null, colorspace: rawItems[r].colorspace, view: rawItems[r].view });
+      return res;
+    } finally { f.close(); }
+  }
+  function readAssignments(path) { return readAssignmentsStream(path); }
+  function readAssignmentsInMemory(path) {                           // previous implementation, kept for verification
+    var d = readBinary(path), nodes = parse(d, true), res = { working: null, items: [], detected: {} };   // pruned walk: reader only needs the item/colour chain (patchFile stays on the full parse)
+    var wi = findWorkingJSON(d, nodes);
+    if (wi >= 0) { var wb = body(d, nodes[wi]); var m = wb.match(/"colorProfileName":"([^"]*)"/); res.working = m ? m[1] : (wb === "{}" ? "(none)" : "?"); }
+    for (var i = 0; i < nodes.length; i++) {
+      if (nodes[i].tag === "mcsp" || nodes[i].tag === "Mcsp") {
+        var mj = null;
+        for (var mk = i + 1; mk < nodes.length; mk++) if (nodes[mk].tag === "Utf8" && nodes[mk].parent === nodes[i].parent) { mj = body(d, nodes[mk]); break; }
+        if (mj) {
+          var mn = mj.match(/"colorProfileName":"([^"]*)"/);
+          if (mn) {
+            var mp = itemAncestor(nodes, i);
+            var mid = mp === null ? null : itemIdOf(d, nodes, mp);
+            if (mid !== null && !res.detected[mid]) res.detected[mid] = mn[1];
+          }
+        }
+        continue;
+      }
+      if (nodes[i].tag !== "ocsp") continue;
+      var cs = null, view = null;
+      for (var k = i + 1; k < nodes.length; k++) if (nodes[k].tag === "Utf8" && nodes[k].parent === nodes[i].parent) {
+        var jb = body(d, nodes[k]); var mm = jb.match(/"colorProfileName":"([^"]*)"/); var mv = jb.match(/"colorSpace2":"([^"]*)"/);
+        if (mm) { cs = mm[1]; view = mv ? mv[1] : null; } break;
+      }
+      if (cs === null) continue;
+      var p2 = itemAncestor(nodes, i);
+      res.items.push({ id: p2 === null ? null : itemIdOf(d, nodes, p2), colorspace: cs, view: view });
+    }
+    return res;
+  }
+  return { patchFile: patchFile, parse: parse, profileJSON: profileJSON, readBinary: readBinary, readAssignments: readAssignments, readAssignmentsInMemory: readAssignmentsInMemory };
+})();
