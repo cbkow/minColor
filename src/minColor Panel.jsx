@@ -26,37 +26,118 @@
     try { win.update(); } catch (e3) {}
   }
   function guard(label, fn) {
+    try { log(label + "\u2026"); unstick(); } catch (eB) {}
     try { var r = fn(); log(label + ": " + (r === undefined ? "ok" : r)); refreshDoctor(); }
     catch (e) { log(label + " FAILED: " + e.toString()); alert("minColor — " + label + " failed:\n" + e.toString()); unstick(); }
   }
 
-  // ---- Doctor status line ----
+  // ---- remembered choices: dropdowns restore their last-used value and persist on change ----
+  var UIS = {}; try { UIS = MinColor.uiState() || {}; } catch (eU) {}
+  function bindDD(dd, key) {
+    if (UIS[key]) for (var bi = 0; bi < dd.items.length; bi++) if (dd.items[bi].text === UIS[key]) { dd.selection = bi; break; }
+    if (dd.selection) dd.helpTip = dd.selection.text;
+    dd.onChange = function () { if (dd.selection) { dd.helpTip = dd.selection.text; UIS[key] = dd.selection.text; try { MinColor.saveUiState(UIS); } catch (eS) {} } };
+  }
+
+  // ---- flat-icon toolkit: owner-drawn vector glyphs (no image assets, theme-neutral) ----
+  var IC = [0.72, 0.72, 0.72, 1];
+  function pen(g, w) { return g.newPen(g.PenType.SOLID_COLOR, IC, w || 1.4); }
+  function brush(g) { return g.newBrush(g.BrushType.SOLID_COLOR, IC); }
+  var GLYPH = {
+    gear: function (g) {
+      g.newPath(); g.ellipsePath(5, 5, 8, 8); g.strokePath(pen(g, 1.6));
+      for (var i = 0; i < 8; i++) { var a = i * Math.PI / 4, c = Math.cos(a), s = Math.sin(a);
+        g.newPath(); g.moveTo(9 + c * 4.6, 9 + s * 4.6); g.lineTo(9 + c * 7.2, 9 + s * 7.2); g.strokePath(pen(g, 1.6)); }
+      g.newPath(); g.ellipsePath(7.8, 7.8, 2.4, 2.4); g.fillPath(brush(g));
+    },
+    film: function (g) {
+      g.newPath(); g.rectPath(3, 4.5, 12, 9); g.strokePath(pen(g, 1.3));
+      for (var i = 0; i < 3; i++) { g.newPath(); g.rectPath(4.6 + i * 3.4, 5.6, 1.6, 1.6); g.fillPath(brush(g));
+        g.newPath(); g.rectPath(4.6 + i * 3.4, 10.8, 1.6, 1.6); g.fillPath(brush(g)); }
+    },
+    bars: function (g) {
+      g.newPath(); g.rectPath(3, 4.4, 10, 2.4); g.fillPath(brush(g));
+      g.newPath(); g.rectPath(6, 7.8, 9, 2.4); g.fillPath(brush(g));
+      g.newPath(); g.rectPath(4, 11.2, 7, 2.4); g.fillPath(brush(g));
+    },
+    adj: function (g) {
+      g.newPath(); g.ellipsePath(3.5, 3.5, 11, 11); g.strokePath(pen(g, 1.4));
+      g.newPath(); g.moveTo(9, 3.5);
+      for (var a = 90; a <= 270; a += 15) g.lineTo(9 + 5.5 * Math.cos(a * Math.PI / 180), 9 - 5.5 * Math.sin(a * Math.PI / 180));
+      g.fillPath(brush(g));
+    },
+    eye: function (g) {
+      g.newPath(); g.ellipsePath(2.5, 5.5, 13, 7); g.strokePath(pen(g, 1.4));
+      g.newPath(); g.ellipsePath(7.4, 7.4, 3.2, 3.2); g.fillPath(brush(g));
+    },
+    clap: function (g) {
+      g.newPath(); g.rectPath(3, 8, 12, 6.5); g.strokePath(pen(g, 1.3));
+      g.newPath(); g.rectPath(3, 4, 12, 3.2); g.strokePath(pen(g, 1.3));
+      g.newPath(); g.moveTo(6, 4); g.lineTo(7.6, 7.2); g.strokePath(pen(g, 1.1));
+      g.newPath(); g.moveTo(10, 4); g.lineTo(11.6, 7.2); g.strokePath(pen(g, 1.1));
+    }
+  };
+  function iconize(btn, glyph, tip) {
+    if (tip) btn.helpTip = tip;
+    btn.hov = false;
+    btn.onDraw = function () {
+      var g = this.graphics, s = this.size;
+      if (this.hov) { g.newPath(); g.rectPath(0, 0, s[0], s[1]); g.fillPath(g.newBrush(g.BrushType.SOLID_COLOR, [1, 1, 1, 0.09])); }
+      glyph(g);
+    };
+    btn.addEventListener("mouseover", function () { this.hov = true; try { win.update(); } catch (e) {} });
+    btn.addEventListener("mouseout", function () { this.hov = false; try { win.update(); } catch (e) {} });
+    return btn;
+  }
+  function section(title, glyph) {                                  // slim drawn header (icon + bold label + hairline) over an indented body group
+    var hdr = win.add("group"); hdr.spacing = 6; hdr.alignChildren = ["left", "center"]; hdr.alignment = ["fill", "top"]; hdr.margins = [0, 6, 0, 0];
+    var ic = hdr.add("iconbutton", undefined, undefined, { style: "toolbutton" }); ic.preferredSize = [18, 18];
+    ic.onDraw = function () { glyph(this.graphics); };
+    var st = hdr.add("statictext", undefined, title);
+    try { st.graphics.font = ScriptUI.newFont("dialog", "BOLD", 11); } catch (eH) {}
+    var ln = hdr.add("panel"); ln.alignment = ["fill", "center"]; ln.preferredSize.height = 2; ln.minimumSize.width = 20;
+    var body = win.add("group"); body.orientation = "column"; body.alignChildren = ["fill", "top"]; body.spacing = 4; body.margins = [22, 0, 0, 2];
+    return body;
+  }
+
+  // ---- Doctor status line: owner-drawn live lamp (click = re-check; a 5 s heartbeat keeps it live) ----
   var rowDoc = win.add("group"); rowDoc.alignChildren = ["left", "center"];
-  var dot = rowDoc.add("statictext", undefined, "●"); dot.preferredSize.width = 14;
+  var dot = rowDoc.add("iconbutton", undefined, undefined, { style: "toolbutton" });
+  dot.preferredSize = [18, 18]; dot.dotColor = [0.6, 0.6, 0.6, 1];
+  dot.helpTip = "minColor Doctor \u2014 click to re-check now (auto-checks every 5 s)";
+  dot.onDraw = function () {
+    var g = this.graphics;
+    g.newPath(); g.ellipsePath(3, 3, 12, 12);
+    g.fillPath(g.newBrush(g.BrushType.SOLID_COLOR, this.dotColor));
+    g.strokePath(g.newPen(g.PenType.SOLID_COLOR, [0, 0, 0, 0.45], 1));
+    g.newPath(); g.ellipsePath(5.5, 5, 5, 3.4);                    // specular glint
+    g.fillPath(g.newBrush(g.BrushType.SOLID_COLOR, [1, 1, 1, 0.28]));
+  };
   var docText = rowDoc.add("statictext", undefined, "…", { truncate: "end" }); docText.alignment = ["fill", "center"];
   var bRepair = rowDoc.add("button", undefined, "Repair"); bRepair.preferredSize.width = 60; bRepair.visible = false;
-  var bRefresh = rowDoc.add("button", undefined, "Recheck"); bRefresh.preferredSize.width = 70;
+  bRepair.helpTip = "One-click fix: re-point the engine at this project's sidecar config";
   function refreshDoctor() {
     try {
       var d = MinColor.doctor();
-      var colors = { green: [0.3, 0.85, 0.35], yellow: [0.95, 0.8, 0.2], red: [0.95, 0.35, 0.3], unmanaged: [0.6, 0.6, 0.6] };
-      try { dot.graphics.foregroundColor = dot.graphics.newPen(dot.graphics.PenType.SOLID_COLOR, colors[d.status] || colors.unmanaged, 1); } catch (e) {}
+      var colors = { green: [0.28, 0.82, 0.4, 1], yellow: [0.95, 0.78, 0.18, 1], red: [0.94, 0.32, 0.28, 1], unmanaged: [0.55, 0.55, 0.55, 1] };
+      dot.dotColor = colors[d.status] || colors.unmanaged;
+      dot.helpTip = "Doctor: " + d.status + " \u2014 " + d.text + "  (click to re-check)";
       docText.text = d.text; bRepair.visible = (d.status === "yellow" && d.canRepair);
     } catch (e) { docText.text = "status unavailable: " + e; }
     unstick();
   }
-  bRefresh.onClick = function () { try { this.active = false; } catch (eA) {} refreshDoctor(); };
+  dot.onClick = function () { try { this.active = false; } catch (eA) {} refreshDoctor(); };
   bRepair.onClick = function () { guard("Repair", function () { return MinColor.repair(); }); };
 
   // ---- Set Up / Migrate dialog ----
-  var pSetup = win.add("panel", undefined, "Setup Project");
-  pSetup.orientation = "column"; pSetup.alignChildren = ["fill", "top"]; pSetup.margins = 8; pSetup.spacing = 4;
+  var pSetup = section("Setup Project", GLYPH.gear);
   var b = pSetup.add("button", undefined, "Set Up / Migrate Project…");
   b.onClick = function () {
     var dlg = new Window("dialog", "minColor — Set Up / Migrate");
     dlg.orientation = "column"; dlg.alignChildren = ["fill", "top"]; dlg.margins = 12; dlg.spacing = 8;
     var r1 = dlg.add("group"); r1.add("statictext", undefined, "Working-space preset:");
     var dd = r1.add("dropdownlist", undefined, keys); dd.selection = 0;
+    bindDD(dd, "setupPreset");
     dlg.add("statictext", undefined, "New Project: seeds a fresh project (asks where to save; sidecar created).");
     dlg.add("statictext", undefined, "Migrate Current: strips footage assignments (harvested as suggestions),");
     dlg.add("statictext", undefined, "sets working space + sidecar config, one save/backup/reopen.");
@@ -85,14 +166,14 @@
   };
 
   // ---- Interpret (live) ----
-  var pFtg = win.add("panel", undefined, "Interpret Footage");
-  pFtg.orientation = "column"; pFtg.alignChildren = ["fill", "top"]; pFtg.margins = 8; pFtg.spacing = 4;
+  var pFtg = section("Interpret Footage", GLYPH.film);
   var rowS = pFtg.add("group"); rowS.add("statictext", undefined, "Selected as:");
-  var ddSrc = rowS.add("dropdownlist", undefined, lists.inputSpaces); ddSrc.selection = 0; ddSrc.preferredSize.width = 220;
+  var ddSrc = rowS.add("dropdownlist", undefined, lists.inputSpaces); ddSrc.selection = 0;
+  ddSrc.alignment = ["fill", "center"]; ddSrc.preferredSize.width = 150;
   var bSel = rowS.add("button", undefined, "Apply"); bSel.preferredSize.width = 60;
+  bindDD(ddSrc, "interpretSpace");
   bSel.onClick = function () { runPass("Interpret selected", { mode: "selection" }, ddSrc.selection.text); };
-  var pTL = win.add("panel", undefined, "Interpret Timeline");
-  pTL.orientation = "column"; pTL.alignChildren = ["fill", "top"]; pTL.margins = 8; pTL.spacing = 4;
+  var pTL = section("Interpret Timeline", GLYPH.bars);
   var rowA = pTL.add("group");
   var bComp = rowA.add("button", undefined, "Interpret timeline"); bComp.alignment = ["fill", "center"];
   bComp.helpTip = "Active comp + nested precomps, auto-suggested per item";
@@ -124,6 +205,7 @@
     var row = dlg.add("group");
     var et = row.add("edittext", undefined, ""); et.characters = 6;
     var dds = row.add("dropdownlist", undefined, ["working (identity)"].concat(lists.inputSpaces)); dds.selection = 0; dds.preferredSize.width = 200;
+    bindDD(dds, "matchesSpace");
     var row2 = dlg.add("group");
     var bSet = row2.add("button", undefined, "Add / Update");
     var bDel = row2.add("button", undefined, "Remove");
@@ -139,11 +221,13 @@
   };
 
   // ---- View ----
-  var pAdj = win.add("panel", undefined, "Adjustment Layer");
-  pAdj.orientation = "column"; pAdj.alignChildren = ["fill", "top"]; pAdj.margins = 8; pAdj.spacing = 4;
+  var pAdj = section("Adjustment Layer", GLYPH.adj);
   var rowV = pAdj.add("group"); rowV.add("statictext", undefined, "View:");
-  var ddView = rowV.add("dropdownlist", undefined, lists.viewSpaces); ddView.selection = 0; ddView.preferredSize.width = 220;
+  var ddView = rowV.add("dropdownlist", undefined, lists.viewSpaces); ddView.selection = 0;
+  ddView.alignment = ["fill", "center"]; ddView.preferredSize.width = 150;
+  bindDD(ddView, "viewSpace");
   var bView = rowV.add("button", undefined, "Add guide"); bView.preferredSize.width = 80;
+  bView.helpTip = "Add / update the VIEW guide layer \u2014 viewport only, never renders";
   bView.onClick = function () {
     guard("View guide", function () {
       var comp = app.project.activeItem; if (!(comp instanceof CompItem)) throw new Error("open a comp");
@@ -155,10 +239,13 @@
   };
   var renderSpaces = (function () { var seen = {}, out = [], all = lists.viewSpaces.concat(lists.inputSpaces); for (var ri = 0; ri < all.length; ri++) if (!seen[all[ri]]) { seen[all[ri]] = 1; out.push(all[ri]); } return out; })();
   var rowR = pAdj.add("group"); rowR.add("statictext", undefined, "Render:");
-  var ddRender = rowR.add("dropdownlist", undefined, renderSpaces); ddRender.preferredSize.width = 220;
+  var ddRender = rowR.add("dropdownlist", undefined, renderSpaces);
+  ddRender.alignment = ["fill", "center"]; ddRender.preferredSize.width = 150;
   ddRender.selection = 0;
   for (var rdi = 0; rdi < ddRender.items.length; rdi++) if (ddRender.items[rdi].text === "Gamma 2.4 Encoded Rec.709") { ddRender.selection = rdi; break; }
+  bindDD(ddRender, "renderSpace");
   var bRender = rowR.add("button", undefined, "Add render"); bRender.preferredSize.width = 80;
+  bRender.helpTip = "Add / update the RENDER layer \u2014 renders in output: working \u2192 delivery space";
   bRender.helpTip = "Adjustment layer (NOT a guide \u2014 it renders): working space \u2192 delivery space";
   bRender.onClick = function () {
     guard("Render layer", function () {
@@ -176,6 +263,10 @@
 
   if (payloadError) { docText.text = "minColor payload not found — run the installer. (" + payloadError + ")"; }
   else refreshDoctor();
+  // live Doctor: AE's scheduleTask re-checks every 5 s (6 ms a pop), so the lamp updates itself
+  try { if ($.global.__minColorTask) app.cancelTask($.global.__minColorTask); } catch (eC) {}
+  $.global.__minColorTick = function () { try { if (win.visible) refreshDoctor(); } catch (eK) {} };
+  try { $.global.__minColorTask = app.scheduleTask("if ($.global.__minColorTick) $.global.__minColorTick();", 5000, true); } catch (eS) {}
   win.layout.layout(true); win.onResizing = win.onResize = function () { this.layout.resize(); };
   if (win instanceof Window) { win.center(); win.show(); }
  } catch (eTop) {   // never modal-block AE: log load errors instead

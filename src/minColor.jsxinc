@@ -285,6 +285,15 @@ var MinColor = (function () {
     return mk.create() ? mk.fsName : Folder.temp.fsName;
   }
   function extDefaults() { try { return readJSON(settingsDir() + "/extension-defaults.json").defaults; } catch (e) { return {}; } }
+  function uiState() { try { return readJSON(settingsDir() + "/ui-state.json") || {}; } catch (e) { return {}; } }
+  function saveUiState(map) {                                        // last-used dropdown choices; tiny flat JSON next to the panel's settings
+    var keys = [], k; for (k in map) keys.push(k); keys.sort();
+    var parts = [];
+    for (var i = 0; i < keys.length; i++) parts.push('"' + keys[i] + '": "' + String(map[keys[i]]).replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"');
+    var f = new File(settingsDir() + "/ui-state.json");
+    if (!f.open("w")) return;
+    f.write('{\n ' + parts.join(',\n ') + '\n}\n'); f.close();
+  }
   function saveExtDefaults(map) {
     var keys = [], k; for (k in map) keys.push(k); keys.sort();
     var parts = [];
@@ -514,6 +523,6 @@ var MinColor = (function () {
 
   return { presets: presets, menuLists: menuLists, preflight: preflight, payloadRoot: payloadRoot, ensureSidecar: ensureSidecar, sidecarInfo: sidecarInfo, doctor: doctor, repair: repair, migrateProject: migrateProject, interpretPass: interpretPass, extDefaults: extDefaults, saveExtDefaults: saveExtDefaults, suggestionFor: suggestionFor, collectDetected: collectDetected, readHarvest: readHarvest, harvestPath: harvestPath, seedStickyPref: seedStickyPref, newProject: newProject,
            assertProject: assertProject, applyPresetToCurrent: applyPresetToCurrent,
-           syncReport: syncReport, syncApply: syncApply,
+           syncReport: syncReport, syncApply: syncApply, uiState: uiState, saveUiState: saveUiState,
            setPopupByName: setPopupByName, addInputTransform: addInputTransform, addViewGuideLayer: addViewGuideLayer, addRenderLayer: addRenderLayer, findUtilityLayer: findUtilityLayer };
 })();
