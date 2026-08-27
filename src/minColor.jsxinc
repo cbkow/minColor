@@ -337,6 +337,14 @@ var MinColor = (function () {
     return out;
   }
 
+  function packageForAnyAE() {                                       // deliberate exit: Adobe effects + self-contained sidecar + archive artifacts
+    var tr = translateEffects("native");
+    var inf = sidecarInfo();
+    if (inf && app.project.file) app.project.ocioConfigurationFile = ensureSidecar(inf.preset);
+    var ar = archiveProject();
+    return { translated: tr.converted.length, failed: tr.failed, archive: ar };
+  }
+
   // ---------- archive: materialize everything a future machine needs ----------
   function archiveProject() {
     var p = app.project;
@@ -371,6 +379,13 @@ var MinColor = (function () {
       golden = "reference_" + info.preset + "_00000.psd";
     } catch (eG) { golden = "skipped (" + eG.toString() + ")"; }
     return { sidecar: sidecarCfg, provenance: pf.fsName, golden: golden };
+  }
+
+  // ---------- direct MINC authoring (minColor-only world, 2026-08-27) ----------
+  var __mincSerial = Math.floor((new Date()).getTime() % 900000);
+  function stampSerial(fx) { try { fx.property("Sync Serial").setValue(++__mincSerial); } catch (eS) {} }
+  function syncPluginNames() {
+    try { var id = app.findMenuCommandId("minColor: Sync From Names"); if (id) { app.executeCommand(id); stampEngine("plugin"); } } catch (eC) {}
   }
 
   // ---------- engine translation: native CST <-> MINC CST plugin (stage two) ----------
@@ -634,7 +649,7 @@ var MinColor = (function () {
   }
   function hasMinColorFx(layer) {
     var fxp = layer.property("ADBE Effect Parade");
-    for (var i = 1; i <= fxp.numProperties; i++) if (fxp.property(i).name.indexOf(FX_PREFIX) === 0 && fxp.property(i).matchName === "ADBE OCIO Color Space Transform") return true;
+    for (var i = 1; i <= fxp.numProperties; i++) if (fxp.property(i).name.indexOf(FX_PREFIX) === 0 && (fxp.property(i).matchName === "ADBE OCIO Color Space Transform" || fxp.property(i).matchName === MINC_MATCH)) return true;
     return false;
   }
   function collectDetected() {                                       // requires saved project (reads the .aep)
@@ -681,7 +696,7 @@ var MinColor = (function () {
       var label = layer.containingComp.name + "/" + layer.name;
       try {
         var fxp0 = layer.property("ADBE Effect Parade"), haveIdx = -1;
-        for (var fi = 1; fi <= fxp0.numProperties; fi++) if (fxp0.property(fi).name.indexOf(FX_PREFIX) === 0 && fxp0.property(fi).matchName === "ADBE OCIO Color Space Transform") { haveIdx = fi; break; }
+        for (var fi = 1; fi <= fxp0.numProperties; fi++) if (fxp0.property(fi).name.indexOf(FX_PREFIX) === 0 && (fxp0.property(fi).matchName === "ADBE OCIO Color Space Transform" || fxp0.property(fi).matchName === MINC_MATCH)) { haveIdx = fi; break; }
         if (haveIdx > 0) {                                            // self-heal: a CST named for a space this config doesn't have is a stranded failed add — remove and redo
           var exName = fxp0.property(haveIdx).name.substring(FX_PREFIX.length);
           var ai = exName.indexOf(" \u2192 working"); if (ai > 0) exName = exName.substring(0, ai);
@@ -748,6 +763,7 @@ var MinColor = (function () {
         for (var i = 1; i <= p.numItems; i++) if (p.item(i) instanceof CompItem) walkComp(p.item(i), false, seen3);
       }
     } finally {
+      try { if (pluginAvailable()) syncPluginNames(); } catch (eSy) {}
       app.endUndoGroup();
       if (homeComp && $.global.__minColorViewerId !== null && $.global.__minColorViewerId !== homeComp.id) { try { homeComp.openInViewer(); } catch (eV) {} }   // our per-comp viewer switches must not drift the user's active comp
     }
@@ -775,15 +791,21 @@ var MinColor = (function () {
       return setPopupByName(fx.property(idx), wanted);
     }
   }
-  function addInputTransform(layer, sourceSpace) {                  // native CST: source -> working
-    var comp = layer.containingComp;                                 // popups only populate with a viewer/ECW context (RESULTS section 14);
-    if ($.global.__minColorViewerId !== comp.id) { comp.openInViewer(); $.global.__minColorViewerId = comp.id; }   // ...but switch the viewer once per comp, not per layer
+  function addInputTransform(layer, sourceSpace) {                  // source -> working (MINC when installed: no popups, no viewer dance)
+    if (pluginAvailable()) {
+      var mfx = layer.property("ADBE Effect Parade").addProperty(MINC_MATCH);
+      mfx.name = "minColor: " + sourceSpace + " → working";
+      stampSerial(mfx);
+      return mfx;                                                    // caller batch ends with syncPluginNames()
+    }
+    var comp = layer.containingComp;                                 // native fallback: popups need a viewer/ECW context (RESULTS 14)
+    if ($.global.__minColorViewerId !== comp.id) { comp.openInViewer(); $.global.__minColorViewerId = comp.id; }
     var fx = layer.property("ADBE Effect Parade").addProperty("ADBE OCIO Color Space Transform");
     try {
       fx.name = "minColor: " + sourceSpace + " → working";
       setPopupRetrying(fx, 1, sourceSpace, comp);
-      setPopupRetrying(fx, 2, "default", comp);                     // `default` role == working in EVERY preset (scene_linear differs in the SDR preset)
-    } catch (e) { try { fx.remove(); } catch (e2) {} throw e; }      // never strand a half-configured CST
+      setPopupRetrying(fx, 2, "default", comp);                     // `default` role == working in EVERY preset
+    } catch (e) { try { fx.remove(); } catch (e2) {} throw e; }
     return fx;
   }
   function findUtilityLayer(comp, kind) {                            // kind: "view" | "render" — our singleton adjustment layers, identified by their CST's name
@@ -810,12 +832,12 @@ var MinColor = (function () {
     } else {
       sol = comp.layers.addSolid([0, 0, 0], isView ? "minColor VIEW (guide)" : "minColor RENDER", comp.width, comp.height, comp.pixelAspect);
       sol.adjustmentLayer = true; sol.label = isView ? 14 : 9; sol.moveToBeginning();
-      fx = sol.property("ADBE Effect Parade").addProperty("ADBE OCIO Color Space Transform");
+      fx = sol.property("ADBE Effect Parade").addProperty(pluginAvailable() ? MINC_MATCH : "ADBE OCIO Color Space Transform");
     }
     sol.guideLayer = isView;                                         // view never renders; render always does
     fx.name = FX_PREFIX + kind + " " + space;
-    setPopupRetrying(fx, 1, "default", comp);                        // working space via role
-    setPopupRetrying(fx, 2, space, comp);
+    if (fx.matchName === MINC_MATCH) { stampSerial(fx); syncPluginNames(); }
+    else { setPopupRetrying(fx, 1, "default", comp); setPopupRetrying(fx, 2, space, comp); }
     var other = findUtilityLayer(comp, isView ? "render" : "view");
     if (other && other.layer.enabled) { other.layer.enabled = false; res.disabledOther = true; }
     res.layer = sol;
@@ -824,7 +846,7 @@ var MinColor = (function () {
   function addViewGuideLayer(comp, viewColorspace) { return upsertUtilityLayer(comp, "view", viewColorspace || "sRGB"); }
   function addRenderLayer(comp, renderSpace) { return upsertUtilityLayer(comp, "render", renderSpace || "Gamma 2.4 Encoded Rec.709"); }
 
-  return { VERSION: VERSION, presets: presets, menuLists: menuLists, preflight: preflight, payloadRoot: payloadRoot, ensureSidecar: ensureSidecar, sidecarInfo: sidecarInfo, doctor: doctor, repair: repair, pinConfig: pinConfig, findConfigByName: findConfigByName, stampProvenance: stampProvenance, readProvenance: readProvenance, archiveProject: archiveProject, stampEngine: stampEngine, readEngine: readEngine, migrateProject: migrateProject, interpretPass: interpretPass, extDefaults: extDefaults, saveExtDefaults: saveExtDefaults, suggestionFor: suggestionFor, collectDetected: collectDetected, readHarvest: readHarvest, harvestPath: harvestPath, seedStickyPref: seedStickyPref, newProject: newProject,
+  return { VERSION: VERSION, presets: presets, menuLists: menuLists, preflight: preflight, payloadRoot: payloadRoot, ensureSidecar: ensureSidecar, sidecarInfo: sidecarInfo, doctor: doctor, repair: repair, pinConfig: pinConfig, findConfigByName: findConfigByName, stampProvenance: stampProvenance, readProvenance: readProvenance, archiveProject: archiveProject, packageForAnyAE: packageForAnyAE, syncPluginNames: syncPluginNames, stampEngine: stampEngine, readEngine: readEngine, migrateProject: migrateProject, interpretPass: interpretPass, extDefaults: extDefaults, saveExtDefaults: saveExtDefaults, suggestionFor: suggestionFor, collectDetected: collectDetected, readHarvest: readHarvest, harvestPath: harvestPath, seedStickyPref: seedStickyPref, newProject: newProject,
            assertProject: assertProject, applyPresetToCurrent: applyPresetToCurrent,
            syncReport: syncReport, syncApply: syncApply, rebuildMinColorEffects: rebuildMinColorEffects, translateEffects: translateEffects, pluginAvailable: pluginAvailable, uiState: uiState, saveUiState: saveUiState,
            setPopupByName: setPopupByName, addInputTransform: addInputTransform, addViewGuideLayer: addViewGuideLayer, addRenderLayer: addRenderLayer, findUtilityLayer: findUtilityLayer };
