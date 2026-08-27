@@ -258,12 +258,21 @@
     var row2 = dlg.add("group");
     var bSet = row2.add("button", undefined, "Add / Update");
     var bDel = row2.add("button", undefined, "Remove");
-    row2.add("button", undefined, "Done", { name: "ok" });
+    var bDone = row2.add("button", undefined, "Done", { name: "ok" });
     lb.onChange = function () { if (lb.selection) { et.text = lb.selection.text; var want = lb.selection.subItems[0].text; dds.selection = 0; for (var i = 1; i < dds.items.length; i++) if (dds.items[i].text === want) dds.selection = i; } };
-    bSet.onClick = function () {
-      try { var ext = et.text.replace(/^\./, "").toLowerCase(); if (!ext) throw new Error("type an extension");
+    function applyRule(quiet) {
+      try { var ext = et.text.replace(/^\./, "").toLowerCase(); if (!ext) { if (quiet) return; throw new Error("type an extension"); }
         var m = MinColor.extDefaults(); m[ext] = (dds.selection.index === 0) ? "working" : dds.selection.text;
         MinColor.saveExtDefaults(m); refreshMap(); } catch (e) { alert(String(e)); }
+    }
+    bSet.onClick = function () { applyRule(false); };
+    bDone.onClick = function () {                                    // Done commits a pending edit instead of discarding it —
+      try {                                                          // pressing Done without Add/Update was silently losing the rule
+        var ext = et.text.replace(/^\./, "").toLowerCase();
+        if (ext) { var m = MinColor.extDefaults(); var want = (dds.selection.index === 0) ? "working" : dds.selection.text;
+          if (m[ext] !== want) applyRule(true); }
+      } catch (eD) {}
+      dlg.close(1);
     };
     bDel.onClick = function () { try { if (!lb.selection) throw new Error("select a row"); var m = MinColor.extDefaults(); delete m[lb.selection.text]; MinColor.saveExtDefaults(m); refreshMap(); } catch (e) { alert(String(e)); } };
     refreshMap(); dlg.show();
