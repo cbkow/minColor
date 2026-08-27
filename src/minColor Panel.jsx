@@ -146,8 +146,9 @@
     engSyncing = true;
     try {
       var e = MinColor.readEngine();
-      ddEng.selection = (e === "plugin") ? 1 : 0;                    // unmarked project reads as Adobe (the authoring default)
-      ddEng.enabled = (managed !== false);                           // enabled for any managed project, marked or not
+      var want = (e === "plugin") ? 1 : 0;                           // unmarked project reads as Adobe (the authoring default)
+      if (!ddEng.selection || ddEng.selection.index !== want) ddEng.selection = want;   // reassigning inside onChange blanks the control — only touch it when wrong
+      ddEng.enabled = (managed !== false);
     } catch (eE) {}
     engSyncing = false;
   }
@@ -159,8 +160,7 @@
       var r = MinColor.translateEffects(target);
       if (r.failed.length) alert("minColor \u2014 translate\n\n" + r.failed.join("\n").substr(0, 3000));
       return "converted " + r.converted.length + ", failed " + r.failed.length;
-    });
-    syncEngineUI();                                                  // reflect reality (reverts on failure)
+    });                                                              // guard's refreshDoctor re-syncs (and reverts on failure)
   };
   var bArch = rowE.add("button", undefined, "Archive"); bArch.preferredSize.width = 70;
   bArch.helpTip = "Make the project self-contained for handoff/archival: sidecar config + provenance.json + a golden reference frame in _minColor/";
