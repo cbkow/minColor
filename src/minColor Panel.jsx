@@ -147,11 +147,12 @@
     g.fillPath(g.newBrush(g.BrushType.SOLID_COLOR, [1, 1, 1, 0.28]));
   };
   var docText = rowDoc.add("statictext", undefined, "…", { truncate: "end" }); docText.alignment = ["fill", "center"];
+  var bRepair = rowDoc.add("button", undefined, "Repair"); bRepair.preferredSize.width = 60; bRepair.visible = false;
   var bProj = iconize(rowDoc.add("iconbutton", undefined, undefined, { style: "toolbutton" }), GLYPH.gear,
     "Project\u2026 \u2014 status, provenance, Archive / Package / Adopt");
   bProj.preferredSize = [20, 20]; bProj.minimumSize = [20, 20]; bProj.maximumSize = [20, 20];   // ScriptUI stretches toolbuttons unless hard-clamped
+  bProj.alignment = ["right", "center"];                             // last in row + right-aligned = flush right (hidden Repair still reserves space otherwise)
   bProj.onClick = function () { try { showProjectDialog(); } catch (eP) { alert("minColor: " + eP); } };
-  var bRepair = rowDoc.add("button", undefined, "Repair"); bRepair.preferredSize.width = 60; bRepair.visible = false;
   bRepair.helpTip = "One-click fix: re-point the engine at this project's sidecar config";
   function refreshDoctor() {
     try {
