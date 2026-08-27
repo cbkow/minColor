@@ -62,11 +62,19 @@ static void Utf16HandleToUtf8(AEGP_SuiteHandler &suites, AEGP_MemHandle h, char 
     suites.MemorySuite1()->AEGP_FreeMemHandle(h);
 }
 
+static void SyncFromNames(SPBasicSuite *bp);
 static A_Err IdleHook(AEGP_GlobalRefcon, AEGP_IdleRefcon, A_long *max_sleepPL) {
+    static unsigned long lastSyncedGen = 0;
     if (g_pica) {
         PF_InData fake = {};                            /* Refresh only needs pica */
         fake.pica_basicP = g_pica;
         MincAuthorityRefresh(&fake);
+        MincAuthoritySnapshot s;                        /* project/preset changed -> names are the durable
+                                                           store: re-derive every instance's state */
+        if (MincAuthorityGet(&s) && s.generation != lastSyncedGen) {
+            lastSyncedGen = s.generation;
+            SyncFromNames(g_pica);
+        }
     }
     if (max_sleepPL) *max_sleepPL = 60;                 /* ~1 s at 60 ticks */
     return A_Err_NONE;
@@ -174,11 +182,11 @@ static void SyncFromNames(SPBasicSuite *bp) {
                                         if (strcmp(em, MINC_MATCH_NAME) != 0) { AuthLog("sync: index misalign '%s'", em); efs->AEGP_DisposeEffect(effH); effH = nullptr; }
                                     }
                                     if (effH) {
+                                        /* transport: CallGeneric -> seq data + registry (names are the durable store; auto-sync re-derives on project open) */
                                         MincSyncPayload pay; memset(&pay, 0, sizeof(pay));
                                         pay.magic = MINC_ARB_MAGIC; pay.arb = want;
-                                        A_Time t0 = {0, 100};
-                                        A_Err ce = efs->AEGP_EffectCallGeneric(g_aegpID, effH, &t0, PF_Cmd_COMPLETELY_GENERAL, &pay);
-                                        if (ce == A_Err_NONE) ++wrote; else AuthLog("sync: CallGeneric err=%d", (int)ce);
+                                        A_Time tg = {0, 100};
+                                        if (efs->AEGP_EffectCallGeneric(g_aegpID, effH, &tg, PF_Cmd_COMPLETELY_GENERAL, &pay) == A_Err_NONE) ++wrote;
                                         efs->AEGP_DisposeEffect(effH);
                                     }
                                 } else if (name8[0]) { ++badname; AuthLog("sync: unparsed name '%s'", name8); }

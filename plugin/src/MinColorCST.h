@@ -31,8 +31,8 @@
 #define MINC_STAGE_VERSION PF_Stage_DEVELOP
 #define MINC_BUILD_VERSION 1
 
-enum { MINC_INPUT = 0, MINC_ARB, MINC_NUM_PARAMS };
-enum { ARB_DISK_ID = 1 };
+enum { MINC_INPUT = 0, MINC_ARB, MINC_SERIAL, MINC_NUM_PARAMS };
+enum { ARB_DISK_ID = 1, SERIAL_DISK_ID = 2 };
 
 #include "MincTypes.h"
 

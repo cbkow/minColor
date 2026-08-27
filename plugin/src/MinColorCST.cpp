@@ -39,6 +39,13 @@ static PF_Err ParamsSetup(PF_InData *in_data, PF_OutData *out_data) {
                           ARB_DISK_ID,
                           NULL);
     }
+    if (!err) {
+        AEFX_CLR_STRUCT(def);
+        /* scriptable per-instance serial: the panel stamps a unique value on every instance so
+           byte-identical comps can never share a cached frame, and bumps it after each sync to
+           invalidate stale frames. Floats are the one param type ExtendScript can set. */
+        PF_ADD_FLOAT_SLIDERX("Sync Serial", 0, 1000000, 0, 1000000, 0, PF_Precision_INTEGER, 0, 0, SERIAL_DISK_ID);
+    }
     out_data->num_params = MINC_NUM_PARAMS;
     return err;
 }
@@ -80,9 +87,23 @@ static PF_Err SequenceSetdown(PF_InData *in_data, PF_OutData *out_data) {
     out_data->sequence_data = NULL;
     return PF_Err_NONE;
 }
-static PF_Err HandleGeneric(PF_InData *in_data, PF_OutData *out_data, void *extra) {
+static PF_Err HandleGeneric(PF_InData *in_data, PF_OutData *out_data, PF_ParamDef *params[], void *extra) {
     const MincSyncPayload *pay = reinterpret_cast<const MincSyncPayload*>(extra);
     if (!pay || pay->magic != MINC_ARB_MAGIC) return PF_Err_NONE;   /* not ours */
+    if (params && params[MINC_ARB] && params[MINC_ARB]->u.arb_d.value) {
+        /* the blessed transport: we are a PF context with live params — write our own arb
+           param and flag CHANGED_VALUE so it round-trips through AE's normal machinery */
+        AEGP_SuiteHandler suites(in_data->pica_basicP);
+        MinColorArb *pa = reinterpret_cast<MinColorArb*>(
+            suites.HandleSuite1()->host_lock_handle(params[MINC_ARB]->u.arb_d.value));
+        if (pa) {
+            uint32_t keepId = pa->instanceId;
+            *pa = pay->arb; pa->instanceId = keepId;
+            MincDebugLog("generic: param write space='%s' dir=%d id=%u", pa->space, (int)pa->direction, keepId);
+        }
+        suites.HandleSuite1()->host_unlock_handle(params[MINC_ARB]->u.arb_d.value);
+        params[MINC_ARB]->uu.change_flags = PF_ChangeFlag_CHANGED_VALUE;
+    }
     if (!in_data->sequence_data) { PF_Err e = SeqNew(in_data, out_data, &pay->arb); MincDebugLog("generic: seq created space='%s'", pay->arb.space); return e; }
     AEGP_SuiteHandler suites(in_data->pica_basicP);
     MinColorArb *a = reinterpret_cast<MinColorArb*>(suites.HandleSuite1()->host_lock_handle(in_data->sequence_data));
@@ -114,7 +135,7 @@ extern "C" DllExport PF_Err EffectMain(PF_Cmd cmd, PF_InData *in_data, PF_OutDat
             case PF_Cmd_SEQUENCE_FLATTEN:    err = SequenceResetup(in_data, out_data); break;   /* data is already flat: "flatten" = fresh copy */
             case PF_Cmd_GET_FLATTENED_SEQUENCE_DATA: err = SequenceResetup(in_data, out_data); break;
             case PF_Cmd_SEQUENCE_SETDOWN:    err = SequenceSetdown(in_data, out_data); break;
-            case PF_Cmd_COMPLETELY_GENERAL:  err = HandleGeneric(in_data, out_data, extra); break;
+            case PF_Cmd_COMPLETELY_GENERAL:  err = HandleGeneric(in_data, out_data, params, extra); break;
             case PF_Cmd_UPDATE_PARAMS_UI:
             case PF_Cmd_USER_CHANGED_PARAM:  MincAuthorityRefresh(in_data);         break;
             case PF_Cmd_SMART_PRE_RENDER:

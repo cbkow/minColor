@@ -21,8 +21,38 @@ static PF_Err CheckoutArb(PF_InData *in_data, MinColorArb *out) {
     return err;
 }
 
+static void ResolveArb(PF_InData *in_data, MinColorArb *arb) {      /* param first, then seq+registry */
+    memset(arb, 0, sizeof(*arb));
+    CheckoutArb(in_data, arb);
+    uint32_t seqId = 0;
+    if (arb->space[0] == '\0') {
+        PF_ConstHandle ch = nullptr;
+        const void *ssV = nullptr;
+        if (in_data->pica_basicP->AcquireSuite(kPFEffectSequenceDataSuite, kPFEffectSequenceDataSuiteVersion1, &ssV) == kSPNoError && ssV) {
+            const PF_EffectSequenceDataSuite1 *ss = reinterpret_cast<const PF_EffectSequenceDataSuite1*>(ssV);
+            ss->PF_GetConstSequenceData(in_data->effect_ref, &ch);
+            in_data->pica_basicP->ReleaseSuite(kPFEffectSequenceDataSuite, kPFEffectSequenceDataSuiteVersion1);
+        }
+        const MinColorArb *sa = ch ? *reinterpret_cast<const MinColorArb* const*>(ch) : nullptr;
+        if (!sa && in_data->sequence_data) sa = *reinterpret_cast<const MinColorArb* const*>(in_data->sequence_data);
+        if (sa && sa->magic == MINC_ARB_MAGIC) {
+            *arb = *sa; seqId = sa->instanceId;
+            MinColorArb reg;
+            if (MincRegistryGet(sa->instanceId, &reg)) { reg.instanceId = sa->instanceId; *arb = reg; }
+        }
+    }
+    MincDebugLog("resolve: seqId=%u space='%s' dir=%d", seqId ? seqId : arb->instanceId, arb->space, (int)arb->direction);
+}
+
 PF_Err MincSmartPreRender(PF_InData *in_data, PF_OutData *out_data, PF_PreRenderExtra *extra) {
     PF_Err err = PF_Err_NONE;
+    {   /* our real state is invisible to AE's param fingerprint — mix it into the render
+           GUID so five differently-synced instances never share a cached frame */
+        MinColorArb arb; ResolveArb(in_data, &arb);
+        MincAuthoritySnapshot auth = {}; MincAuthorityGet(&auth);
+        struct { MinColorArb a; unsigned long gen; } mix = { arb, auth.generation };
+        extra->cb->GuidMixInPtr(in_data->effect_ref, sizeof(mix), &mix);
+    }
     PF_RenderRequest req = extra->input->output_request;
     PF_CheckoutResult res;
     ERR(extra->cb->checkout_layer(in_data->effect_ref, MINC_INPUT, MINC_INPUT, &req,
@@ -68,24 +98,8 @@ PF_Err MincSmartRender(PF_InData *in_data, PF_OutData *out_data, PF_SmartRenderE
     ERR(extra->cb->checkout_layer_pixels(in_data->effect_ref, MINC_INPUT, &inputW));
     ERR(extra->cb->checkout_output(in_data->effect_ref, &outputW));
     if (!err && inputW && outputW) {
-        MinColorArb arb; memset(&arb, 0, sizeof(arb));
+        MinColorArb arb; ResolveArb(in_data, &arb);
         PF_Err arbErr = PF_Err_NONE;
-        {   /* source of truth = per-instance sequence data (const-access under MFR) */
-            PF_ConstHandle ch = nullptr;
-            const void *ssV = nullptr;
-            if (in_data->pica_basicP->AcquireSuite(kPFEffectSequenceDataSuite, kPFEffectSequenceDataSuiteVersion1, &ssV) == kSPNoError && ssV) {
-                const PF_EffectSequenceDataSuite1 *ss = reinterpret_cast<const PF_EffectSequenceDataSuite1*>(ssV);
-                ss->PF_GetConstSequenceData(in_data->effect_ref, &ch);
-                in_data->pica_basicP->ReleaseSuite(kPFEffectSequenceDataSuite, kPFEffectSequenceDataSuiteVersion1);
-            }
-            const MinColorArb *sa = ch ? *reinterpret_cast<const MinColorArb* const*>(ch) : nullptr;
-            if (!sa && in_data->sequence_data) sa = *reinterpret_cast<const MinColorArb* const*>(in_data->sequence_data);
-            if (sa && sa->magic == MINC_ARB_MAGIC) {
-                arb = *sa;
-                MinColorArb reg;
-                if (MincRegistryGet(sa->instanceId, &reg)) { reg.instanceId = sa->instanceId; arb = reg; }   /* registry wins: seq clones go stale */
-            }
-        }
         MincAuthoritySnapshot auth = {};
         MincAuthorityGet(&auth);
         MincDebugLog("render: arbErr=%d magic=%08lx dir=%d space='%s' | gen=%lu ocioOn=%d ws='%s'",

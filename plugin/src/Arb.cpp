@@ -3,11 +3,15 @@
 #include <cstring>
 #include <cstdio>
 
+#include <atomic>
+static std::atomic<uint32_t> g_arbNonce{0x40000000u};
 static void ArbDefaults(MinColorArb *a) {
     memset(a, 0, sizeof(*a));
     a->magic = MINC_ARB_MAGIC;
     a->version = MINC_ARB_VERSION;
     a->direction = MINC_DIR_TO_WORKING;
+    a->instanceId = g_arbNonce.fetch_add(1);   /* unique per instance: identical comps can never
+                                                  hash identically -> no cross-instance cache reuse */
 }
 
 static PF_Err NewArb(PF_InData *in_data, PF_ArbitraryH *arbPH) {
