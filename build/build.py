@@ -35,7 +35,17 @@ def main():
         "         (or the app's Scripts/ScriptUI Panels folder)\n"
         "Windows: %APPDATA%\\Adobe\\After Effects\\<version>\\Scripts\\ScriptUI Panels\\\n"
         "         (or Program Files\\Adobe\\...\\Support Files\\Scripts\\ScriptUI Panels\\, needs admin)\n\n"
-        "Restart After Effects; the panel appears under Window > minColor.jsx.\n")
+        "Restart After Effects; the panel appears under Window > minColor.jsx.\n\n"
+        "OPTIONAL - the minColor plugin engine (macOS, Apple silicon):\n"
+        "Copy plugin-macOS/minColorCST.plugin into:\n"
+        "    /Library/Application Support/Adobe/Common/Plug-ins/7.0/MediaCore/minColor/\n"
+        "(create the minColor folder if needed). Recommended: also copy the contents of\n"
+        "minColor-data/configs into that same minColor folder as 'configs' so projects pin\n"
+        "the machine-wide store; without it, projects fall back to per-project sidecars.\n"
+        "Windows plugin: not yet built.\n")
+    plugin_src = os.path.join(ROOT, "plugin", "build", "minColorCST.plugin")
+    if os.path.isdir(plugin_src):
+        shutil.copytree(plugin_src, os.path.join(OUT, "plugin-macOS", "minColorCST.plugin"))
     pay = os.path.join(OUT, "minColor-data")
     os.makedirs(os.path.join(pay, "settings"))
     cfgs = os.path.join(pay, "configs")

@@ -44,6 +44,12 @@ Restart After Effects; the panel appears under **Window ▸ minColor.jsx**. The 
 folder is invisible to AE's Window menu. That copy is the whole install — nothing else
 runs or writes outside AE.
 
+**Optional — the minColor plugin engine** (macOS/Apple silicon; Windows build pending):
+copy `plugin-macOS/minColorCST.plugin` from the distributable into
+`/Library/Application Support/Adobe/Common/Plug-ins/7.0/MediaCore/minColor/`, ideally with
+the `configs` folder beside it (machine-wide store; projects fall back to sidecars without it).
+The panel authors plugin effects automatically when it detects the installed bundle.
+
 The panel finds its data next to itself first; a machine-wide copy at
 `/Users/Shared/minColor` (or `C:\ProgramData\minColor`) acts as a facility-managed
 fallback for studios that prefer centrally updated configs.
