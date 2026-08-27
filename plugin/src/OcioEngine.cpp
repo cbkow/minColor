@@ -4,7 +4,6 @@
 #include <shared_mutex>
 #include <map>
 #include <string>
-#include <sys/stat.h>
 namespace OCIO = OCIO_NAMESPACE;
 
 struct ConfigEntry { std::string key; OCIO::ConstConfigRcPtr config; };
@@ -13,11 +12,26 @@ static std::map<std::string, ConfigEntry> g_configs;       /* path -> entry (key
 static std::shared_mutex g_procMx;
 static std::map<std::string, OCIO::ConstCPUProcessorRcPtr> g_procs;
 
+#ifdef _WIN32
+#define NOMINMAX
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <sys/stat.h>
+static std::string StatKey(const char *path) {               /* UTF-8 -> wide: ANSI stat() fails on non-ASCII paths */
+    wchar_t w[2048];
+    if (!MultiByteToWideChar(CP_UTF8, 0, path, -1, w, 2048)) return std::string();
+    struct _stat64 st;
+    if (_wstat64(w, &st) != 0) return std::string();
+    return std::string(path) + "|" + std::to_string(st.st_mtime) + "|" + std::to_string(st.st_size);
+}
+#else
+#include <sys/stat.h>
 static std::string StatKey(const char *path) {
     struct stat st;
     if (stat(path, &st) != 0) return std::string();
     return std::string(path) + "|" + std::to_string(st.st_mtime) + "|" + std::to_string(st.st_size);
 }
+#endif
 
 static OCIO::ConstConfigRcPtr GetConfig(const char *path) {
     std::string key = StatKey(path);
