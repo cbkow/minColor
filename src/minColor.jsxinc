@@ -3,7 +3,7 @@
 // Facts and constraints this encodes are documented in ../PREPLAN.md and ../probes/RESULTS.md.
 
 var MinColor = (function () {
-  var VERSION = "0.5.0";
+  var VERSION = "0.6.0";
   var ROOT = new File($.fileName).parent.parent.fsName;            // repo root (src/..)
   var DIST = ROOT + "/config/dist";
   var STICKY_SEC = "After Effects Sticky Prefs", STICKY_KEY = "AE Last Project Settings";
