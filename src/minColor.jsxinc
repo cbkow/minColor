@@ -219,7 +219,9 @@ var MinColor = (function () {
     p2.ocioConfigurationFile = target;
     var d2 = doctor();
     if (d2.status !== "green") throw new Error("repair incomplete: " + d2.text);
-    return "repaired \u2192 " + target;
+    try { syncPluginNames(); } catch (eSy) {}                        // refresh MINC registry against the healed authority
+    try { app.purge(PurgeTarget.ALL_CACHES); } catch (ePu) {}        // cached frames predate the heal — without this the viewer
+    return "repaired \u2192 " + target;                             // keeps showing pre-heal pixels and looks like it needs a restart
   }
   function preflight() {
     var r = { ok: true, notes: [] };
