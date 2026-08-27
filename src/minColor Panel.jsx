@@ -230,12 +230,13 @@
     guard(label, function () {
       var r = MinColor.interpretPass(scope, space || null);
       var detail = [];
-      if (r.added.length) detail.push("ADDED:\n  " + r.added.join("\n  "));
-      if (r.failed && r.failed.length) detail.push("FAILED:\n  " + r.failed.join("\n  "));
-      if (r.flagged.length) detail.push("FLAGGED:\n  " + r.flagged.join("\n  "));
-      if (r.identity && r.identity.length) detail.push("ALREADY WORKING-SPACE (identity, no CST needed):\n  " + r.identity.join("\n  "));
-      if (r.skipped.length) detail.push("SKIPPED:\n  " + r.skipped.join("\n  "));
-      if (detail.length) alert("minColor \u2014 " + label + "\n\n" + detail.join("\n\n").substr(0, 4000));
+      var cap = function (a) { return a.length <= 14 ? a.join("\n  ") : a.slice(0, 14).join("\n  ") + "\n  \u2026 and " + (a.length - 14) + " more"; };
+      if (r.added.length) detail.push("ADDED:\n  " + cap(r.added));
+      if (r.failed && r.failed.length) detail.push("FAILED:\n  " + cap(r.failed));
+      if (r.flagged.length) detail.push("FLAGGED:\n  " + cap(r.flagged));
+      if (r.identity && r.identity.length) detail.push("ALREADY WORKING-SPACE (identity, no CST needed):\n  " + cap(r.identity));
+      if (r.skipped.length) detail.push("SKIPPED:\n  " + cap(r.skipped));
+      if (detail.length) alert("minColor \u2014 " + label + "\n\n" + detail.join("\n\n"));   // per-bucket caps: a big ADDED list must never hide the skipped/identity buckets
       return "added " + r.added.length + ", failed " + (r.failed ? r.failed.length : 0) + ", identity " + (r.identity ? r.identity.length : 0) + ", skipped " + r.skipped.length;
     });
   }
