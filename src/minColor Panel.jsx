@@ -160,7 +160,11 @@
                   "\n\nSave, back up, patch and reopen now?";
         if (!confirm(msg.substr(0, 3000))) return "cancelled";
         var r = MinColor.migrateProject(dd.selection.text);
-        return "working=" + r.working + " stripped=" + r.stripped + " residual=" + r.residual;
+        var warn = [];
+        if (r.effectsFailed && r.effectsFailed.length) warn.push("CST REBUILD FAILED:\n  " + r.effectsFailed.join("\n  "));
+        if (r.effectsForeign && r.effectsForeign.length) warn.push("MANUALLY ADDED OCIO CSTs \u2014 NOT rebuilt (re-create these by hand under the new config, or they can crash AE):\n  " + r.effectsForeign.join("\n  "));
+        if (warn.length) alert("minColor \u2014 migrate warnings\n\n" + warn.join("\n\n").substr(0, 3000));
+        return "working=" + r.working + " stripped=" + r.stripped + " rebuilt=" + (r.effectsRebuilt || 0) + " residual=" + r.residual;
       });
     }
   };
