@@ -43,6 +43,7 @@ add_library(minColorCST MODULE
   src/MinColorCST.cpp
   src/Arb.cpp
   src/Authority.cpp
+  src/Passport.cpp
   src/OcioEngine.cpp
   src/SmartRender.cpp
   src/Ui.cpp

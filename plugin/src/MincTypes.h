@@ -66,6 +66,11 @@ typedef struct {                       /* handed to instances via AEGP_EffectCal
 void MincRegistrySet(uint32_t id, const MincSeqData *sd);
 bool MincRegistryGet(uint32_t id, MincSeqData *out);
 
+/* Passport.cpp — self-locating store + effective authority (see file header) */
+const char *MincLocalStoreConfigDir(void);
+bool MincEffectiveAuthority(const MincAuthoritySnapshot *live, const MincSeqData *sd,
+                            MincAuthoritySnapshot *out);   /* true == synthesized from passport */
+
 int MincOcioProbeStatus(const MincAuthoritySnapshot *auth, const MinColorArb *arb);  /* ladder check, no pixels */
 int MincOcioApplyRows(const MincAuthoritySnapshot *auth, const MinColorArb *arb,
                       float *rgbaRows, int pixelCount);

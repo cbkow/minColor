@@ -13,8 +13,11 @@ PF_Err MincHandleEvent(PF_InData *in_data, PF_OutData *out_data, PF_ParamDef *pa
     PF_Err err = PF_Err_NONE, err2 = PF_Err_NONE;
     if (extra->e_type != PF_Event_DRAW || extra->effect_win.area != PF_EA_CONTROL) return err;
 
-    MinColorArb arb; MincResolveArb(in_data, &arb);
-    MincAuthoritySnapshot auth = {}; MincAuthorityGet(&auth);
+    MincSeqData sdRes; MincResolveSeq(in_data, &sdRes);
+    MinColorArb arb = sdRes.arb;
+    MincAuthoritySnapshot live = {}; MincAuthorityGet(&live);
+    MincAuthoritySnapshot auth = {};
+    bool viaPassport = MincEffectiveAuthority(&live, &sdRes, &auth);
     int status = MincOcioProbeStatus(&auth, &arb);
 
     DRAWBOT_Suites suites; DRAWBOT_DrawRef drawRef = NULL;
@@ -33,7 +36,8 @@ PF_Err MincHandleEvent(PF_InData *in_data, PF_OutData *out_data, PF_ParamDef *pa
         DRAWBOT_RectF32 r = { fr.left + 0.5f, fr.top + 0.5f, (float)(fr.right - fr.left), (float)(fr.bottom - fr.top) };
         DRAWBOT_ColorRGBA bg;
         switch (status) {                                            /* chip = the ladder made visible */
-            case MINC_STATUS_OK:               bg = {0.13f, 0.30f, 0.16f, 1}; break;
+            case MINC_STATUS_OK:               bg = viaPassport ? DRAWBOT_ColorRGBA{0.13f, 0.22f, 0.34f, 1}
+                                                                : DRAWBOT_ColorRGBA{0.13f, 0.30f, 0.16f, 1}; break;
             case MINC_STATUS_PASS_EMPTY:       bg = {0.25f, 0.25f, 0.25f, 1}; break;
             default:                           bg = {0.36f, 0.28f, 0.10f, 1}; break;
         }
@@ -47,7 +51,7 @@ PF_Err MincHandleEvent(PF_InData *in_data, PF_OutData *out_data, PF_ParamDef *pa
             snprintf(line1, sizeof(line1), (arb.direction == MINC_DIR_TO_WORKING) ? "%s -> working" : "working -> %s", arb.space);
         else snprintf(line1, sizeof(line1), "(unset - name the effect and Sync)");
         switch (status) {
-            case MINC_STATUS_OK:                snprintf(line2, sizeof(line2), "OK  \xc2\xb7  working: %s", auth.workingSpace); break;
+            case MINC_STATUS_OK:                snprintf(line2, sizeof(line2), viaPassport ? "OK (passport)  \xc2\xb7  working: %s" : "OK  \xc2\xb7  working: %s", auth.workingSpace); break;
             case MINC_STATUS_PASS_EMPTY:        snprintf(line2, sizeof(line2), "passthrough"); break;
             case MINC_STATUS_PASS_OCIO_OFF:     snprintf(line2, sizeof(line2), "PASSTHROUGH: project not in OCIO mode"); break;
             case MINC_STATUS_PASS_UNKNOWN_SPACE:snprintf(line2, sizeof(line2), "PASSTHROUGH: space not in config"); break;

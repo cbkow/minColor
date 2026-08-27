@@ -57,14 +57,17 @@ void MincResolveArb(PF_InData *in_data, MinColorArb *arb) {      /* thin wrapper
 
 PF_Err MincSmartPreRender(PF_InData *in_data, PF_OutData *out_data, PF_PreRenderExtra *extra) {
     PF_Err err = PF_Err_NONE;
-    {   /* our real state is invisible to AE's param fingerprint — mix it into the render
-           GUID so five differently-synced instances never share a cached frame */
-        MinColorArb arb; MincResolveArb(in_data, &arb);
-        MincAuthoritySnapshot auth = {}; MincAuthorityGet(&auth);
-        struct { MinColorArb a; unsigned long gen; } mix;
-        memset(&mix, 0, sizeof(mix));                    /* struct padding must not leak stack noise
-                                                            into the GUID — it defeats frame caching */
-        mix.a = arb; mix.gen = auth.generation;
+    {   /* our real state is invisible to AE's param fingerprint — mix the EFFECTIVE state
+           (resolved arb + the authority the render will actually use) into the render GUID */
+        MincSeqData sd; MincResolveSeq(in_data, &sd);
+        MincAuthoritySnapshot live = {}; MincAuthorityGet(&live);
+        MincAuthoritySnapshot eff = {};
+        uint32_t usedPassport = MincEffectiveAuthority(&live, &sd, &eff) ? 1u : 0u;
+        struct { MinColorArb a; uint32_t pass; char cfg[1024]; char ws[MINC_SPACE_LEN]; } mix;
+        memset(&mix, 0, sizeof(mix));                    /* padding must not leak stack noise into the GUID */
+        mix.a = sd.arb; mix.pass = usedPassport;
+        memcpy(mix.cfg, eff.configPath, sizeof(mix.cfg));
+        memcpy(mix.ws, eff.workingSpace, sizeof(mix.ws));
         extra->cb->GuidMixInPtr(in_data->effect_ref, sizeof(mix), &mix);
     }
     PF_RenderRequest req = extra->input->output_request;
@@ -112,10 +115,13 @@ PF_Err MincSmartRender(PF_InData *in_data, PF_OutData *out_data, PF_SmartRenderE
     ERR(extra->cb->checkout_layer_pixels(in_data->effect_ref, MINC_INPUT, &inputW));
     ERR(extra->cb->checkout_output(in_data->effect_ref, &outputW));
     if (!err && inputW && outputW) {
-        MinColorArb arb; MincResolveArb(in_data, &arb);
+        MincSeqData sd; MincResolveSeq(in_data, &sd);
+        MinColorArb arb = sd.arb;
         PF_Err arbErr = PF_Err_NONE;
+        MincAuthoritySnapshot live = {};
+        MincAuthorityGet(&live);
         MincAuthoritySnapshot auth = {};
-        MincAuthorityGet(&auth);
+        MincEffectiveAuthority(&live, &sd, &auth);       /* dead live authority + passport -> local store */
         MincDebugLog("render: arbErr=%d magic=%08lx dir=%d space='%s' | gen=%lu ocioOn=%d ws='%s'",
                      (int)arbErr, (unsigned long)arb.magic, (int)arb.direction, arb.space,
                      auth.generation, (int)auth.ocioOn, auth.workingSpace);
