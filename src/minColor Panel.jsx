@@ -140,6 +140,14 @@
   var bPlug = rowE.add("button", undefined, "Use plugin FX"); bPlug.preferredSize.width = 105;
   bPlug.helpTip = "Convert every minColor effect to the MINC CST plugin (crash-proof across preset switches; destination follows the working space live)";
   var bNat = rowE.add("button", undefined, "Use native FX"); bNat.preferredSize.width = 105;
+  var bArch = rowE.add("button", undefined, "Archive"); bArch.preferredSize.width = 70;
+  bArch.helpTip = "Make the project self-contained for handoff/archival: sidecar config + provenance.json + a golden reference frame in _minColor/";
+  bArch.onClick = function () {
+    guard("Archive", function () {
+      var r = MinColor.archiveProject();
+      return "sidecar + provenance + " + r.golden;
+    });
+  };
   bNat.helpTip = "Convert back to AE's native OCIO CST \u2014 for handoff to machines without the plugin";
   try { bPlug.enabled = MinColor.pluginAvailable(); } catch (ePl) { bPlug.enabled = false; }
   bPlug.onClick = function () {

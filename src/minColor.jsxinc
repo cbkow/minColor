@@ -323,6 +323,42 @@ var MinColor = (function () {
     return out;
   }
 
+  // ---------- archive: materialize everything a future machine needs ----------
+  function archiveProject() {
+    var p = app.project;
+    if (!p.file) throw new Error("save the project first");
+    var info = sidecarInfo(); if (!info) throw new Error("not a minColor project");
+    var sidecarCfg = ensureSidecar(info.preset);                     // config + luts travel with the job
+    var sd = p.file.parent.fsName + "/_minColor";
+    var prov = readProvenance() || "{}";
+    var pf = new File(sd + "/provenance.json");
+    pf.open("w"); pf.write(prov); pf.close();
+    /* golden reference frame: a synthetic ramp through the CURRENT engine+config — future
+       reopenings diff against it to DETECT drift instead of wondering */
+    var golden = "skipped (no _HIDDEN X-Factor 32 output template)";
+    try {
+      var c = p.items.addComp("__minc_golden", 256, 32, 1.0, 1.0, 25.0);
+      c.openInViewer();
+      var sol = c.layers.addSolid([0, 0, 0], "ramp", 256, 32, 1.0, 1.0);
+      var rampFx = sol.property("ADBE Effect Parade").addProperty("ADBE Ramp");
+      rampFx.property(1).setValue([0, 16]); rampFx.property(3).setValue([256, 16]);
+      var fx = sol.property("ADBE Effect Parade").addProperty("ADBE OCIO Color Space Transform");
+      fx.name = FX_PREFIX + "sRGB \u2192 working";
+      setPopupRetrying(fx, 1, "sRGB", c);
+      setPopupRetrying(fx, 2, "default", c);
+      var rqi = p.renderQueue.items.add(c);
+      rqi.applyTemplate("Best Settings"); rqi.timeSpanStart = 0; rqi.timeSpanDuration = c.frameDuration;
+      var om = rqi.outputModule(1);
+      om.applyTemplate("_HIDDEN X-Factor 32");
+      var gpath = sd + "/reference_" + info.preset + "_[#####].psd";
+      om.file = new File(gpath);
+      app.beginSuppressDialogs(); p.renderQueue.render(); app.endSuppressDialogs(false);
+      c.remove();
+      golden = "reference_" + info.preset + "_00000.psd";
+    } catch (eG) { golden = "skipped (" + eG.toString() + ")"; }
+    return { sidecar: sidecarCfg, provenance: pf.fsName, golden: golden };
+  }
+
   // ---------- engine translation: native CST <-> MINC CST plugin (stage two) ----------
   var MINC_MATCH = "MINC CST";
   function pluginAvailable() {
@@ -773,7 +809,7 @@ var MinColor = (function () {
   function addViewGuideLayer(comp, viewColorspace) { return upsertUtilityLayer(comp, "view", viewColorspace || "sRGB"); }
   function addRenderLayer(comp, renderSpace) { return upsertUtilityLayer(comp, "render", renderSpace || "Gamma 2.4 Encoded Rec.709"); }
 
-  return { VERSION: VERSION, presets: presets, menuLists: menuLists, preflight: preflight, payloadRoot: payloadRoot, ensureSidecar: ensureSidecar, sidecarInfo: sidecarInfo, doctor: doctor, repair: repair, pinConfig: pinConfig, findConfigByName: findConfigByName, stampProvenance: stampProvenance, readProvenance: readProvenance, migrateProject: migrateProject, interpretPass: interpretPass, extDefaults: extDefaults, saveExtDefaults: saveExtDefaults, suggestionFor: suggestionFor, collectDetected: collectDetected, readHarvest: readHarvest, harvestPath: harvestPath, seedStickyPref: seedStickyPref, newProject: newProject,
+  return { VERSION: VERSION, presets: presets, menuLists: menuLists, preflight: preflight, payloadRoot: payloadRoot, ensureSidecar: ensureSidecar, sidecarInfo: sidecarInfo, doctor: doctor, repair: repair, pinConfig: pinConfig, findConfigByName: findConfigByName, stampProvenance: stampProvenance, readProvenance: readProvenance, archiveProject: archiveProject, migrateProject: migrateProject, interpretPass: interpretPass, extDefaults: extDefaults, saveExtDefaults: saveExtDefaults, suggestionFor: suggestionFor, collectDetected: collectDetected, readHarvest: readHarvest, harvestPath: harvestPath, seedStickyPref: seedStickyPref, newProject: newProject,
            assertProject: assertProject, applyPresetToCurrent: applyPresetToCurrent,
            syncReport: syncReport, syncApply: syncApply, rebuildMinColorEffects: rebuildMinColorEffects, translateEffects: translateEffects, pluginAvailable: pluginAvailable, uiState: uiState, saveUiState: saveUiState,
            setPopupByName: setPopupByName, addInputTransform: addInputTransform, addViewGuideLayer: addViewGuideLayer, addRenderLayer: addRenderLayer, findUtilityLayer: findUtilityLayer };
