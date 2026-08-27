@@ -1,23 +1,31 @@
-# minColor plugin — Windows build quick-start
+# minColor plugin — Windows build
 
-Prereqs: Visual Studio 2022 (C++ workload), CMake 3.24+, git. Use an
-"x64 Native Tools Command Prompt for VS".
+STATUS: built and proven on the Union Windows machine (2026-08-27) — this doc
+describes the pipeline as it actually shipped.
 
-1. Unzip the Windows AE SDK (private/sdk/AfterEffectsSDK_25.6_61_win — it's a
-   zstd tarball like the mac one; 7-Zip-Zstandard is bundled beside it) so that
-   `plugin/sdk/<anything>/Examples/Headers/AE_Effect.h` exists.
-2. Build static OCIO:  `plugin\external\build.bat`   (produces external\install)
-3. Configure + build:  `cmake -S plugin -B plugin\build`  then
-                       `cmake --build plugin\build --config Release`
-4. Install: copy `plugin\build\Release\minColorCST.aex` to
-   `C:\Program Files\Adobe\Common\Plug-ins\7.0\MediaCore\minColor\`
-   and the configs from `config\dist\` (plus luts/filmic/icc) into a `configs`
-   folder beside it.
-5. Verify: restart AE → Effect ▸ minColor ▸ minColor CST; run the panel's
-   interpret pass on a scratch project; log lands in %TEMP%\minColorCST_authority.log.
+Prereqs: Visual Studio 2022 (C++ workload), CMake 3.24+, git.
+Use an "x64 Native Tools Command Prompt for VS".
 
-Known-unknowns to expect (M0-style whack-a-mole): PiPL preprocess flags, OCIO
-ext-package link order (add external\build\ext\dist\lib\*.lib to the target if
-unresolved externals appear — mirrors the mac fix), MSVC runtime (/MD) matching
-between OCIO and the plugin, and the DRAWBOT/AEGP suite headers pulling in
-Windows.h ordering issues (NOMINMAX is already defined).
+1. SDK: unzip the Windows AE SDK so plugin/sdk/<anything>/Examples/Headers/AE_Effect.h
+   exists (the SDK archive does not travel with the repo — copy it from
+   private/sdk/ on the mac, or re-download).
+2. Static OCIO 2.5.2:  plugin\external\build.bat   -> external\install
+   (built /MD — CMAKE_MSVC_RUNTIME_LIBRARY MultiThreadedDLL matches AE and the plugin)
+3. Plugin:  cmake -S plugin -B plugin\build
+            cmake --build plugin\build --config Release      -> minColorCST.aex
+   PiPL: src/MinColorCST_PiPL.r -> cl /EP -> PiPLtool -> cl /EP /D MSWindows -> .rc,
+   run via cmake/BuildPiPL.cmake in script mode (stdout redirection works under
+   both VS and Ninja generators). OCIO ext deps resolve via CMAKE_PREFIX_PATH to
+   external/build/ext/dist (OpenColorIOConfig find_dependency()s them) and the
+   *.lib glob links the static ext packages.
+4. AE-free engine check:  plugin\tools\build-probe.bat  (MSVC build of
+   tools/probe-engine.cpp; verify against PyOpenColorIO as on mac).
+5. Install: copy plugin\build\Release\minColorCST.aex to
+   C:\Program Files\Adobe\Common\Plug-ins\7.0\MediaCore\minColor\
+   plus config\dist contents as a "configs" folder beside it.
+6. Verify: restart AE -> Effect > minColor > minColor CST; panel interpret pass;
+   log lands in %TEMP%\minColorCST_authority.log.
+
+Portability rules (both platforms build from the SAME sources): platform code
+goes behind #ifdef AE_OS_WIN (defined by the Windows CMake branch alongside
+MSWindows); never fork shared logic.

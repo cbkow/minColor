@@ -5,32 +5,9 @@
 #include <map>
 #include <cstring>
 #include <cstdio>
-#include <cstdlib>
-#ifdef AE_OS_WIN
-  #include <Windows.h>
-#else
-  #include <pthread.h>
+#ifndef AE_OS_WIN
+#include <pthread.h>
 #endif
-
-static const char *MincLogPath() {                                   // per-OS debug log location
-#ifdef AE_OS_WIN
-    static char path[1024] = "";
-    if (!path[0]) { const char *tmp = getenv("TEMP"); snprintf(path, sizeof(path), "%s\\minColorCST_authority.log", tmp ? tmp : "C:\\Temp"); }
-    return path;
-#else
-    return "/tmp/minColorCST_authority.log";
-#endif
-}
-static bool MincIsMainThread() {
-#ifdef AE_OS_WIN
-    static DWORD mainId = 0;                                          // first caller is GLOBAL_SETUP = main thread
-    DWORD me = GetCurrentThreadId();
-    if (!mainId) { mainId = me; return true; }
-    return me == mainId;
-#else
-    return pthread_main_np() != 0;
-#endif
-}
 
 static std::mutex             g_regMx;
 static std::map<uint32_t, MinColorArb> g_registry;
@@ -56,26 +33,37 @@ static bool                   g_hooksOK = false;
 static SPBasicSuite          *g_pica = nullptr;
 
 #ifdef AE_OS_WIN
-static double NowMs() { return (double)GetTickCount64(); }
+#include <cstdlib>
+#include <chrono>
+static const char *MincLogPath() {                                  /* %TEMP%/minColorCST_authority.log */
+    static char p[MAX_PATH + 40] = "";
+    if (!p[0]) { const char *t = getenv("TEMP"); snprintf(p, sizeof(p), "%s/minColorCST_authority.log", t ? t : "C:/Windows/Temp"); }
+    return p;
+}
+#define MINC_LOG_PATH MincLogPath()
+static double NowMs() { return std::chrono::duration<double, std::milli>(std::chrono::system_clock::now().time_since_epoch()).count(); }
+static struct MincLoadStampT {                                      /* DLL load moment: catches static-init cost */
+    MincLoadStampT() { FILE *f = fopen(MINC_LOG_PATH, "a"); if (f) { fprintf(f, "boot: dll loaded @%.0fms\n", NowMs()); fclose(f); } }
+} s_mincLoadStamp;
+static DWORD g_mainTid = 0;                                         /* stands in for pthread_main_np: set at GlobalSetup */
 #else
-  #include <sys/time.h>
+#define MINC_LOG_PATH "/tmp/minColorCST_authority.log"
+#include <sys/time.h>
 static double NowMs() { struct timeval tv; gettimeofday(&tv, nullptr); return tv.tv_sec * 1000.0 + tv.tv_usec / 1000.0; }
-#endif
-#ifndef AE_OS_WIN
 __attribute__((constructor)) static void MincLoadStamp() {          /* dylib load moment: catches static-init cost */
-    FILE *f = fopen(MincLogPath(), "a");
+    FILE *f = fopen(MINC_LOG_PATH, "a");
     if (f) { fprintf(f, "boot: dylib loaded @%.0fms\n", NowMs()); fclose(f); }
 }
 #endif
 void MincDebugLog(const char *fmt, ...) {
-    FILE *f = fopen(MincLogPath(), "a");
+    FILE *f = fopen(MINC_LOG_PATH, "a");
     if (!f) return;
     va_list ap; va_start(ap, fmt); vfprintf(f, fmt, ap); va_end(ap);
     fputc('\n', f); fclose(f);
 }
 /* M1 diagnostic log — remove once the authority path is proven */
 static void AuthLog(const char *fmt, ...) {
-    FILE *f = fopen(MincLogPath(), "a");
+    FILE *f = fopen(MINC_LOG_PATH, "a");
     if (!f) return;
     va_list ap; va_start(ap, fmt); vfprintf(f, fmt, ap); va_end(ap);
     fputc('\n', f); fclose(f);
@@ -264,6 +252,9 @@ static A_Err UpdateMenuHook(AEGP_GlobalRefcon, AEGP_UpdateMenuRefcon, AEGP_Windo
 
 void MincAuthorityGlobalSetup(PF_InData *in_data) {
     if (g_registered) return;
+#ifdef AE_OS_WIN
+    g_mainTid = GetCurrentThreadId();                   /* GLOBAL_SETUP runs on the main thread */
+#endif
     AuthLog("boot: GlobalSetup enter @%.0fms", NowMs());
     try {
         g_pica = in_data->pica_basicP;
@@ -292,7 +283,11 @@ void MincAuthorityGlobalSetup(PF_InData *in_data) {
 }
 
 void MincAuthorityRefresh(PF_InData *in_data) {
-    if (!MincIsMainThread()) return;                    /* AEGP suites: main thread only */
+#ifdef AE_OS_WIN
+    if (GetCurrentThreadId() != g_mainTid) return;      /* AEGP suites: main thread only */
+#else
+    if (!pthread_main_np()) return;                     /* AEGP suites: main thread only */
+#endif
     if (!g_registered || !in_data || !in_data->pica_basicP) return;
     try {
         AEGP_SuiteHandler suites(in_data->pica_basicP);

@@ -3,3 +3,4 @@ build/
 external/src/
 external/build/
 external/install/
+tools/probe-engine.exe
