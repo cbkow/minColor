@@ -152,15 +152,23 @@
     } catch (eE) {}
     engSyncing = false;
   }
-  ddEng.onChange = function () {
-    if (engSyncing || !ddEng.selection) return;
-    var target = (ddEng.selection.index === 1) ? "plugin" : "native";
-    if (MinColor.readEngine() === target) return;
+  $.global.__mcEngineGo = function () {                              // runs OUTSIDE the dropdown's event context: doing the
+    var target = $.global.__mcEngineTarget;                          // translate synchronously inside onChange blanks the control
+    $.global.__mcEngineTarget = null;
+    if (!target || MinColor.readEngine() === target) return;
     guard("Engine \u2192 " + target, function () {
       var r = MinColor.translateEffects(target);
       if (r.failed.length) alert("minColor \u2014 translate\n\n" + r.failed.join("\n").substr(0, 3000));
       return "converted " + r.converted.length + ", failed " + r.failed.length;
     });                                                              // guard's refreshDoctor re-syncs (and reverts on failure)
+  };
+  ddEng.onChange = function () {
+    if (engSyncing || !ddEng.selection) return;
+    var target = (ddEng.selection.index === 1) ? "plugin" : "native";
+    if (MinColor.readEngine() === target) return;
+    $.global.__mcEngineTarget = target;
+    try { app.scheduleTask("if ($.global.__mcEngineGo) $.global.__mcEngineGo();", 60, false); }
+    catch (eT) { $.global.__mcEngineGo(); }
   };
   var bArch = rowE.add("button", undefined, "Archive"); bArch.preferredSize.width = 70;
   bArch.helpTip = "Make the project self-contained for handoff/archival: sidecar config + provenance.json + a golden reference frame in _minColor/";
