@@ -95,6 +95,17 @@ var MinColor = (function () {
   function readEngine() {
     try { var m = app.project.xmpPacket.match(/<minColor:engine>([^<]*)<\/minColor:engine>/); return m ? m[1] : null; } catch (e) { return null; }
   }
+  function stampHarvest(json) {                                      // stripped-assignment provenance INSIDE the .aep (was _minColor/harvest.json)
+    try {
+      var xmp = app.project.xmpPacket;
+      var enc = json.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+      if (xmp.indexOf("minColor:harvest") >= 0)
+        xmp = xmp.replace(/(<minColor:harvest>)[^<]*(<\/minColor:harvest>)/, "$1" + enc.replace(/\$/g, "$$$$") + "$2");
+      else
+        xmp = xmp.replace("</rdf:RDF>", '<rdf:Description rdf:about="" xmlns:minColor="https://bialkow.ski/minColor/ns/"><minColor:harvest>' + enc + '</minColor:harvest></rdf:Description></rdf:RDF>');
+      app.project.xmpPacket = xmp;
+    } catch (e) {}
+  }
   function pinConfig(presetKey) {                                    // preferred pin target for a preset
     var pr = presets()[presetKey]; if (!pr) throw new Error("unknown preset " + presetKey);
     var central = new File(centralConfigs() + "/" + pr.config);
@@ -543,18 +554,16 @@ var MinColor = (function () {
     var pr = presets()[presetKey]; if (!pr) throw new Error("unknown preset " + presetKey);
     var p = app.project; if (!p.file) throw new Error("save the project first");
     var rep = syncReport();                                          // also saves; rows carry current assignments
-    // persist the harvest BEFORE stripping (suggestions for the interpret passes)
-    var hdir = new Folder(p.file.parent.fsName + "/_minColor"); if (!hdir.exists) hdir.create();
+    // persist the harvest BEFORE stripping — into the project XMP (travels with the .aep;
+    // _minColor/ now appears only for backups)
     var items = {}, strip = [];
     for (var i = 0; i < rep.rows.length; i++) {
       var r = rep.rows[i];
       if (!r.okFlag) { items[String(r.id)] = { name: r.current }; strip.push({ id: r.id, item: r.item, name: pr.working, family: pr.family }); }
     }
-    var hf = new File(hdir.fsName + "/harvest.json"); hf.open("w");
-    hf.write('{ "migrated": "' + presetKey + '", "items": {');
     var first = true, out = "";
     for (var k in items) { out += (first ? "" : ",") + '"' + k + '":{"name":"' + items[k].name.replace(/"/g, "") + '"}'; first = false; }
-    hf.write(out + "} }"); hf.close();
+    stampHarvest('{ "migrated": "' + presetKey + '", "items": {' + out + '} }');
     // one ceremony: sidecar + config + working space + strip, single patch/reopen
     p.ocioConfigurationFile = pinConfig(presetKey);
     try { stampProvenance(presetKey, presets()[presetKey].config); } catch (eSt) {}
@@ -566,7 +575,8 @@ var MinColor = (function () {
     // post-audit
     var audit = syncReport(), bad = 0;
     for (var a2 = 0; a2 < audit.rows.length; a2++) if (!audit.rows[a2].okFlag) bad++;
-    return { preset: presetKey, working: app.project.workingSpace, stripped: strip.length, residual: bad, backup: bpath, harvested: strip.length, effectsRebuilt: rebuilt.rebuilt.length, effectsFailed: rebuilt.failed, effectsForeign: rebuilt.foreign, strippedPipeline: rebuilt.strippedPipeline, gradesLeft: rebuilt.gradesLeft, viewRenderRetargeted: rebuilt.viewRender || 0, orphanLayers: rebuilt.orphans || [], backups: backupStats() };
+    var pinNow = app.project.ocioConfigurationFile || "";
+    return { preset: presetKey, working: app.project.workingSpace, pinLocus: (pinNow.indexOf(CENTRAL_ROOT) === 0 ? "central" : "sidecar (central store not installed)"), stripped: strip.length, residual: bad, backup: bpath, harvested: strip.length, effectsRebuilt: rebuilt.rebuilt.length, effectsFailed: rebuilt.failed, effectsForeign: rebuilt.foreign, strippedPipeline: rebuilt.strippedPipeline, gradesLeft: rebuilt.gradesLeft, viewRenderRetargeted: rebuilt.viewRender || 0, orphanLayers: rebuilt.orphans || [], backups: backupStats() };
   }
 
   // ---------- suggestions & interpret passes (single-authority model: effects only) ----------
@@ -611,7 +621,16 @@ var MinColor = (function () {
     return null;
   }
   function harvestPath() { var p = app.project; return p.file ? p.file.parent.fsName + "/_minColor/harvest.json" : null; }
-  function readHarvest() { try { var hp = harvestPath(); if (!hp) return {}; var f = new File(hp); if (!f.exists) return {}; return readJSON(hp).items || {}; } catch (e) { return {}; } }
+  function readHarvest() {
+    try {
+      var m = app.project.xmpPacket.match(/<minColor:harvest>([^<]*)<\/minColor:harvest>/);
+      if (m) {
+        var json = m[1].replace(/&lt;/g, "<").replace(/&amp;/g, "&");
+        return eval("(" + json + ")").items || {};
+      }
+    } catch (eX) {}
+    try { var hp = harvestPath(); if (!hp) return {}; var f = new File(hp); if (!f.exists) return {}; return readJSON(hp).items || {}; } catch (e) { return {}; }   // legacy sidecar file
+  }
   var LEGACY_SPACE_MAP = {                                           // old-config / ICC-era names -> this config family
     "sRGB IEC61966-2.1": "sRGB",
     "Standard": "Gamma 2.4 Encoded Rec.709",                         // old Rec.1886/Standard footage assignment
@@ -846,7 +865,7 @@ var MinColor = (function () {
   function addViewGuideLayer(comp, viewColorspace) { return upsertUtilityLayer(comp, "view", viewColorspace || "sRGB"); }
   function addRenderLayer(comp, renderSpace) { return upsertUtilityLayer(comp, "render", renderSpace || "Gamma 2.4 Encoded Rec.709"); }
 
-  return { VERSION: VERSION, presets: presets, menuLists: menuLists, preflight: preflight, payloadRoot: payloadRoot, ensureSidecar: ensureSidecar, sidecarInfo: sidecarInfo, doctor: doctor, repair: repair, pinConfig: pinConfig, findConfigByName: findConfigByName, stampProvenance: stampProvenance, readProvenance: readProvenance, archiveProject: archiveProject, packageForAnyAE: packageForAnyAE, syncPluginNames: syncPluginNames, stampEngine: stampEngine, readEngine: readEngine, migrateProject: migrateProject, interpretPass: interpretPass, extDefaults: extDefaults, saveExtDefaults: saveExtDefaults, suggestionFor: suggestionFor, collectDetected: collectDetected, readHarvest: readHarvest, harvestPath: harvestPath, seedStickyPref: seedStickyPref, newProject: newProject,
+  return { VERSION: VERSION, presets: presets, menuLists: menuLists, preflight: preflight, payloadRoot: payloadRoot, ensureSidecar: ensureSidecar, sidecarInfo: sidecarInfo, doctor: doctor, repair: repair, pinConfig: pinConfig, findConfigByName: findConfigByName, stampProvenance: stampProvenance, readProvenance: readProvenance, archiveProject: archiveProject, packageForAnyAE: packageForAnyAE, syncPluginNames: syncPluginNames, stampEngine: stampEngine, readEngine: readEngine, stampHarvest: stampHarvest, migrateProject: migrateProject, interpretPass: interpretPass, extDefaults: extDefaults, saveExtDefaults: saveExtDefaults, suggestionFor: suggestionFor, collectDetected: collectDetected, readHarvest: readHarvest, harvestPath: harvestPath, seedStickyPref: seedStickyPref, newProject: newProject,
            assertProject: assertProject, applyPresetToCurrent: applyPresetToCurrent,
            syncReport: syncReport, syncApply: syncApply, rebuildMinColorEffects: rebuildMinColorEffects, translateEffects: translateEffects, pluginAvailable: pluginAvailable, uiState: uiState, saveUiState: saveUiState,
            setPopupByName: setPopupByName, addInputTransform: addInputTransform, addViewGuideLayer: addViewGuideLayer, addRenderLayer: addRenderLayer, findUtilityLayer: findUtilityLayer };

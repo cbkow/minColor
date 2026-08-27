@@ -208,7 +208,7 @@
         if (r.gradesLeft && r.gradesLeft.length) warn.push("OCIO CDL/File grades left in place (file-based \u2014 verify their look under the new working space):\n  " + r.gradesLeft.join("\n  "));
         if (r.orphanLayers && r.orphanLayers.length) warn.push("EMPTY minColor VIEW/RENDER layers (artifacts of an old bug \u2014 safe to delete):\n  " + r.orphanLayers.join("\n  "));
         if (warn.length) alert("minColor \u2014 migrate warnings\n\n" + warn.join("\n\n").substr(0, 3000));
-        return "working=" + r.working + " stripped=" + r.stripped + " rebuilt=" + (r.effectsRebuilt || 0) + " view/render retargeted=" + (r.viewRenderRetargeted || 0) + " residual=" + r.residual + " | backups: " + (r.backups ? r.backups.count + " (" + r.backups.mb + " MB)" : "?");
+        return "working=" + r.working + " | pin: " + (r.pinLocus || "?") + " | stripped=" + r.stripped + " rebuilt=" + (r.effectsRebuilt || 0) + " view/render retargeted=" + (r.viewRenderRetargeted || 0) + " residual=" + r.residual + " | backups: " + (r.backups ? r.backups.count + " (" + r.backups.mb + " MB)" : "?");
       });
     }
   };
