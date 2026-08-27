@@ -148,7 +148,17 @@ var MinColor = (function () {
       var base = cfg.substring(cfg.lastIndexOf("/") + 1);
       return { preset: m[1], configPath: new File(cfg).exists ? cfg : null, config: base, pinned: cfg };
     }
-    /* pointer empty or foreign (e.g. Adobe-mode fallback wiped it): fall back to the sidecar listing */
+    /* pointer empty or foreign — AE WIPES the pin when the stored path does not exist (cross-platform
+       arrival: a Windows pin opened on mac, or vice versa). Provenance inside the .aep is the portable
+       identity carrier: recover preset + hashed config filename from it. */
+    var prov = readProvenance();
+    if (prov) {
+      try {
+        var pj = eval("(" + prov + ")");
+        if (pj && pj.config && pj.preset) return { preset: pj.preset, configPath: findConfigByName(pj.config), config: pj.config, pinned: null };
+      } catch (eP) {}
+    }
+    /* legacy fallback: the pre-central sidecar listing */
     var sd = p2.file ? p2.file.parent.fsName + "/_minColor" : null;
     if (sd && new File(sd + "/minColor.json").exists) {
       try {
@@ -170,7 +180,7 @@ var MinColor = (function () {
   }
   function doctor() {                                                // diagnose; returns {status:"green"|"yellow"|"red"|"unmanaged", text, canRepair}
     var p2 = app.project, info = sidecarInfo();
-    if (!info) return { status: "unmanaged", text: p2.file ? "not a minColor project (no _minColor sidecar)" : "unsaved project", canRepair: false };
+    if (!info) return { status: "unmanaged", text: p2.file ? "not a minColor project (no pin, provenance, or sidecar)" : "unsaved project", canRepair: false };
     var pr = presets()[info.preset] || null;
     var cfgOk = new File(p2.ocioConfigurationFile).exists && p2.ocioConfigurationFile === info.configPath;
     var cmsOk = (p2.colorManagementSystem === 1);
