@@ -34,6 +34,20 @@ static OCIO::ConstConfigRcPtr GetConfig(const char *path) {
     return cfg;
 }
 
+int MincOcioProbeStatus(const MincAuthoritySnapshot *auth, const MinColorArb *arb) {
+    if (!auth->ocioOn)  return MINC_STATUS_PASS_OCIO_OFF;
+    if (!arb->space[0]) return MINC_STATUS_PASS_EMPTY;
+    if (!auth->configPath[0] || !auth->workingSpace[0]) return MINC_STATUS_PASS_CONFIG_ERROR;
+    try {
+        OCIO::ConstConfigRcPtr cfg = GetConfig(auth->configPath);
+        if (!cfg) return MINC_STATUS_PASS_CONFIG_ERROR;
+        const char *src = (arb->direction == MINC_DIR_TO_WORKING) ? arb->space : auth->workingSpace;
+        const char *dst = (arb->direction == MINC_DIR_TO_WORKING) ? auth->workingSpace : arb->space;
+        if (!cfg->getColorSpace(src) || !cfg->getColorSpace(dst)) return MINC_STATUS_PASS_UNKNOWN_SPACE;
+        return MINC_STATUS_OK;
+    } catch (...) { return MINC_STATUS_PASS_CONFIG_ERROR; }
+}
+
 int MincOcioApplyRows(const MincAuthoritySnapshot *auth, const MinColorArb *arb,
                       float *rgbaRows, int pixelCount) {
     if (!auth->ocioOn)          return MINC_STATUS_PASS_OCIO_OFF;

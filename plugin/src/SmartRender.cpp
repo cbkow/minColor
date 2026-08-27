@@ -21,7 +21,7 @@ static PF_Err CheckoutArb(PF_InData *in_data, MinColorArb *out) {
     return err;
 }
 
-static void ResolveArb(PF_InData *in_data, MinColorArb *arb) {      /* param first, then seq+registry */
+void MincResolveArb(PF_InData *in_data, MinColorArb *arb) {      /* param first, then seq+registry */
     memset(arb, 0, sizeof(*arb));
     CheckoutArb(in_data, arb);
     uint32_t seqId = 0;
@@ -48,7 +48,7 @@ PF_Err MincSmartPreRender(PF_InData *in_data, PF_OutData *out_data, PF_PreRender
     PF_Err err = PF_Err_NONE;
     {   /* our real state is invisible to AE's param fingerprint — mix it into the render
            GUID so five differently-synced instances never share a cached frame */
-        MinColorArb arb; ResolveArb(in_data, &arb);
+        MinColorArb arb; MincResolveArb(in_data, &arb);
         MincAuthoritySnapshot auth = {}; MincAuthorityGet(&auth);
         struct { MinColorArb a; unsigned long gen; } mix = { arb, auth.generation };
         extra->cb->GuidMixInPtr(in_data->effect_ref, sizeof(mix), &mix);
@@ -98,7 +98,7 @@ PF_Err MincSmartRender(PF_InData *in_data, PF_OutData *out_data, PF_SmartRenderE
     ERR(extra->cb->checkout_layer_pixels(in_data->effect_ref, MINC_INPUT, &inputW));
     ERR(extra->cb->checkout_output(in_data->effect_ref, &outputW));
     if (!err && inputW && outputW) {
-        MinColorArb arb; ResolveArb(in_data, &arb);
+        MinColorArb arb; MincResolveArb(in_data, &arb);
         PF_Err arbErr = PF_Err_NONE;
         MincAuthoritySnapshot auth = {};
         MincAuthorityGet(&auth);

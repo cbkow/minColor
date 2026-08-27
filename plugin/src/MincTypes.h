@@ -42,5 +42,6 @@ typedef struct {                       /* handed to instances via AEGP_EffectCal
 void MincRegistrySet(uint32_t id, const MinColorArb *arb);
 bool MincRegistryGet(uint32_t id, MinColorArb *out);
 
+int MincOcioProbeStatus(const MincAuthoritySnapshot *auth, const MinColorArb *arb);  /* ladder check, no pixels */
 int MincOcioApplyRows(const MincAuthoritySnapshot *auth, const MinColorArb *arb,
                       float *rgbaRows, int pixelCount);

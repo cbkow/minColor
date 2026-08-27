@@ -37,6 +37,8 @@ add_library(minColorCST MODULE
   src/Authority.cpp
   src/OcioEngine.cpp
   src/SmartRender.cpp
+  src/Ui.cpp
+  "${AE_SDK_EXAMPLES}/Util/AEFX_SuiteHelper.c"
   "${AE_SDK_EXAMPLES}/Util/AEGP_SuiteHandler.cpp"
   "${AE_SDK_EXAMPLES}/Util/MissingSuiteError.cpp"
   "${AE_SDK_EXAMPLES}/Util/Smart_Utils.cpp"

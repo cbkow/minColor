@@ -12,7 +12,8 @@ static PF_Err About(PF_InData *in_data, PF_OutData *out_data) {
 static PF_Err GlobalSetup(PF_InData *in_data, PF_OutData *out_data) {
     out_data->my_version = PF_VERSION(MINC_MAJOR_VERSION, MINC_MINOR_VERSION,
                                       MINC_BUG_VERSION, MINC_STAGE_VERSION, MINC_BUILD_VERSION);
-    out_data->out_flags  = PF_OutFlag_DEEP_COLOR_AWARE |
+    out_data->out_flags  = PF_OutFlag_CUSTOM_UI |
+                           PF_OutFlag_DEEP_COLOR_AWARE |
                            PF_OutFlag_PIX_INDEPENDENT  |
                            PF_OutFlag_SEND_UPDATE_PARAMS_UI |
                            PF_OutFlag_SEQUENCE_DATA_NEEDS_FLATTENING;   /* render clones come from the flat snapshot — keep it fresh */
@@ -32,9 +33,9 @@ static PF_Err ParamsSetup(PF_InData *in_data, PF_OutData *out_data) {
     if (!err) {
         def.flags = 0;   /* CANNOT_TIME_VARY made AE serve the param from static storage, ignoring AEGP stream writes (M3 finding) */
         PF_ADD_ARBITRARY2("Transform",
-                          0, 0,                       /* no custom UI yet (Ui.cpp = later): dims MUST be 0 without PF_OutFlag_CUSTOM_UI */
+                          210, 30,                    /* the ECW badge (Ui.cpp) */
                           0,
-                          PF_PUI_NO_ECW_UI,
+                          PF_PUI_CONTROL,
                           arbH,
                           ARB_DISK_ID,
                           NULL);
@@ -44,7 +45,16 @@ static PF_Err ParamsSetup(PF_InData *in_data, PF_OutData *out_data) {
         /* scriptable per-instance serial: the panel stamps a unique value on every instance so
            byte-identical comps can never share a cached frame, and bumps it after each sync to
            invalidate stale frames. Floats are the one param type ExtendScript can set. */
-        PF_ADD_FLOAT_SLIDERX("Sync Serial", 0, 1000000, 0, 1000000, 0, PF_Precision_INTEGER, 0, 0, SERIAL_DISK_ID);
+        PF_ADD_FLOAT_SLIDERX("Sync Serial", 0, 1000000, 0, 1000000, 0, PF_Precision_INTEGER, PF_PUI_INVISIBLE, 0, SERIAL_DISK_ID);
+    }
+    if (!err) {                                                     /* register for ECW events */
+        PF_CustomUIInfo ci;
+        AEFX_CLR_STRUCT(ci);
+        ci.events = PF_CustomEFlag_EFFECT;
+        ci.comp_ui_width = ci.comp_ui_height = 0;  ci.comp_ui_alignment = PF_UIAlignment_NONE;
+        ci.layer_ui_width = ci.layer_ui_height = 0; ci.layer_ui_alignment = PF_UIAlignment_NONE;
+        ci.preview_ui_width = ci.preview_ui_height = 0; ci.preview_ui_alignment = PF_UIAlignment_NONE;
+        err = (*(in_data->inter.register_ui))(in_data->effect_ref, &ci);
     }
     out_data->num_params = MINC_NUM_PARAMS;
     return err;
@@ -138,6 +148,9 @@ extern "C" DllExport PF_Err EffectMain(PF_Cmd cmd, PF_InData *in_data, PF_OutDat
             case PF_Cmd_COMPLETELY_GENERAL:  err = HandleGeneric(in_data, out_data, params, extra); break;
             case PF_Cmd_UPDATE_PARAMS_UI:
             case PF_Cmd_USER_CHANGED_PARAM:  MincAuthorityRefresh(in_data);         break;
+            case PF_Cmd_EVENT:
+                err = MincHandleEvent(in_data, out_data, params, reinterpret_cast<PF_EventExtra*>(extra));
+                break;
             case PF_Cmd_SMART_PRE_RENDER:
                 err = MincSmartPreRender(in_data, out_data,
                                          reinterpret_cast<PF_PreRenderExtra*>(extra));

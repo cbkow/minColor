@@ -50,6 +50,10 @@ void   MincAuthorityRefresh(PF_InData *in_data);       /* main-thread only; no-o
 bool   MincAuthorityGet(MincAuthoritySnapshot *out);   /* thread-safe copy                      */
 
 /* SmartRender.cpp */
+void MincResolveArb(PF_InData *in_data, MinColorArb *arb);
+/* Ui.cpp */
+PF_Err MincHandleEvent(PF_InData *in_data, PF_OutData *out_data, PF_ParamDef *params[], PF_EventExtra *extra);
+
 PF_Err MincSmartPreRender(PF_InData *in_data, PF_OutData *out_data, PF_PreRenderExtra *extra);
 PF_Err MincSmartRender(PF_InData *in_data, PF_OutData *out_data, PF_SmartRenderExtra *extra);
 
