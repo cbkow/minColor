@@ -5,7 +5,32 @@
 #include <map>
 #include <cstring>
 #include <cstdio>
-#include <pthread.h>
+#include <cstdlib>
+#ifdef AE_OS_WIN
+  #include <Windows.h>
+#else
+  #include <pthread.h>
+#endif
+
+static const char *MincLogPath() {                                   // per-OS debug log location
+#ifdef AE_OS_WIN
+    static char path[1024] = "";
+    if (!path[0]) { const char *tmp = getenv("TEMP"); snprintf(path, sizeof(path), "%s\\minColorCST_authority.log", tmp ? tmp : "C:\\Temp"); }
+    return path;
+#else
+    return "/tmp/minColorCST_authority.log";
+#endif
+}
+static bool MincIsMainThread() {
+#ifdef AE_OS_WIN
+    static DWORD mainId = 0;                                          // first caller is GLOBAL_SETUP = main thread
+    DWORD me = GetCurrentThreadId();
+    if (!mainId) { mainId = me; return true; }
+    return me == mainId;
+#else
+    return pthread_main_np() != 0;
+#endif
+}
 
 static std::mutex             g_regMx;
 static std::map<uint32_t, MinColorArb> g_registry;
@@ -30,21 +55,27 @@ static bool                   g_registered = false;
 static bool                   g_hooksOK = false;
 static SPBasicSuite          *g_pica = nullptr;
 
-#include <sys/time.h>
+#ifdef AE_OS_WIN
+static double NowMs() { return (double)GetTickCount64(); }
+#else
+  #include <sys/time.h>
 static double NowMs() { struct timeval tv; gettimeofday(&tv, nullptr); return tv.tv_sec * 1000.0 + tv.tv_usec / 1000.0; }
+#endif
+#ifndef AE_OS_WIN
 __attribute__((constructor)) static void MincLoadStamp() {          /* dylib load moment: catches static-init cost */
-    FILE *f = fopen("/tmp/minColorCST_authority.log", "a");
+    FILE *f = fopen(MincLogPath(), "a");
     if (f) { fprintf(f, "boot: dylib loaded @%.0fms\n", NowMs()); fclose(f); }
 }
+#endif
 void MincDebugLog(const char *fmt, ...) {
-    FILE *f = fopen("/tmp/minColorCST_authority.log", "a");
+    FILE *f = fopen(MincLogPath(), "a");
     if (!f) return;
     va_list ap; va_start(ap, fmt); vfprintf(f, fmt, ap); va_end(ap);
     fputc('\n', f); fclose(f);
 }
 /* M1 diagnostic log — remove once the authority path is proven */
 static void AuthLog(const char *fmt, ...) {
-    FILE *f = fopen("/tmp/minColorCST_authority.log", "a");
+    FILE *f = fopen(MincLogPath(), "a");
     if (!f) return;
     va_list ap; va_start(ap, fmt); vfprintf(f, fmt, ap); va_end(ap);
     fputc('\n', f); fclose(f);
@@ -261,7 +292,7 @@ void MincAuthorityGlobalSetup(PF_InData *in_data) {
 }
 
 void MincAuthorityRefresh(PF_InData *in_data) {
-    if (!pthread_main_np()) return;                     /* AEGP suites: main thread only */
+    if (!MincIsMainThread()) return;                    /* AEGP suites: main thread only */
     if (!g_registered || !in_data || !in_data->pica_basicP) return;
     try {
         AEGP_SuiteHandler suites(in_data->pica_basicP);

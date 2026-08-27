@@ -4,7 +4,7 @@
 #include <shared_mutex>
 #include <map>
 #include <string>
-#include <sys/stat.h>
+#include <filesystem>
 namespace OCIO = OCIO_NAMESPACE;
 
 struct ConfigEntry { std::string key; OCIO::ConstConfigRcPtr config; };
@@ -14,9 +14,11 @@ static std::shared_mutex g_procMx;
 static std::map<std::string, OCIO::ConstCPUProcessorRcPtr> g_procs;
 
 static std::string StatKey(const char *path) {
-    struct stat st;
-    if (stat(path, &st) != 0) return std::string();
-    return std::string(path) + "|" + std::to_string(st.st_mtime) + "|" + std::to_string(st.st_size);
+    std::error_code ec;
+    auto sz = std::filesystem::file_size(path, ec);
+    if (ec) return std::string();
+    auto mt = std::filesystem::last_write_time(path, ec).time_since_epoch().count();
+    return std::string(path) + "|" + std::to_string((long long)mt) + "|" + std::to_string((unsigned long long)sz);
 }
 
 static OCIO::ConstConfigRcPtr GetConfig(const char *path) {

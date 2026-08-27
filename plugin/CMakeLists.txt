@@ -2,8 +2,10 @@ cmake_minimum_required(VERSION 3.24)
 project(minColorCST LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_OSX_ARCHITECTURES "arm64")   # OCIO ext deps built arm64-only; universal = distribution task (see plan risks)
-set(CMAKE_OSX_DEPLOYMENT_TARGET "13.0")
+if(APPLE)
+  set(CMAKE_OSX_ARCHITECTURES "arm64")   # OCIO ext deps built arm64-only; universal = distribution task
+  set(CMAKE_OSX_DEPLOYMENT_TARGET "13.0")
+endif()
 
 # --- After Effects SDK (drop the unzipped SDK into plugin/sdk/) ---
 set(AE_SDK_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/sdk" CACHE PATH "After Effects SDK root")
@@ -52,18 +54,36 @@ target_include_directories(minColorCST PRIVATE
 )
 file(GLOB OCIO_EXT_LIBS "${CMAKE_CURRENT_SOURCE_DIR}/external/build/ext/dist/lib/*.a")
 target_link_libraries(minColorCST PRIVATE OpenColorIO::OpenColorIO ${OCIO_EXT_LIBS})
-set_target_properties(minColorCST PROPERTIES
-  BUNDLE TRUE
-  BUNDLE_EXTENSION "plugin"
-  CXX_VISIBILITY_PRESET hidden
-  VISIBILITY_INLINES_HIDDEN ON
-  OUTPUT_NAME "minColorCST"
-  MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/src/Info.plist.in"
-)
-# export ONLY the effect entry point (the static OCIO otherwise leaks thousands of symbols)
-target_link_options(minColorCST PRIVATE "-Wl,-exported_symbol,_EffectMain" "-Wl,-dead_strip")
+if(APPLE)
+  set_target_properties(minColorCST PROPERTIES
+    BUNDLE TRUE
+    BUNDLE_EXTENSION "plugin"
+    CXX_VISIBILITY_PRESET hidden
+    VISIBILITY_INLINES_HIDDEN ON
+    OUTPUT_NAME "minColorCST"
+    MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/src/Info.plist.in"
+  )
+  # export ONLY the effect entry point (the static OCIO otherwise leaks thousands of symbols)
+  target_link_options(minColorCST PRIVATE "-Wl,-exported_symbol,_EffectMain" "-Wl,-dead_strip")
+else()
+  set_target_properties(minColorCST PROPERTIES SUFFIX ".aex" OUTPUT_NAME "minColorCST")
+  target_compile_definitions(minColorCST PRIVATE AE_OS_WIN _CRT_SECURE_NO_WARNINGS NOMINMAX)
+  # PiPL on Windows: cl /EP preprocess .r -> PiPLtool -> .rc -> compiled into the .aex
+  set(PIPL_RR  "${CMAKE_CURRENT_BINARY_DIR}/minColorCST.rr")
+  set(PIPL_RRC "${CMAKE_CURRENT_BINARY_DIR}/minColorCST.rrc")
+  set(PIPL_RC  "${CMAKE_CURRENT_BINARY_DIR}/minColorCST.rc")
+  find_program(PIPLTOOL PiPLtool PATHS "${AE_SDK_EXAMPLES}/Resources" REQUIRED)
+  add_custom_command(OUTPUT "${PIPL_RC}"
+    COMMAND cl /I "${AE_SDK_HEADERS}" /EP /DMSWindows "${CMAKE_CURRENT_SOURCE_DIR}/src/MinColorCST_PiPL.r" > "${PIPL_RR}"
+    COMMAND "${PIPLTOOL}" "${PIPL_RR}" "${PIPL_RRC}"
+    COMMAND cl /EP "${PIPL_RRC}" > "${PIPL_RC}"
+    DEPENDS src/MinColorCST_PiPL.r
+    COMMENT "PiPL (PiPLtool)")
+  target_sources(minColorCST PRIVATE "${PIPL_RC}")
+endif()
 
-# --- PiPL: .r -> .rsrc via Rez (fallback: commit the generated rsrc) ---
+# --- PiPL (macOS): .r -> .rsrc via Rez ---
+if(APPLE)
 find_program(REZ_TOOL Rez)
 set(PIPL_RSRC "${CMAKE_CURRENT_BINARY_DIR}/minColorCST.rsrc")
 add_custom_command(OUTPUT "${PIPL_RSRC}"
@@ -77,3 +97,4 @@ add_dependencies(minColorCST pipl)
 add_custom_command(TARGET minColorCST POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_BUNDLE_DIR:minColorCST>/Contents/Resources"
   COMMAND ${CMAKE_COMMAND} -E copy "${PIPL_RSRC}" "$<TARGET_BUNDLE_DIR:minColorCST>/Contents/Resources/minColorCST.rsrc")
+endif()
