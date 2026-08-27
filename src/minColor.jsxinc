@@ -233,8 +233,9 @@ var MinColor = (function () {
   // ---------- engine translation: native CST <-> MINC CST plugin (stage two) ----------
   var MINC_MATCH = "MINC CST";
   function pluginAvailable() {
-    for (var i = 0; i < app.effects.length; i++) if (app.effects[i].matchName === MINC_MATCH) return true;
-    return false;
+    // never iterate app.effects (~1200 entries through the scripting bridge = >10 s at panel boot);
+    // the plugin's AEGP menu command is a single instant lookup and proves the loaded state
+    try { return app.findMenuCommandId("minColor: Sync From Names") !== 0; } catch (e) { return false; }
   }
   function translateEffects(target) {                                // "plugin" | "native"
     if (target === "plugin" && !pluginAvailable()) throw new Error("minColor CST plugin not installed");

@@ -59,7 +59,7 @@ set_target_properties(minColorCST PROPERTIES
   MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/src/Info.plist.in"
 )
 # export ONLY the effect entry point (the static OCIO otherwise leaks thousands of symbols)
-target_link_options(minColorCST PRIVATE "-Wl,-exported_symbol,_EffectMain")
+target_link_options(minColorCST PRIVATE "-Wl,-exported_symbol,_EffectMain" "-Wl,-dead_strip")
 
 # --- PiPL: .r -> .rsrc via Rez (fallback: commit the generated rsrc) ---
 find_program(REZ_TOOL Rez)

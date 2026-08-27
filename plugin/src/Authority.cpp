@@ -30,6 +30,12 @@ static bool                   g_registered = false;
 static bool                   g_hooksOK = false;
 static SPBasicSuite          *g_pica = nullptr;
 
+#include <sys/time.h>
+static double NowMs() { struct timeval tv; gettimeofday(&tv, nullptr); return tv.tv_sec * 1000.0 + tv.tv_usec / 1000.0; }
+__attribute__((constructor)) static void MincLoadStamp() {          /* dylib load moment: catches static-init cost */
+    FILE *f = fopen("/tmp/minColorCST_authority.log", "a");
+    if (f) { fprintf(f, "boot: dylib loaded @%.0fms\n", NowMs()); fclose(f); }
+}
 void MincDebugLog(const char *fmt, ...) {
     FILE *f = fopen("/tmp/minColorCST_authority.log", "a");
     if (!f) return;
@@ -227,6 +233,7 @@ static A_Err UpdateMenuHook(AEGP_GlobalRefcon, AEGP_UpdateMenuRefcon, AEGP_Windo
 
 void MincAuthorityGlobalSetup(PF_InData *in_data) {
     if (g_registered) return;
+    AuthLog("boot: GlobalSetup enter @%.0fms", NowMs());
     try {
         g_pica = in_data->pica_basicP;
         AEGP_SuiteHandler suites(in_data->pica_basicP);
@@ -248,7 +255,9 @@ void MincAuthorityGlobalSetup(PF_InData *in_data) {
             }
         }
     } catch (...) { AuthLog("GlobalSetup: exception"); }
-    MincAuthorityRefresh(in_data);
+    AuthLog("boot: GlobalSetup exit @%.0fms", NowMs());
+    /* no authority refresh here: the idle hook does it within ~1s, and suite calls during the
+       startup plugin scan are a boot-time cost we do not need to pay */
 }
 
 void MincAuthorityRefresh(PF_InData *in_data) {
