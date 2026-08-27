@@ -46,6 +46,42 @@ var MinColor = (function () {
     ? "C:/Program Files/Adobe/Common/Plug-ins/7.0/MediaCore/minColor"
     : "/Library/Application Support/Adobe/Common/Plug-ins/7.0/MediaCore/minColor";
   function centralConfigs() { return CENTRAL_ROOT + "/configs"; }
+  var OCIO_ENGINE_VERSION = "2.5.2";                                 // static OCIO linked into the MINC plugin (keep in sync with plugin/external/build.sh TAG)
+  function pluginBundleVersion() {                                   // CFBundleVersion of the installed plugin, or null
+    try {
+      var plist = new File(CENTRAL_ROOT + "/minColorCST.plugin/Contents/Info.plist");
+      if (!plist.exists) return null;
+      plist.open("r"); var s = plist.read(); plist.close();
+      var m = s.match(/CFBundleVersion<\/key>\s*<string>([^<]+)/);
+      return m ? m[1] : null;
+    } catch (e) { return null; }
+  }
+  function stampProvenance(presetKey, configBase) {                   // archival record INSIDE the .aep (XMP packet)
+    try {
+      var d = new Date();
+      function z(n) { return (n < 10 ? "0" : "") + n; }
+      var rec = '{"tool":"minColor","panel":"' + VERSION + '","plugin":"' + (pluginBundleVersion() || "none") +
+                '","ocioEngine":"' + OCIO_ENGINE_VERSION + '","preset":"' + presetKey + '","config":"' + configBase +
+                '","date":"' + d.getFullYear() + "-" + z(d.getMonth() + 1) + "-" + z(d.getDate()) + '"}';
+      var xmp = app.project.xmpPacket;
+      var block = '<rdf:Description rdf:about="" xmlns:minColor="https://bialkow.ski/minColor/ns/">' +
+                  '<minColor:provenance>' + rec.replace(/&/g, "&amp;").replace(/</g, "&lt;") + '</minColor:provenance></rdf:Description>';
+      if (xmp.indexOf("minColor:provenance") >= 0)
+        /* AE normalizes the packet on store — replace only the inner element, formatting-agnostic */
+        xmp = xmp.replace(/(<minColor:provenance>)[^<]*(<\/minColor:provenance>)/,
+                          "$1" + rec.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/\$/g, "$$$$") + "$2");
+      else
+        xmp = xmp.replace("</rdf:RDF>", block + "</rdf:RDF>");
+      app.project.xmpPacket = xmp;
+      return rec;
+    } catch (e) { return null; }                                      // provenance is best-effort, never blocks a ceremony
+  }
+  function readProvenance() {
+    try {
+      var m = app.project.xmpPacket.match(/<minColor:provenance>([^<]*)<\/minColor:provenance>/);
+      return m ? m[1].replace(/&lt;/g, "<").replace(/&amp;/g, "&") : null;
+    } catch (e) { return null; }
+  }
   function pinConfig(presetKey) {                                    // preferred pin target for a preset
     var pr = presets()[presetKey]; if (!pr) throw new Error("unknown preset " + presetKey);
     var central = new File(centralConfigs() + "/" + pr.config);
@@ -190,6 +226,7 @@ var MinColor = (function () {
       p = app.project;
     }
     var pinned = pinConfig(presetKey);
+    try { stampProvenance(presetKey, presets()[presetKey].config); } catch (eSt2) {}
     p.ocioConfigurationFile = pinned;
     if (p.workingSpace !== pr.workingSpaceLabel) {
       // AE resolved the seeded working space against its DEFAULT config and dropped it (RESULTS 15):
@@ -386,6 +423,7 @@ var MinColor = (function () {
     var pr = presets()[presetKey]; var p = app.project;
     if (!p.file) throw new Error("save the project first");
     p.ocioConfigurationFile = pinConfig(presetKey);
+    try { stampProvenance(presetKey, presets()[presetKey].config); } catch (eSt) {}
     p.save();
     var bpath = backupProject("prepatch");
     AEPPatch.patchFile(p.file.fsName, { working: { name: pr.working, family: pr.family } });
@@ -453,6 +491,7 @@ var MinColor = (function () {
     hf.write(out + "} }"); hf.close();
     // one ceremony: sidecar + config + working space + strip, single patch/reopen
     p.ocioConfigurationFile = pinConfig(presetKey);
+    try { stampProvenance(presetKey, presets()[presetKey].config); } catch (eSt) {}
     p.save();
     var bpath = backupProject("premigrate");
     AEPPatch.patchFile(p.file.fsName, { working: { name: pr.working, family: pr.family }, footage: strip });
@@ -734,7 +773,7 @@ var MinColor = (function () {
   function addViewGuideLayer(comp, viewColorspace) { return upsertUtilityLayer(comp, "view", viewColorspace || "sRGB"); }
   function addRenderLayer(comp, renderSpace) { return upsertUtilityLayer(comp, "render", renderSpace || "Gamma 2.4 Encoded Rec.709"); }
 
-  return { VERSION: VERSION, presets: presets, menuLists: menuLists, preflight: preflight, payloadRoot: payloadRoot, ensureSidecar: ensureSidecar, sidecarInfo: sidecarInfo, doctor: doctor, repair: repair, pinConfig: pinConfig, findConfigByName: findConfigByName, migrateProject: migrateProject, interpretPass: interpretPass, extDefaults: extDefaults, saveExtDefaults: saveExtDefaults, suggestionFor: suggestionFor, collectDetected: collectDetected, readHarvest: readHarvest, harvestPath: harvestPath, seedStickyPref: seedStickyPref, newProject: newProject,
+  return { VERSION: VERSION, presets: presets, menuLists: menuLists, preflight: preflight, payloadRoot: payloadRoot, ensureSidecar: ensureSidecar, sidecarInfo: sidecarInfo, doctor: doctor, repair: repair, pinConfig: pinConfig, findConfigByName: findConfigByName, stampProvenance: stampProvenance, readProvenance: readProvenance, migrateProject: migrateProject, interpretPass: interpretPass, extDefaults: extDefaults, saveExtDefaults: saveExtDefaults, suggestionFor: suggestionFor, collectDetected: collectDetected, readHarvest: readHarvest, harvestPath: harvestPath, seedStickyPref: seedStickyPref, newProject: newProject,
            assertProject: assertProject, applyPresetToCurrent: applyPresetToCurrent,
            syncReport: syncReport, syncApply: syncApply, rebuildMinColorEffects: rebuildMinColorEffects, translateEffects: translateEffects, pluginAvailable: pluginAvailable, uiState: uiState, saveUiState: saveUiState,
            setPopupByName: setPopupByName, addInputTransform: addInputTransform, addViewGuideLayer: addViewGuideLayer, addRenderLayer: addRenderLayer, findUtilityLayer: findUtilityLayer };
