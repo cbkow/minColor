@@ -73,9 +73,15 @@ PF_Err MincSmartRender(PF_InData *in_data, PF_OutData *out_data, PF_SmartRenderE
         MincAuthoritySnapshot auth = {};
         MincAuthorityGet(&auth);
         int status = MINC_STATUS_PASS_EMPTY;
-        AEGP_SuiteHandler suites(in_data->pica_basicP);
         PF_PixelFormat fmt = PF_PixelFormat_INVALID;
-        suites.PFWorldSuite2()->PF_GetPixelFormat(outputW, &fmt);
+        {
+            const void *wsV = nullptr;
+            if (in_data->pica_basicP->AcquireSuite(kPFWorldSuite, kPFWorldSuiteVersion2, &wsV) == kSPNoError && wsV) {
+                const PF_WorldSuite2 *ws = reinterpret_cast<const PF_WorldSuite2*>(wsV);
+                ws->PF_GetPixelFormat(outputW, &fmt);
+                in_data->pica_basicP->ReleaseSuite(kPFWorldSuite, kPFWorldSuiteVersion2);
+            }
+        }
         switch (fmt) {
             case PF_PixelFormat_ARGB128:
                 ProcessRows<PF_PixelFloat>(inputW, outputW, &auth, &arb, &status,

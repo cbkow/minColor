@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.24)
 project(minColorCST LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64")
+set(CMAKE_OSX_ARCHITECTURES "arm64")   # OCIO ext deps built arm64-only; universal = distribution task (see plan risks)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "13.0")
 
 # --- After Effects SDK (drop the unzipped SDK into plugin/sdk/) ---
@@ -37,6 +37,10 @@ add_library(minColorCST MODULE
   src/Authority.cpp
   src/OcioEngine.cpp
   src/SmartRender.cpp
+  "${AE_SDK_EXAMPLES}/Util/AEGP_SuiteHandler.cpp"
+  "${AE_SDK_EXAMPLES}/Util/MissingSuiteError.cpp"
+  "${AE_SDK_EXAMPLES}/Util/Smart_Utils.cpp"
+  "${AE_SDK_EXAMPLES}/Util/AEGP_Utils.cpp"
 )
 target_include_directories(minColorCST PRIVATE
   "${AE_SDK_HEADERS}"
@@ -44,14 +48,18 @@ target_include_directories(minColorCST PRIVATE
   "${AE_SDK_EXAMPLES}/Util"
   src
 )
-target_link_libraries(minColorCST PRIVATE OpenColorIO::OpenColorIO)
+file(GLOB OCIO_EXT_LIBS "${CMAKE_CURRENT_SOURCE_DIR}/external/build/ext/dist/lib/*.a")
+target_link_libraries(minColorCST PRIVATE OpenColorIO::OpenColorIO ${OCIO_EXT_LIBS})
 set_target_properties(minColorCST PROPERTIES
   BUNDLE TRUE
   BUNDLE_EXTENSION "plugin"
   CXX_VISIBILITY_PRESET hidden
   VISIBILITY_INLINES_HIDDEN ON
   OUTPUT_NAME "minColorCST"
+  MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/src/Info.plist.in"
 )
+# export ONLY the effect entry point (the static OCIO otherwise leaks thousands of symbols)
+target_link_options(minColorCST PRIVATE "-Wl,-exported_symbol,_EffectMain")
 
 # --- PiPL: .r -> .rsrc via Rez (fallback: commit the generated rsrc) ---
 find_program(REZ_TOOL Rez)

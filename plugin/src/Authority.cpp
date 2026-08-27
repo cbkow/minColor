@@ -71,9 +71,10 @@ void MincAuthorityRefresh(PF_InData *in_data) {
     if (!g_registered || !in_data || !in_data->pica_basicP) return;
     try {
         AEGP_SuiteHandler suites(in_data->pica_basicP);
-        AEGP_ColorSettingsSuite5 *cs = nullptr;
+        const void *csV = nullptr;
         if (in_data->pica_basicP->AcquireSuite(kAEGPColorSettingsSuite, kAEGPColorSettingsSuiteVersion5,
-                                               reinterpret_cast<const void**>(&cs)) != kSPNoError || !cs) return;
+                                               &csV) != kSPNoError || !csV) return;
+        const AEGP_ColorSettingsSuite5 *cs = reinterpret_cast<const AEGP_ColorSettingsSuite5*>(csV);
         MincAuthoritySnapshot next = {};
         A_Boolean on = FALSE;
         cs->AEGP_IsOCIOColorManagementUsed(g_aegpID, &on);

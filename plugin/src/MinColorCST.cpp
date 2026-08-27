@@ -31,7 +31,7 @@ static PF_Err ParamsSetup(PF_InData *in_data, PF_OutData *out_data) {
     if (!err) {
         def.flags = PF_ParamFlag_CANNOT_TIME_VARY;   /* keyframing this makes no sense in v1 */
         PF_ADD_ARBITRARY2("Transform",
-                          1, 1,                       /* no custom UI yet (Ui.cpp = later)   */
+                          0, 0,                       /* no custom UI yet (Ui.cpp = later): dims MUST be 0 without PF_OutFlag_CUSTOM_UI */
                           0,
                           PF_PUI_NO_ECW_UI,
                           arbH,
