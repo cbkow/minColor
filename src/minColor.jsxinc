@@ -230,6 +230,67 @@ var MinColor = (function () {
     return out;
   }
 
+  // ---------- engine translation: native CST <-> MINC CST plugin (stage two) ----------
+  var MINC_MATCH = "MINC CST";
+  function pluginAvailable() {
+    for (var i = 0; i < app.effects.length; i++) if (app.effects[i].matchName === MINC_MATCH) return true;
+    return false;
+  }
+  function translateEffects(target) {                                // "plugin" | "native"
+    if (target === "plugin" && !pluginAvailable()) throw new Error("minColor CST plugin not installed");
+    var p = app.project, out = { converted: [], skipped: [], failed: [] };
+    var serial = Math.floor((new Date()).getTime() % 900000);
+    $.global.__minColorViewerId = null;
+    for (var i = 1; i <= p.numItems; i++) {
+      var it = p.item(i); if (!(it instanceof CompItem)) continue;
+      for (var L = 1; L <= it.numLayers; L++) {
+        var ly = it.layer(L), fxp = null;
+        try { fxp = ly.property("ADBE Effect Parade"); } catch (e0) { continue; }
+        if (!fxp) continue;
+        for (var k = 1; k <= fxp.numProperties; k++) {
+          var prop = fxp.property(k), nm = prop.name;
+          if (nm.indexOf(FX_PREFIX) !== 0) continue;
+          var label = it.name + "/" + ly.name + " [" + nm + "]";
+          try {
+            var wasLocked = ly.locked; if (wasLocked) ly.locked = false;
+            try {
+              if (target === "plugin" && prop.matchName === "ADBE OCIO Color Space Transform") {
+                var idx = k;
+                fxp.property(k).remove();
+                if ($.global.__minColorViewerId !== it.id) { it.openInViewer(); $.global.__minColorViewerId = it.id; }
+                var nf = fxp.addProperty(MINC_MATCH);
+                nf.name = nm;
+                nf.property("Sync Serial").setValue(++serial);
+                if (nf.propertyIndex !== idx) nf.moveTo(idx);        // moveTo INVALIDATES nf — done with it
+                out.converted.push(label);
+              } else if (target === "native" && prop.matchName === MINC_MATCH) {
+                var rest = nm.substring(FX_PREFIX.length), src2 = null, dst2 = null;
+                var mv = rest.match(/^(view|render) (.+)$/);
+                if (mv) { src2 = "default"; dst2 = mv[2]; }
+                else { var ai = rest.indexOf(" \u2192 working"); if (ai > 0) { src2 = rest.substring(0, ai); dst2 = "default"; } }
+                if (!src2) { out.skipped.push(label + " (unparsed name)"); continue; }
+                var idx2 = k;
+                fxp.property(k).remove();
+                if ($.global.__minColorViewerId !== it.id) { it.openInViewer(); $.global.__minColorViewerId = it.id; }
+                var nfx = fxp.addProperty("ADBE OCIO Color Space Transform");
+                nfx.name = nm;
+                setPopupRetrying(nfx, 1, src2, it);
+                setPopupRetrying(nfx, 2, dst2, it);
+                if (nfx.propertyIndex !== idx2) nfx.moveTo(idx2);    // moveTo INVALIDATES nfx
+                out.converted.push(label);
+              }
+            } finally { if (wasLocked) ly.locked = true; }
+          } catch (e) { out.failed.push(label + " \u2014 " + e.toString()); }
+        }
+      }
+    }
+    if (target === "plugin") {
+      var id = app.findMenuCommandId("minColor: Sync From Names");
+      if (id) app.executeCommand(id);
+    }
+    return out;
+  }
+
   // ---------- apply preset to an existing project (save -> backup -> patch -> reopen) ----------
   function applyPresetToCurrent(presetKey) {
     var pr = presets()[presetKey]; var p = app.project;
@@ -591,6 +652,6 @@ var MinColor = (function () {
 
   return { VERSION: VERSION, presets: presets, menuLists: menuLists, preflight: preflight, payloadRoot: payloadRoot, ensureSidecar: ensureSidecar, sidecarInfo: sidecarInfo, doctor: doctor, repair: repair, migrateProject: migrateProject, interpretPass: interpretPass, extDefaults: extDefaults, saveExtDefaults: saveExtDefaults, suggestionFor: suggestionFor, collectDetected: collectDetected, readHarvest: readHarvest, harvestPath: harvestPath, seedStickyPref: seedStickyPref, newProject: newProject,
            assertProject: assertProject, applyPresetToCurrent: applyPresetToCurrent,
-           syncReport: syncReport, syncApply: syncApply, rebuildMinColorEffects: rebuildMinColorEffects, uiState: uiState, saveUiState: saveUiState,
+           syncReport: syncReport, syncApply: syncApply, rebuildMinColorEffects: rebuildMinColorEffects, translateEffects: translateEffects, pluginAvailable: pluginAvailable, uiState: uiState, saveUiState: saveUiState,
            setPopupByName: setPopupByName, addInputTransform: addInputTransform, addViewGuideLayer: addViewGuideLayer, addRenderLayer: addRenderLayer, findUtilityLayer: findUtilityLayer };
 })();

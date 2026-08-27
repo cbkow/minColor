@@ -132,6 +132,27 @@
   // ---- Set Up / Migrate dialog ----
   var pSetup = section("Setup Project", GLYPH.gear);
   var b = pSetup.add("button", undefined, "Set Up / Migrate Project…");
+  var rowE = pSetup.add("group"); rowE.alignChildren = ["left", "center"];
+  var stE = rowE.add("statictext", undefined, "Engine:");
+  var bPlug = rowE.add("button", undefined, "Use plugin FX"); bPlug.preferredSize.width = 105;
+  bPlug.helpTip = "Convert every minColor effect to the MINC CST plugin (crash-proof across preset switches; destination follows the working space live)";
+  var bNat = rowE.add("button", undefined, "Use native FX"); bNat.preferredSize.width = 105;
+  bNat.helpTip = "Convert back to AE's native OCIO CST \u2014 for handoff to machines without the plugin";
+  try { bPlug.enabled = MinColor.pluginAvailable(); } catch (ePl) { bPlug.enabled = false; }
+  bPlug.onClick = function () {
+    guard("Use plugin FX", function () {
+      var r = MinColor.translateEffects("plugin");
+      if (r.failed.length || r.skipped.length) alert("minColor \u2014 translate\n\n" + r.failed.concat(r.skipped).join("\n").substr(0, 3000));
+      return "converted " + r.converted.length + ", failed " + r.failed.length;
+    });
+  };
+  bNat.onClick = function () {
+    guard("Use native FX", function () {
+      var r = MinColor.translateEffects("native");
+      if (r.failed.length || r.skipped.length) alert("minColor \u2014 translate\n\n" + r.failed.concat(r.skipped).join("\n").substr(0, 3000));
+      return "converted " + r.converted.length + ", failed " + r.failed.length;
+    });
+  };
   b.onClick = function () {
     var dlg = new Window("dialog", "minColor — Set Up / Migrate");
     dlg.orientation = "column"; dlg.alignChildren = ["fill", "top"]; dlg.margins = 12; dlg.spacing = 8;
