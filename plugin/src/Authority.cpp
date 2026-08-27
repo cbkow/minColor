@@ -56,10 +56,15 @@ __attribute__((constructor)) static void MincLoadStamp() {          /* dylib loa
 }
 #endif
 void MincDebugLog(const char *fmt, ...) {
+#ifndef MINC_DEBUG
+    (void)fmt; return;                                   /* hot paths call this per frame/resolve —
+                                                            fopen-per-line only in debug builds */
+#else
     FILE *f = fopen(MINC_LOG_PATH, "a");
     if (!f) return;
     va_list ap; va_start(ap, fmt); vfprintf(f, fmt, ap); va_end(ap);
     fputc('\n', f); fclose(f);
+#endif
 }
 /* M1 diagnostic log — remove once the authority path is proven */
 static void AuthLog(const char *fmt, ...) {

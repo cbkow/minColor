@@ -50,7 +50,10 @@ PF_Err MincSmartPreRender(PF_InData *in_data, PF_OutData *out_data, PF_PreRender
            GUID so five differently-synced instances never share a cached frame */
         MinColorArb arb; MincResolveArb(in_data, &arb);
         MincAuthoritySnapshot auth = {}; MincAuthorityGet(&auth);
-        struct { MinColorArb a; unsigned long gen; } mix = { arb, auth.generation };
+        struct { MinColorArb a; unsigned long gen; } mix;
+        memset(&mix, 0, sizeof(mix));                    /* struct padding must not leak stack noise
+                                                            into the GUID — it defeats frame caching */
+        mix.a = arb; mix.gen = auth.generation;
         extra->cb->GuidMixInPtr(in_data->effect_ref, sizeof(mix), &mix);
     }
     PF_RenderRequest req = extra->input->output_request;
