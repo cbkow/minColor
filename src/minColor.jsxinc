@@ -305,15 +305,37 @@ var MinColor = (function () {
     return out;
   }
 
+  // ---------- backups: timestamped, append-only, human-readable; every patch path uses this ----------
+  function backupProject(tag) {
+    var p = app.project;
+    var bdir = new Folder(p.file.parent.fsName + "/_minColor/backups"); if (!bdir.exists) bdir.create();
+    var d = new Date();
+    function z(n) { return (n < 10 ? "0" : "") + n; }
+    var stamp = "" + d.getFullYear() + z(d.getMonth() + 1) + z(d.getDate()) + "-" + z(d.getHours()) + z(d.getMinutes()) + z(d.getSeconds());
+    var base = bdir.fsName + "/" + p.file.name.replace(/\.aep$/i, "") + "_" + tag + "_" + stamp;
+    var bpath = base + ".aep", n = 2;
+    while (new File(bpath).exists) bpath = base + "-" + (n++) + ".aep";   // same-second ceremonies stay distinct
+    if (!p.file.copy(bpath)) throw new Error("backup copy failed");
+    return bpath;
+  }
+  function backupStats() {
+    var p = app.project, out = { count: 0, mb: 0 };
+    if (!p.file) return out;
+    var bdir = new Folder(p.file.parent.fsName + "/_minColor/backups"); if (!bdir.exists) return out;
+    var fs = bdir.getFiles("*.aep");
+    out.count = fs.length;
+    for (var i = 0; i < fs.length; i++) out.mb += fs[i].length / 1048576;
+    out.mb = Math.round(out.mb * 10) / 10;
+    return out;
+  }
+
   // ---------- apply preset to an existing project (save -> backup -> patch -> reopen) ----------
   function applyPresetToCurrent(presetKey) {
     var pr = presets()[presetKey]; var p = app.project;
     if (!p.file) throw new Error("save the project first");
     p.ocioConfigurationFile = ensureSidecar(presetKey);
     p.save();
-    var bdir = new Folder(p.file.parent.fsName + "/_minColor/backups"); if (!bdir.exists) bdir.create();
-    var bpath = bdir.fsName + "/" + p.file.name.replace(/\.aep$/i, "") + "_" + (new Date()).getTime() + ".aep";
-    if (!p.file.copy(bpath)) throw new Error("backup copy failed");
+    var bpath = backupProject("prepatch");
     AEPPatch.patchFile(p.file.fsName, { working: { name: pr.working, family: pr.family } });
     app.beginSuppressDialogs(); app.open(new File(p.file.fsName)); app.endSuppressDialogs(false);
     return { working: app.project.workingSpace, backup: bpath };
@@ -347,9 +369,7 @@ var MinColor = (function () {
       fixes.push({ id: rows[i].id, item: rows[i].item, name: rows[i].wanted, family: familyOf(rows[i].wanted) });
     if (!fixes.length) return { applied: 0 };
     p.save();
-    var bdir = new Folder(p.file.parent.fsName + "/_minColor/backups"); if (!bdir.exists) bdir.create();
-    var bpath = bdir.fsName + "/" + p.file.name.replace(/\.aep$/i, "") + "_" + (new Date()).getTime() + ".aep";
-    if (!p.file.copy(bpath)) throw new Error("backup copy failed");
+    var bpath = backupProject("prepatch");
     AEPPatch.patchFile(p.file.fsName, { footage: fixes });
     app.beginSuppressDialogs(); app.open(new File(p.file.fsName)); app.endSuppressDialogs(false);
     return { applied: fixes.length, backup: bpath };
@@ -382,16 +402,14 @@ var MinColor = (function () {
     // one ceremony: sidecar + config + working space + strip, single patch/reopen
     p.ocioConfigurationFile = ensureSidecar(presetKey);
     p.save();
-    var bdir = new Folder(hdir.fsName + "/backups"); if (!bdir.exists) bdir.create();
-    var bpath = bdir.fsName + "/" + p.file.name.replace(/\.aep$/i, "") + "_premigrate_" + (new Date()).getTime() + ".aep";
-    if (!p.file.copy(bpath)) throw new Error("backup copy failed");
+    var bpath = backupProject("premigrate");
     AEPPatch.patchFile(p.file.fsName, { working: { name: pr.working, family: pr.family }, footage: strip });
     app.beginSuppressDialogs(); app.open(new File(p.file.fsName)); app.endSuppressDialogs(false);
     var rebuilt = rebuildMinColorEffects();                          // stale-config CSTs from a previous preset can crash AE's validator
     // post-audit
     var audit = syncReport(), bad = 0;
     for (var a2 = 0; a2 < audit.rows.length; a2++) if (!audit.rows[a2].okFlag) bad++;
-    return { preset: presetKey, working: app.project.workingSpace, stripped: strip.length, residual: bad, backup: bpath, harvested: strip.length, effectsRebuilt: rebuilt.rebuilt.length, effectsFailed: rebuilt.failed, effectsForeign: rebuilt.foreign, viewRenderRetargeted: rebuilt.viewRender || 0, orphanLayers: rebuilt.orphans || [] };
+    return { preset: presetKey, working: app.project.workingSpace, stripped: strip.length, residual: bad, backup: bpath, harvested: strip.length, effectsRebuilt: rebuilt.rebuilt.length, effectsFailed: rebuilt.failed, effectsForeign: rebuilt.foreign, viewRenderRetargeted: rebuilt.viewRender || 0, orphanLayers: rebuilt.orphans || [], backups: backupStats() };
   }
 
   // ---------- suggestions & interpret passes (single-authority model: effects only) ----------
