@@ -2,9 +2,26 @@
    AEGP suites are main-thread only — render threads read the mutexed snapshot copy.  */
 #include "MinColorCST.h"
 #include <mutex>
+#include <map>
 #include <cstring>
 #include <cstdio>
 #include <pthread.h>
+
+static std::mutex             g_regMx;
+static std::map<uint32_t, MinColorArb> g_registry;
+void MincRegistrySet(uint32_t id, const MinColorArb *arb) {
+    if (!id) return;
+    std::lock_guard<std::mutex> lk(g_regMx);
+    g_registry[id] = *arb;
+}
+bool MincRegistryGet(uint32_t id, MinColorArb *out) {
+    if (!id) return false;
+    std::lock_guard<std::mutex> lk(g_regMx);
+    auto it = g_registry.find(id);
+    if (it == g_registry.end()) return false;
+    *out = it->second;
+    return true;
+}
 
 static std::mutex             g_mx;
 static MincAuthoritySnapshot  g_snap = {};
@@ -13,6 +30,12 @@ static bool                   g_registered = false;
 static bool                   g_hooksOK = false;
 static SPBasicSuite          *g_pica = nullptr;
 
+void MincDebugLog(const char *fmt, ...) {
+    FILE *f = fopen("/tmp/minColorCST_authority.log", "a");
+    if (!f) return;
+    va_list ap; va_start(ap, fmt); vfprintf(f, fmt, ap); va_end(ap);
+    fputc('\n', f); fclose(f);
+}
 /* M1 diagnostic log — remove once the authority path is proven */
 static void AuthLog(const char *fmt, ...) {
     FILE *f = fopen("/tmp/minColorCST_authority.log", "a");
@@ -49,6 +72,151 @@ static A_Err IdleHook(AEGP_GlobalRefcon, AEGP_IdleRefcon, A_long *max_sleepPL) {
     return A_Err_NONE;
 }
 
+/* ---------------- "minColor: Sync From Names" ----------------
+   The panel names MINC CST instances ("minColor: X \xe2\x86\x92 working" / "minColor: view X" /
+   "minColor: render X") and invokes this menu command; we parse every instance's display name
+   and write its arb param. AEGP CAN set arbitrary streams; ExtendScript cannot.            */
+static AEGP_Command g_syncCmd = 0;
+
+static bool ParseGrammar(const char *utf8, MinColorArb *out) {
+    const char *PRE = "minColor: ";
+    if (strncmp(utf8, PRE, 10) != 0) return false;
+    const char *rest = utf8 + 10;
+    memset(out, 0, sizeof(*out));
+    out->magic = MINC_ARB_MAGIC; out->version = MINC_ARB_VERSION;
+    if (!strncmp(rest, "view ", 5))   { out->direction = MINC_DIR_FROM_WORKING; snprintf(out->space, MINC_SPACE_LEN, "%s", rest + 5); return true; }
+    if (!strncmp(rest, "render ", 7)) { out->direction = MINC_DIR_FROM_WORKING; snprintf(out->space, MINC_SPACE_LEN, "%s", rest + 7); return true; }
+    const char *arrow = strstr(rest, " \xe2\x86\x92 working");        /* " -> working", real arrow */
+    if (!arrow) arrow = strstr(rest, " -> working");
+    if (!arrow) return false;
+    out->direction = MINC_DIR_TO_WORKING;
+    size_t n = (size_t)(arrow - rest); if (n >= MINC_SPACE_LEN) n = MINC_SPACE_LEN - 1;
+    memcpy(out->space, rest, n);
+    return true;
+}
+
+template <typename SUITE>
+struct Acq {                                                        /* tiny RAII suite acquire */
+    SPBasicSuite *pica; const char *name; A_long ver; SUITE *p = nullptr;
+    Acq(SPBasicSuite *b, const char *n, A_long v) : pica(b), name(n), ver(v) {
+        const void *vp = nullptr;
+        if (b->AcquireSuite(n, v, &vp) == kSPNoError) p = (SUITE*)const_cast<void*>(vp);
+    }
+    ~Acq() { if (p) pica->ReleaseSuite(name, ver); }
+    SUITE *operator->() const { return p; }
+    explicit operator bool() const { return p != nullptr; }
+};
+
+static void SyncFromNames(SPBasicSuite *bp) {
+    AEGP_SuiteHandler suites(bp);
+    Acq<AEGP_ProjSuite6>          pjs(bp, kAEGPProjSuite,          kAEGPProjSuiteVersion6);
+    Acq<AEGP_ItemSuite9>          its(bp, kAEGPItemSuite,          kAEGPItemSuiteVersion9);
+    Acq<AEGP_CompSuite12>         cps(bp, kAEGPCompSuite,          kAEGPCompSuiteVersion12);
+    Acq<AEGP_LayerSuite9>         lys(bp, kAEGPLayerSuite,         kAEGPLayerSuiteVersion9);
+    Acq<AEGP_DynamicStreamSuite4> dss(bp, kAEGPDynamicStreamSuite, kAEGPDynamicStreamSuiteVersion4);
+    Acq<AEGP_StreamSuite6>        sts(bp, kAEGPStreamSuite,        kAEGPStreamSuiteVersion6);
+    Acq<AEGP_EffectSuite5>        efs(bp, kAEGPEffectSuite,        kAEGPEffectSuiteVersion5);
+    if (!pjs || !its || !cps || !lys || !dss || !sts || !efs) { AuthLog("sync: suite acquire failed"); return; }
+    int seen = 0, wrote = 0, badname = 0;
+    AEGP_ProjectH projH = nullptr;
+    if (pjs->AEGP_GetProjectByIndex(0, &projH) != A_Err_NONE || !projH) return;
+    AEGP_ItemH itemH = nullptr;
+    its->AEGP_GetFirstProjItem(projH, &itemH);
+    while (itemH) {
+        AEGP_ItemType ty = AEGP_ItemType_NONE;
+        its->AEGP_GetItemType(itemH, &ty);
+        if (ty == AEGP_ItemType_COMP) {
+            AEGP_CompH compH = nullptr;
+            if (cps->AEGP_GetCompFromItem(itemH, &compH) == A_Err_NONE && compH) {
+                A_long nL = 0; lys->AEGP_GetCompNumLayers(compH, &nL);
+                for (A_long li = 0; li < nL; ++li) {
+                    AEGP_LayerH layerH = nullptr;
+                    if (lys->AEGP_GetCompLayerByIndex(compH, li, &layerH) != A_Err_NONE || !layerH) continue;
+                    AEGP_StreamRefH layerRef = nullptr, fxGroup = nullptr;
+                    if (dss->AEGP_GetNewStreamRefForLayer(g_aegpID, layerH, &layerRef) != A_Err_NONE || !layerRef) continue;
+                    {   /* find the effects group by ITERATION — ByMatchname raises an internal
+                           verification failure on layers without one (cameras, lights) */
+                        A_long nkids = 0;
+                        if (dss->AEGP_GetNumStreamsInGroup(layerRef, &nkids) == A_Err_NONE) {
+                            for (A_long ki = 0; ki < nkids && !fxGroup; ++ki) {
+                                AEGP_StreamRefH kid = nullptr;
+                                if (dss->AEGP_GetNewStreamRefByIndex(g_aegpID, layerRef, ki, &kid) != A_Err_NONE || !kid) continue;
+                                A_char km[AEGP_MAX_STREAM_MATCH_NAME_SIZE] = "";
+                                dss->AEGP_GetMatchName(kid, km);
+                                if (!strcmp(km, "ADBE Effect Parade")) fxGroup = kid;
+                                else sts->AEGP_DisposeStream(kid);
+                            }
+                        }
+                    }
+                    if (fxGroup) {
+                        A_long nfx = 0; dss->AEGP_GetNumStreamsInGroup(fxGroup, &nfx);
+                        for (A_long fi = 0; fi < nfx; ++fi) {
+                            AEGP_StreamRefH fxRef = nullptr;
+                            if (dss->AEGP_GetNewStreamRefByIndex(g_aegpID, fxGroup, fi, &fxRef) != A_Err_NONE || !fxRef) continue;
+                            A_char match[AEGP_MAX_STREAM_MATCH_NAME_SIZE] = "";
+                            dss->AEGP_GetMatchName(fxRef, match);
+                            if (!strcmp(match, MINC_MATCH_NAME)) {
+                                ++seen;
+                                AEGP_MemHandle nameH = nullptr;
+                                char name8[512] = "";
+                                if (sts->AEGP_GetStreamName(g_aegpID, fxRef, FALSE, &nameH) == A_Err_NONE)
+                                    Utf16HandleToUtf8(suites, nameH, name8, sizeof(name8));
+                                MinColorArb want;
+                                if (ParseGrammar(name8, &want)) {
+                                    /* write via the EFFECT's param stream (Projector-sample pattern):
+                                       parade child index == effect index, verified by matchname */
+                                    AEGP_EffectRefH effH = nullptr;
+                                    if (efs->AEGP_GetLayerEffectByIndex(g_aegpID, layerH, fi, &effH) == A_Err_NONE && effH) {
+                                        AEGP_InstalledEffectKey key = 0;
+                                        A_char em[64] = "";
+                                        efs->AEGP_GetInstalledKeyFromLayerEffect(effH, &key);
+                                        efs->AEGP_GetEffectMatchName(key, em);
+                                        if (strcmp(em, MINC_MATCH_NAME) != 0) { AuthLog("sync: index misalign '%s'", em); efs->AEGP_DisposeEffect(effH); effH = nullptr; }
+                                    }
+                                    if (effH) {
+                                        MincSyncPayload pay; memset(&pay, 0, sizeof(pay));
+                                        pay.magic = MINC_ARB_MAGIC; pay.arb = want;
+                                        A_Time t0 = {0, 100};
+                                        A_Err ce = efs->AEGP_EffectCallGeneric(g_aegpID, effH, &t0, PF_Cmd_COMPLETELY_GENERAL, &pay);
+                                        if (ce == A_Err_NONE) ++wrote; else AuthLog("sync: CallGeneric err=%d", (int)ce);
+                                        efs->AEGP_DisposeEffect(effH);
+                                    }
+                                } else if (name8[0]) { ++badname; AuthLog("sync: unparsed name '%s'", name8); }
+                            }
+                            sts->AEGP_DisposeStream(fxRef);
+                        }
+                        sts->AEGP_DisposeStream(fxGroup);
+                    }
+                    sts->AEGP_DisposeStream(layerRef);
+                }
+            }
+        }
+        AEGP_ItemH nextH = nullptr;
+        its->AEGP_GetNextProjItem(projH, itemH, &nextH);
+        itemH = nextH;
+    }
+    AuthLog("sync: instances=%d wrote=%d unparsed=%d", seen, wrote, badname);
+}
+
+static A_Err CommandHook(AEGP_GlobalRefcon, AEGP_CommandRefcon, AEGP_Command command,
+                         AEGP_HookPriority, A_Boolean, A_Boolean *handledPB) {
+    if (command == g_syncCmd && g_pica) {
+        SyncFromNames(g_pica);
+        PF_InData fake = {}; fake.pica_basicP = g_pica;
+        MincAuthorityRefresh(&fake);
+        if (handledPB) *handledPB = TRUE;
+    }
+    return A_Err_NONE;
+}
+
+static A_Err UpdateMenuHook(AEGP_GlobalRefcon, AEGP_UpdateMenuRefcon, AEGP_WindowType) {
+    if (g_pica && g_syncCmd) {
+        Acq<AEGP_CommandSuite1> cs(g_pica, kAEGPCommandSuite, kAEGPCommandSuiteVersion1);
+        if (cs) cs->AEGP_EnableCommand(g_syncCmd);
+    }
+    return A_Err_NONE;
+}
+
 void MincAuthorityGlobalSetup(PF_InData *in_data) {
     if (g_registered) return;
     try {
@@ -60,7 +228,16 @@ void MincAuthorityGlobalSetup(PF_InData *in_data) {
         if (g_registered) {
             A_Err e2 = suites.RegisterSuite5()->AEGP_RegisterIdleHook(g_aegpID, IdleHook, NULL);
             g_hooksOK = (e2 == A_Err_NONE);
-            AuthLog("RegisterIdleHook err=%d", (int)e2);   /* M1 decision point: single binary vs sibling AEGP */
+            AuthLog("RegisterIdleHook err=%d", (int)e2);   /* M1: single binary confirmed */
+            {   /* menu command: the panel's transport for writing arb params */
+                Acq<AEGP_CommandSuite1> cs(in_data->pica_basicP, kAEGPCommandSuite, kAEGPCommandSuiteVersion1);
+                if (cs && cs->AEGP_GetUniqueCommand(&g_syncCmd) == A_Err_NONE && g_syncCmd) {
+                    cs->AEGP_InsertMenuCommand(g_syncCmd, "minColor: Sync From Names", AEGP_Menu_EDIT, AEGP_MENU_INSERT_AT_BOTTOM);
+                    A_Err e3 = suites.RegisterSuite5()->AEGP_RegisterCommandHook(g_aegpID, AEGP_HP_BeforeAE, g_syncCmd, CommandHook, NULL);
+                    A_Err e4 = suites.RegisterSuite5()->AEGP_RegisterUpdateMenuHook(g_aegpID, UpdateMenuHook, NULL);
+                    AuthLog("sync command=%d hook=%d menuhook=%d", (int)g_syncCmd, (int)e3, (int)e4);
+                }
+            }
         }
     } catch (...) { AuthLog("GlobalSetup: exception"); }
     MincAuthorityRefresh(in_data);

@@ -42,6 +42,8 @@ PF_Err MincHandleArbitrary(PF_InData *in_data, PF_OutData *out_data,
                            PF_ArbParamsExtra *extra);
 PF_Err MincArbNewDefault(PF_InData *in_data, PF_ArbitraryH *arbPH);
 
+void MincDebugLog(const char *fmt, ...);                 /* Authority.cpp; debug builds of M1/M2 */
+
 /* Authority.cpp — main-thread snapshot of AE's current OCIO state */
 void   MincAuthorityGlobalSetup(PF_InData *in_data);   /* RegisterWithAEGP + hooks (idempotent) */
 void   MincAuthorityRefresh(PF_InData *in_data);       /* main-thread only; no-ops elsewhere    */

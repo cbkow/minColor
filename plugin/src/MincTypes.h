@@ -1,6 +1,7 @@
 /* AE-free types shared by the engine and the plugin shell (keeps OcioEngine buildable
    without the After Effects SDK — used by tools/probe-engine and, later, tests).      */
 #pragma once
+#include <cstdint>
 
 #define MINC_ARB_MAGIC   0x4D6E4341u
 #define MINC_ARB_VERSION 1
@@ -9,10 +10,11 @@
 enum MinColorDirection { MINC_DIR_TO_WORKING = 0, MINC_DIR_FROM_WORKING = 1 };
 
 typedef struct {
-    unsigned long  magic;
-    unsigned short version;
-    unsigned short direction;
-    char           space[MINC_SPACE_LEN];
+    uint32_t magic;                     /* fixed-width: this struct IS the flat serialized form */
+    uint16_t version;
+    uint16_t direction;
+    uint32_t instanceId;                /* assigned at SEQUENCE_SETUP; survives every AE clone of the data */
+    char     space[MINC_SPACE_LEN];
 } MinColorArb;
 
 enum MincStatus {
@@ -27,8 +29,18 @@ typedef struct {
     bool  ocioOn;
     char  configPath[1024];
     char  workingSpace[MINC_SPACE_LEN];
-    unsigned long generation;
+    uint32_t generation;
 } MincAuthoritySnapshot;
+
+typedef struct {                       /* handed to instances via AEGP_EffectCallGeneric */
+    uint32_t    magic;                 /* MINC_ARB_MAGIC */
+    MinColorArb arb;
+} MincSyncPayload;
+
+/* Authority.cpp: instance registry — AE clones render-side sequence data from stale snapshots,
+   so mutable state flows through this map keyed by the instanceId baked into the data. */
+void MincRegistrySet(uint32_t id, const MinColorArb *arb);
+bool MincRegistryGet(uint32_t id, MinColorArb *out);
 
 int MincOcioApplyRows(const MincAuthoritySnapshot *auth, const MinColorArb *arb,
                       float *rgbaRows, int pixelCount);

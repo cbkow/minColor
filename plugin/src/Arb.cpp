@@ -28,6 +28,7 @@ PF_Err MincHandleArbitrary(PF_InData *in_data, PF_OutData *out_data,
     PF_Err err = PF_Err_NONE;
     AEGP_SuiteHandler suites(in_data->pica_basicP);
     PF_HandleSuite1 *hs = suites.HandleSuite1();
+    MincDebugLog("arb: fn=%d", (int)extra->which_function);
     switch (extra->which_function) {
         case PF_Arbitrary_NEW_FUNC:
             err = NewArb(in_data, extra->u.new_func_params.arbPH);
@@ -39,6 +40,7 @@ PF_Err MincHandleArbitrary(PF_InData *in_data, PF_OutData *out_data,
             err = NewArb(in_data, extra->u.copy_func_params.dst_arbPH);
             if (!err && extra->u.copy_func_params.src_arbH) {
                 void *src = hs->host_lock_handle(extra->u.copy_func_params.src_arbH);
+                MincDebugLog("arb: COPY space='%s'", ((const MinColorArb*)src)->space);
                 void *dst = hs->host_lock_handle(*extra->u.copy_func_params.dst_arbPH);
                 memcpy(dst, src, sizeof(MinColorArb));
                 hs->host_unlock_handle(extra->u.copy_func_params.src_arbH);
@@ -52,6 +54,7 @@ PF_Err MincHandleArbitrary(PF_InData *in_data, PF_OutData *out_data,
         case PF_Arbitrary_FLATTEN_FUNC: {
             void *src = hs->host_lock_handle(extra->u.flatten_func_params.arbH);
             memcpy(extra->u.flatten_func_params.flat_dataPV, src, sizeof(MinColorArb));
+            MincDebugLog("arb: FLATTEN space='%s'", ((const MinColorArb*)src)->space);
             hs->host_unlock_handle(extra->u.flatten_func_params.arbH);
             break;
         }
@@ -60,11 +63,15 @@ PF_Err MincHandleArbitrary(PF_InData *in_data, PF_OutData *out_data,
             if (!err) {
                 MinColorArb *dst = reinterpret_cast<MinColorArb*>(hs->host_lock_handle(*extra->u.unflatten_func_params.arbPH));
                 const MinColorArb *src = reinterpret_cast<const MinColorArb*>(extra->u.unflatten_func_params.flat_dataPV);
+                MincDebugLog("arb: UNFLATTEN buf=%lu need=%lu magic=%08x",
+                             (unsigned long)extra->u.unflatten_func_params.buf_sizeLu,
+                             (unsigned long)sizeof(MinColorArb), src->magic);
                 if (extra->u.unflatten_func_params.buf_sizeLu >= sizeof(MinColorArb) &&
                     src->magic == MINC_ARB_MAGIC && src->version == MINC_ARB_VERSION) {
                     memcpy(dst, src, sizeof(MinColorArb));
                     dst->space[MINC_SPACE_LEN - 1] = '\0';
-                } /* else: keep defaults — unknown future version degrades to passthrough */
+                    MincDebugLog("arb: UNFLATTEN ok space='%s'", dst->space);
+                } else MincDebugLog("arb: UNFLATTEN REJECTED");
                 hs->host_unlock_handle(*extra->u.unflatten_func_params.arbPH);
             }
             break;

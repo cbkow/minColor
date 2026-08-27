@@ -69,9 +69,28 @@ PF_Err MincSmartRender(PF_InData *in_data, PF_OutData *out_data, PF_SmartRenderE
     ERR(extra->cb->checkout_output(in_data->effect_ref, &outputW));
     if (!err && inputW && outputW) {
         MinColorArb arb; memset(&arb, 0, sizeof(arb));
-        ERR(CheckoutArb(in_data, &arb));
+        PF_Err arbErr = PF_Err_NONE;
+        {   /* source of truth = per-instance sequence data (const-access under MFR) */
+            PF_ConstHandle ch = nullptr;
+            const void *ssV = nullptr;
+            if (in_data->pica_basicP->AcquireSuite(kPFEffectSequenceDataSuite, kPFEffectSequenceDataSuiteVersion1, &ssV) == kSPNoError && ssV) {
+                const PF_EffectSequenceDataSuite1 *ss = reinterpret_cast<const PF_EffectSequenceDataSuite1*>(ssV);
+                ss->PF_GetConstSequenceData(in_data->effect_ref, &ch);
+                in_data->pica_basicP->ReleaseSuite(kPFEffectSequenceDataSuite, kPFEffectSequenceDataSuiteVersion1);
+            }
+            const MinColorArb *sa = ch ? *reinterpret_cast<const MinColorArb* const*>(ch) : nullptr;
+            if (!sa && in_data->sequence_data) sa = *reinterpret_cast<const MinColorArb* const*>(in_data->sequence_data);
+            if (sa && sa->magic == MINC_ARB_MAGIC) {
+                arb = *sa;
+                MinColorArb reg;
+                if (MincRegistryGet(sa->instanceId, &reg)) { reg.instanceId = sa->instanceId; arb = reg; }   /* registry wins: seq clones go stale */
+            }
+        }
         MincAuthoritySnapshot auth = {};
         MincAuthorityGet(&auth);
+        MincDebugLog("render: arbErr=%d magic=%08lx dir=%d space='%s' | gen=%lu ocioOn=%d ws='%s'",
+                     (int)arbErr, (unsigned long)arb.magic, (int)arb.direction, arb.space,
+                     auth.generation, (int)auth.ocioOn, auth.workingSpace);
         int status = MINC_STATUS_PASS_EMPTY;
         PF_PixelFormat fmt = PF_PixelFormat_INVALID;
         {
@@ -100,7 +119,7 @@ PF_Err MincSmartRender(PF_InData *in_data, PF_OutData *out_data, PF_SmartRenderE
                     [](float v){ float c = v < 0.f ? 0.f : (v > 1.f ? 1.f : v); return (A_u_char)(c * 255.0f + 0.5f); });
                 break;
         }
-        (void)status;   /* Ui.cpp badge consumes this later (M3+) */
+        MincDebugLog("render: status=%d fmt=%d", status, (int)fmt);
     }
     if (inputW) extra->cb->checkin_layer_pixels(in_data->effect_ref, MINC_INPUT);
     return err;
