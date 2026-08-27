@@ -433,15 +433,14 @@ var MinColor = (function () {
         }
       }
     }
+    /* the engine toggle swaps the EXECUTOR only — semantics live in the names, the config
+       lives in the pin, and neither moves here. Packaging for other machines = Archive.  */
     if (target === "plugin") {
       var id = app.findMenuCommandId("minColor: Sync From Names");
       if (id) app.executeCommand(id);
-      try { var inf = sidecarInfo(); if (inf) app.project.ocioConfigurationFile = pinConfig(inf.preset); } catch (eP2) {}
       stampEngine("plugin");
     } else {
       stampEngine("native");
-      /* handoff to plugin-less machines: make the project self-contained */
-      try { var inf2 = sidecarInfo(); if (inf2 && app.project.file) app.project.ocioConfigurationFile = ensureSidecar(inf2.preset); } catch (eS2) {}
     }
     return out;
   }
