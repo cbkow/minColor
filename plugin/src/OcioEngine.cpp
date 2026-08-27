@@ -62,8 +62,11 @@ int MincOcioProbeStatus(const MincAuthoritySnapshot *auth, const MinColorArb *ar
     } catch (...) { return MINC_STATUS_PASS_CONFIG_ERROR; }
 }
 
-int MincOcioApplyRows(const MincAuthoritySnapshot *auth, const MinColorArb *arb,
-                      float *rgbaRows, int pixelCount) {
+/* Token API: resolve ONCE per frame (the per-row path paid a stat + two map locks + string
+   builds per row — ~2160 stats/frame at UHD). The token owns a heap shared_ptr so the
+   processor survives cache clears for the duration of the frame. */
+int MincOcioBegin(const MincAuthoritySnapshot *auth, const MinColorArb *arb, void **token) {
+    *token = nullptr;
     if (!auth->ocioOn)          return MINC_STATUS_PASS_OCIO_OFF;
     if (!arb->space[0])         return MINC_STATUS_PASS_EMPTY;
     if (!auth->configPath[0] || !auth->workingSpace[0]) return MINC_STATUS_PASS_CONFIG_ERROR;
@@ -86,8 +89,24 @@ int MincOcioApplyRows(const MincAuthoritySnapshot *auth, const MinColorArb *arb,
             if (g_procs.size() > 64) g_procs.clear();
             g_procs[pkey] = proc;
         }
-        OCIO::PackedImageDesc desc(rgbaRows, pixelCount, 1, 4);        /* RGBA float rows */
-        proc->apply(desc);                                             /* thread-safe, stateless */
+        *token = new OCIO::ConstCPUProcessorRcPtr(proc);
         return MINC_STATUS_OK;
     } catch (...) { return MINC_STATUS_PASS_CONFIG_ERROR; }
+}
+void MincOcioApplyToken(void *token, float *rgbaRows, int pixelCount) {
+    if (!token) return;
+    OCIO::PackedImageDesc desc(rgbaRows, pixelCount, 1, 4);            /* RGBA float rows */
+    (*reinterpret_cast<OCIO::ConstCPUProcessorRcPtr*>(token))->apply(desc);   /* thread-safe, stateless */
+}
+void MincOcioEnd(void *token) {
+    delete reinterpret_cast<OCIO::ConstCPUProcessorRcPtr*>(token);
+}
+
+int MincOcioApplyRows(const MincAuthoritySnapshot *auth, const MinColorArb *arb,
+                      float *rgbaRows, int pixelCount) {               /* kept for tools/probe-engine */
+    void *tok = nullptr;
+    int st = MincOcioBegin(auth, arb, &tok);
+    if (st == MINC_STATUS_OK) { try { MincOcioApplyToken(tok, rgbaRows, pixelCount); } catch (...) { st = MINC_STATUS_PASS_CONFIG_ERROR; } }
+    MincOcioEnd(tok);
+    return st;
 }

@@ -83,9 +83,16 @@ PF_Err MincSmartPreRender(PF_InData *in_data, PF_OutData *out_data, PF_PreRender
 
 template <typename PIX, typename CVT_IN, typename CVT_OUT>
 static void ProcessRows(const PF_EffectWorld *in, PF_EffectWorld *out,
-                        const MincAuthoritySnapshot *auth, const MinColorArb *arb,
-                        int *statusOut, CVT_IN cvtIn, CVT_OUT cvtOut) {
+                        void *token, int status, CVT_IN cvtIn, CVT_OUT cvtOut) {
     const int w = MIN(in->width, out->width), h = MIN(in->height, out->height);
+    if (status != MINC_STATUS_OK) {                         /* pass-through fast path: no float scratch */
+        for (int y = 0; y < h; ++y) {
+            const PIX *ip = reinterpret_cast<const PIX*>((const char*)in->data + (size_t)y * in->rowbytes);
+            PIX       *op = reinterpret_cast<PIX*>(      (char*)out->data      + (size_t)y * out->rowbytes);
+            for (int x = 0; x < w; ++x) op[x] = ip[x];
+        }
+        return;
+    }
     std::vector<float> scratch((size_t)w * 4);
     for (int y = 0; y < h; ++y) {
         const PIX *ip = reinterpret_cast<const PIX*>((const char*)in->data  + (size_t)y * in->rowbytes);
@@ -96,15 +103,12 @@ static void ProcessRows(const PF_EffectWorld *in, PF_EffectWorld *out,
             scratch[(size_t)x*4+2] = cvtIn(ip[x].blue);
             scratch[(size_t)x*4+3] = 1.0f;                  /* alpha not transformed */
         }
-        int st = MincOcioApplyRows(auth, arb, scratch.data(), w);
-        if (y == 0) *statusOut = st;
+        MincOcioApplyToken(token, scratch.data(), w);       /* processor resolved ONCE per frame */
         for (int x = 0; x < w; ++x) {
             op[x].alpha = ip[x].alpha;
-            if (st == MINC_STATUS_OK) {
-                op[x].red   = cvtOut(scratch[(size_t)x*4+0]);
-                op[x].green = cvtOut(scratch[(size_t)x*4+1]);
-                op[x].blue  = cvtOut(scratch[(size_t)x*4+2]);
-            } else { op[x].red = ip[x].red; op[x].green = ip[x].green; op[x].blue = ip[x].blue; }
+            op[x].red   = cvtOut(scratch[(size_t)x*4+0]);
+            op[x].green = cvtOut(scratch[(size_t)x*4+1]);
+            op[x].blue  = cvtOut(scratch[(size_t)x*4+2]);
         }
     }
 }
@@ -125,7 +129,8 @@ PF_Err MincSmartRender(PF_InData *in_data, PF_OutData *out_data, PF_SmartRenderE
         MincDebugLog("render: arbErr=%d magic=%08lx dir=%d space='%s' | gen=%lu ocioOn=%d ws='%s'",
                      (int)arbErr, (unsigned long)arb.magic, (int)arb.direction, arb.space,
                      auth.generation, (int)auth.ocioOn, auth.workingSpace);
-        int status = MINC_STATUS_PASS_EMPTY;
+        void *tok = nullptr;
+        int status = MincOcioBegin(&auth, &arb, &tok);      /* ladder + config + processor: once per frame */
         PF_PixelFormat fmt = PF_PixelFormat_INVALID;
         {
             const void *wsV = nullptr;
@@ -137,22 +142,23 @@ PF_Err MincSmartRender(PF_InData *in_data, PF_OutData *out_data, PF_SmartRenderE
         }
         switch (fmt) {
             case PF_PixelFormat_ARGB128:
-                ProcessRows<PF_PixelFloat>(inputW, outputW, &auth, &arb, &status,
+                ProcessRows<PF_PixelFloat>(inputW, outputW, tok, status,
                     [](float v){ return v; },
                     [](float v){ return v; });
                 break;
             case PF_PixelFormat_ARGB64:
-                ProcessRows<PF_Pixel16>(inputW, outputW, &auth, &arb, &status,
+                ProcessRows<PF_Pixel16>(inputW, outputW, tok, status,
                     [](A_u_short v){ return (float)v / 32768.0f; },
                     [](float v){ float c = v < 0.f ? 0.f : (v > 1.f ? 1.f : v); return (A_u_short)(c * 32768.0f + 0.5f); });
                 break;
             case PF_PixelFormat_ARGB32:
             default:
-                ProcessRows<PF_Pixel8>(inputW, outputW, &auth, &arb, &status,
+                ProcessRows<PF_Pixel8>(inputW, outputW, tok, status,
                     [](A_u_char v){ return (float)v / 255.0f; },
                     [](float v){ float c = v < 0.f ? 0.f : (v > 1.f ? 1.f : v); return (A_u_char)(c * 255.0f + 0.5f); });
                 break;
         }
+        MincOcioEnd(tok);
         MincDebugLog("render: status=%d fmt=%d", status, (int)fmt);
     }
     if (inputW) extra->cb->checkin_layer_pixels(in_data->effect_ref, MINC_INPUT);

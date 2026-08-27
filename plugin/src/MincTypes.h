@@ -73,4 +73,7 @@ bool MincEffectiveAuthority(const MincAuthoritySnapshot *live, const MincSeqData
 
 int MincOcioProbeStatus(const MincAuthoritySnapshot *auth, const MinColorArb *arb);  /* ladder check, no pixels */
 int MincOcioApplyRows(const MincAuthoritySnapshot *auth, const MinColorArb *arb,
-                      float *rgbaRows, int pixelCount);
+                      float *rgbaRows, int pixelCount);                /* one-shot (probe tool) */
+int  MincOcioBegin(const MincAuthoritySnapshot *auth, const MinColorArb *arb, void **token);  /* per-frame */
+void MincOcioApplyToken(void *token, float *rgbaRows, int pixelCount);
+void MincOcioEnd(void *token);
