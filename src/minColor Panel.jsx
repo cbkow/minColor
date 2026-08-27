@@ -31,6 +31,39 @@
     catch (e) { log(label + " FAILED: " + e.toString()); alert("minColor — " + label + " failed:\n" + e.toString()); unstick(); }
   }
 
+  function showProjectDialog() {
+    var dlg = new Window("dialog", "minColor \u2014 Project");
+    dlg.orientation = "column"; dlg.alignChildren = ["fill", "top"]; dlg.margins = 14; dlg.spacing = 8;
+    var d = MinColor.doctor();
+    var inf = null; try { inf = MinColor.sidecarInfo(); } catch (e0) {}
+    var eng = null; try { eng = MinColor.readEngine(); } catch (e1) {}
+    var prov = null; try { prov = MinColor.readProvenance(); } catch (e2) {}
+    var bk = null; try { bk = MinColor.doctor && MinColor.readEngine ? null : null; } catch (e3) {}
+    function row(label, value) {
+      var g = dlg.add("group"); g.alignChildren = ["left", "top"];
+      var l = g.add("statictext", undefined, label); l.preferredSize.width = 80;
+      var v = g.add("statictext", undefined, String(value).substr(0, 90), { truncate: "middle" }); v.preferredSize.width = 330;
+    }
+    row("Status", d.status + " \u2014 " + d.text);
+    row("Engine", eng === "plugin" ? "minColor (plugin)" : eng === "native" ? "Adobe (native)" : "\u2014");
+    row("Pinned to", (inf && inf.pinned) ? inf.pinned : "(no pin)");
+    row("Provenance", prov || "(none)");
+    var rowB = dlg.add("group"); rowB.alignment = ["fill", "top"];
+    var bArch2 = rowB.add("button", undefined, "Archive");
+    bArch2.helpTip = "Freeze dependencies, keep working: sidecar + provenance.json + golden reference frame. Purely additive.";
+    var bPkg2 = rowB.add("button", undefined, "Package for any AE");
+    bPkg2.helpTip = "Deliberate exit: effects \u2192 Adobe, sidecar pinned, archive artifacts. Package a version increment, not your working copy.";
+    var bAdopt2 = rowB.add("button", undefined, "Adopt minColor FX");
+    bAdopt2.enabled = (eng === "native" && MinColor.pluginAvailable() && d.status !== "unmanaged");
+    var managed = (d.status !== "unmanaged");
+    bArch2.enabled = managed; bPkg2.enabled = managed;
+    dlg.add("button", undefined, "Close", { name: "ok" });
+    bArch2.onClick = function () { dlg.close(); guard("Archive", function () { var r = MinColor.archiveProject(); return "sidecar + provenance + " + r.golden; }); };
+    bPkg2.onClick = function () { dlg.close(); guard("Package", function () { var r = MinColor.packageForAnyAE(); if (r.failed.length) alert("minColor \u2014 package\n\n" + r.failed.join("\n").substr(0, 3000)); return r.translated + " effect(s) \u2192 Adobe, sidecar pinned, " + r.archive.golden; }); };
+    bAdopt2.onClick = function () { dlg.close(); guard("Adopt", function () { var r = MinColor.translateEffects("plugin"); return "adopted " + r.converted.length + " effect(s)"; }); };
+    dlg.show();
+  }
+
   // ---- remembered choices: dropdowns restore their last-used value and persist on change ----
   var UIS = {}; try { UIS = MinColor.uiState() || {}; } catch (eU) {}
   function bindDD(dd, key) {
@@ -114,6 +147,10 @@
     g.fillPath(g.newBrush(g.BrushType.SOLID_COLOR, [1, 1, 1, 0.28]));
   };
   var docText = rowDoc.add("statictext", undefined, "…", { truncate: "end" }); docText.alignment = ["fill", "center"];
+  var bProj = iconize(rowDoc.add("iconbutton", undefined, undefined, { style: "toolbutton" }), GLYPH.gear,
+    "Project\u2026 \u2014 status, provenance, Archive / Package / Adopt");
+  bProj.preferredSize = [20, 20];
+  bProj.onClick = function () { try { showProjectDialog(); } catch (eP) { alert("minColor: " + eP); } };
   var bRepair = rowDoc.add("button", undefined, "Repair"); bRepair.preferredSize.width = 60; bRepair.visible = false;
   bRepair.helpTip = "One-click fix: re-point the engine at this project's sidecar config";
   function refreshDoctor() {
@@ -126,7 +163,6 @@
       dot.dotColor = colors[d.status] || colors.unmanaged;
       dot.helpTip = "Doctor: " + d.status + " \u2014 " + d.text + "  (click to re-check)";
       docText.text = d.text; bRepair.visible = (d.status === "yellow" && d.canRepair);
-      try { bAdopt.visible = (d.status !== "unmanaged" && MinColor.pluginAvailable() && MinColor.readEngine() === "native"); } catch (eAd) {}
     } catch (e) { docText.text = "status unavailable: " + e; }
     unstick();
   }
@@ -136,32 +172,7 @@
   // ---- Set Up / Migrate dialog ----
   var pSetup = section("Setup Project", GLYPH.gear);
   var b = pSetup.add("button", undefined, "Set Up / Migrate Project…");
-  var rowE = pSetup.add("group"); rowE.alignChildren = ["left", "center"];
-  var bArch = rowE.add("button", undefined, "Archive"); bArch.preferredSize.width = 70;
-  bArch.helpTip = "Make the project self-contained for handoff/archival: sidecar config + provenance.json + a golden reference frame in _minColor/";
-  bArch.onClick = function () {
-    guard("Archive", function () {
-      var r = MinColor.archiveProject();
-      return "sidecar + provenance + " + r.golden;
-    });
-  };
-  var bPkg = rowE.add("button", undefined, "Package for any AE"); bPkg.preferredSize.width = 140;
-  bPkg.helpTip = "Deliberate exit for machines without minColor: converts effects to Adobe's OCIO CST, materializes + pins the sidecar, writes provenance and the golden frame. Reversible with Adopt.";
-  bPkg.onClick = function () {
-    guard("Package", function () {
-      var r = MinColor.packageForAnyAE();
-      if (r.failed.length) alert("minColor \u2014 package\n\n" + r.failed.join("\n").substr(0, 3000));
-      return r.translated + " effect(s) \u2192 Adobe, sidecar pinned, " + r.archive.golden;
-    });
-  };
-  var bAdopt = rowE.add("button", undefined, "Adopt minColor FX"); bAdopt.preferredSize.width = 140; bAdopt.visible = false;
-  bAdopt.helpTip = "This project uses Adobe OCIO effects but the minColor plugin is installed \u2014 convert to the minColor engine";
-  bAdopt.onClick = function () {
-    guard("Adopt", function () {
-      var r = MinColor.translateEffects("plugin");
-      return "adopted " + r.converted.length + " effect(s)";
-    });
-  };
+
   b.onClick = function () {
     var dlg = new Window("dialog", "minColor — Set Up / Migrate");
     dlg.orientation = "column"; dlg.alignChildren = ["fill", "top"]; dlg.margins = 12; dlg.spacing = 8;
