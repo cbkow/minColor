@@ -50,7 +50,8 @@ void   MincAuthorityRefresh(PF_InData *in_data);       /* main-thread only; no-o
 bool   MincAuthorityGet(MincAuthoritySnapshot *out);   /* thread-safe copy                      */
 
 /* SmartRender.cpp */
-void MincResolveArb(PF_InData *in_data, MinColorArb *arb);
+void MincResolveSeq(PF_InData *in_data, MincSeqData *sd);   /* full resolve: seq clone + registry + param arb */
+void MincResolveArb(PF_InData *in_data, MinColorArb *arb);  /* thin wrapper over MincResolveSeq */
 /* Ui.cpp */
 PF_Err MincHandleEvent(PF_InData *in_data, PF_OutData *out_data, PF_ParamDef *params[], PF_EventExtra *extra);
 

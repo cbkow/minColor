@@ -10,13 +10,13 @@
 #endif
 
 static std::mutex             g_regMx;
-static std::map<uint32_t, MinColorArb> g_registry;
-void MincRegistrySet(uint32_t id, const MinColorArb *arb) {
+static std::map<uint32_t, MincSeqData> g_registry;
+void MincRegistrySet(uint32_t id, const MincSeqData *sd) {
     if (!id) return;
     std::lock_guard<std::mutex> lk(g_regMx);
-    g_registry[id] = *arb;
+    g_registry[id] = *sd;
 }
-bool MincRegistryGet(uint32_t id, MinColorArb *out) {
+bool MincRegistryGet(uint32_t id, MincSeqData *out) {
     if (!id) return false;
     std::lock_guard<std::mutex> lk(g_regMx);
     auto it = g_registry.find(id);

@@ -65,30 +65,43 @@ static PF_Err ParamsSetup(PF_InData *in_data, PF_OutData *out_data) {
         Written ONLY via PF_Cmd_COMPLETELY_GENERAL (our AEGP sync hands us the parsed name). ---- */
 #include <atomic>
 static std::atomic<uint32_t> g_instanceCounter{1};
-static PF_Err SeqNew(PF_InData *in_data, PF_OutData *out_data, const MinColorArb *initial) {
+static PF_Err SeqNew(PF_InData *in_data, PF_OutData *out_data, const MincSeqData *initial) {
     AEGP_SuiteHandler suites(in_data->pica_basicP);
-    PF_Handle h = suites.HandleSuite1()->host_new_handle(sizeof(MinColorArb));
+    PF_Handle h = suites.HandleSuite1()->host_new_handle(sizeof(MincSeqData));
     if (!h) return PF_Err_OUT_OF_MEMORY;
-    MinColorArb *a = reinterpret_cast<MinColorArb*>(suites.HandleSuite1()->host_lock_handle(h));
-    if (initial) *a = *initial;
-    else { memset(a, 0, sizeof(*a)); a->magic = MINC_ARB_MAGIC; a->version = MINC_ARB_VERSION; }
-    if (!a->instanceId) a->instanceId = g_instanceCounter.fetch_add(1);
+    MincDebugLog("seq: NEW handle size=%lu initial=%d", (unsigned long)sizeof(MincSeqData), initial ? 1 : 0);
+    MincSeqData *sd = reinterpret_cast<MincSeqData*>(suites.HandleSuite1()->host_lock_handle(h));
+    if (initial) *sd = *initial;
+    else { memset(sd, 0, sizeof(*sd)); sd->arb.magic = MINC_ARB_MAGIC; sd->arb.version = MINC_ARB_VERSION; }
+    sd->seqVersion = MINC_SEQ_VERSION;
+    if (!sd->arb.instanceId) sd->arb.instanceId = g_instanceCounter.fetch_add(1);
     suites.HandleSuite1()->host_unlock_handle(h);
     out_data->sequence_data = h;
     return PF_Err_NONE;
 }
 static PF_Err SequenceSetup(PF_InData *in_data, PF_OutData *out_data) { return SeqNew(in_data, out_data, nullptr); }
 static PF_Err SequenceResetup(PF_InData *in_data, PF_OutData *out_data) {
+    /* dual-accept: a v2 handle (this build), or the 212-byte v1 arb an old save carries —
+       upgraded in place with an empty passport (filled at the next healthy sync). */
     AEGP_SuiteHandler suites(in_data->pica_basicP);
-    const MinColorArb *prev = nullptr;
-    MinColorArb copy;
+    const MincSeqData *prev = nullptr;
+    MincSeqData copy;
     if (in_data->sequence_data) {
-        const MinColorArb *p = reinterpret_cast<const MinColorArb*>(
-            suites.HandleSuite1()->host_lock_handle(in_data->sequence_data));
-        if (p && p->magic == MINC_ARB_MAGIC && p->version == MINC_ARB_VERSION) { copy = *p; prev = &copy; }
+        AEGP_MemSize sz = suites.HandleSuite1()->host_get_handle_size(in_data->sequence_data);
+        MincDebugLog("seq: RESETUP in-size=%lu", (unsigned long)sz);
+        const void *raw = suites.HandleSuite1()->host_lock_handle(in_data->sequence_data);
+        const MinColorArb *p = reinterpret_cast<const MinColorArb*>(raw);
+        if (p && p->magic == MINC_ARB_MAGIC && p->version == MINC_ARB_VERSION) {
+            if ((size_t)sz >= sizeof(MincSeqData) &&
+                reinterpret_cast<const MincSeqData*>(raw)->seqVersion == MINC_SEQ_VERSION) {
+                copy = *reinterpret_cast<const MincSeqData*>(raw); prev = &copy;
+            } else if ((size_t)sz >= sizeof(MinColorArb)) {
+                memset(&copy, 0, sizeof(copy)); copy.arb = *p; prev = &copy;
+            }
+        }
         suites.HandleSuite1()->host_unlock_handle(in_data->sequence_data);
     }
-    return SeqNew(in_data, out_data, prev);                 /* flat struct: resetup == copy */
+    return SeqNew(in_data, out_data, prev);
 }
 static PF_Err SequenceSetdown(PF_InData *in_data, PF_OutData *out_data) {
     if (in_data->sequence_data) {
@@ -115,14 +128,17 @@ static PF_Err HandleGeneric(PF_InData *in_data, PF_OutData *out_data, PF_ParamDe
         suites.HandleSuite1()->host_unlock_handle(params[MINC_ARB]->u.arb_d.value);
         params[MINC_ARB]->uu.change_flags = PF_ChangeFlag_CHANGED_VALUE;
     }
-    if (!in_data->sequence_data) { PF_Err e = SeqNew(in_data, out_data, &pay->arb); MincDebugLog("generic: seq created space='%s'", pay->arb.space); return e; }
+    if (!in_data->sequence_data) {
+        MincSeqData init; memset(&init, 0, sizeof(init)); init.arb = pay->arb;
+        PF_Err e = SeqNew(in_data, out_data, &init); MincDebugLog("generic: seq created space='%s'", pay->arb.space); return e;
+    }
     AEGP_SuiteHandler suites(in_data->pica_basicP);
-    MinColorArb *a = reinterpret_cast<MinColorArb*>(suites.HandleSuite1()->host_lock_handle(in_data->sequence_data));
-    if (a) {
-        uint32_t keep = a->instanceId;
-        *a = pay->arb; a->instanceId = keep;
-        MincRegistrySet(keep, a);                                    /* the render-visible copy */
-        MincDebugLog("generic: id=%u space='%s' dir=%d -> registry", keep, a->space, (int)a->direction);
+    MincSeqData *sd = reinterpret_cast<MincSeqData*>(suites.HandleSuite1()->host_lock_handle(in_data->sequence_data));
+    if (sd) {
+        uint32_t keep = sd->arb.instanceId;
+        sd->arb = pay->arb; sd->arb.instanceId = keep;               /* passport fields untouched here (payload v2 = M3) */
+        MincRegistrySet(keep, sd);                                   /* the render-visible copy */
+        MincDebugLog("generic: id=%u space='%s' dir=%d -> registry", keep, sd->arb.space, (int)sd->arb.direction);
     }
     suites.HandleSuite1()->host_unlock_handle(in_data->sequence_data);
     out_data->out_flags |= PF_OutFlag_FORCE_RERENDER;
@@ -143,8 +159,8 @@ extern "C" DllExport PF_Err EffectMain(PF_Cmd cmd, PF_InData *in_data, PF_OutDat
                 break;
             case PF_Cmd_SEQUENCE_SETUP:      err = SequenceSetup(in_data, out_data);   MincAuthorityRefresh(in_data); break;
             case PF_Cmd_SEQUENCE_RESETUP:    err = SequenceResetup(in_data, out_data); MincAuthorityRefresh(in_data); break;
-            case PF_Cmd_SEQUENCE_FLATTEN:    err = SequenceResetup(in_data, out_data); break;   /* data is already flat: "flatten" = fresh copy */
-            case PF_Cmd_GET_FLATTENED_SEQUENCE_DATA: err = SequenceResetup(in_data, out_data); break;
+            case PF_Cmd_SEQUENCE_FLATTEN:    MincDebugLog("seq: cmd FLATTEN"); err = SequenceResetup(in_data, out_data); break;
+            case PF_Cmd_GET_FLATTENED_SEQUENCE_DATA: MincDebugLog("seq: cmd GET_FLATTENED"); err = SequenceResetup(in_data, out_data); break;
             case PF_Cmd_SEQUENCE_SETDOWN:    err = SequenceSetdown(in_data, out_data); break;
             case PF_Cmd_COMPLETELY_GENERAL:  err = HandleGeneric(in_data, out_data, params, extra); break;
             case PF_Cmd_UPDATE_PARAMS_UI:

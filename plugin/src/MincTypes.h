@@ -17,6 +17,22 @@ typedef struct {
     char     space[MINC_SPACE_LEN];
 } MinColorArb;
 
+#define MINC_SEQ_VERSION    2
+#define MINC_CONFIGBASE_LEN 128
+
+typedef struct {                        /* v2 SEQUENCE data (the arb PARAM stays plain MinColorArb).
+                                           First member IS the v1 seq struct, so old plugins reading the
+                                           212-byte prefix stay correct. The passport (configBase +
+                                           passportWorking) travels inside the .aep and lets the render
+                                           resolve the content-addressed config from the LOCAL store when
+                                           live authority is dead (cross-platform arrival, aerender). */
+    MinColorArb arb;
+    uint16_t    seqVersion;             /* MINC_SEQ_VERSION */
+    uint16_t    reserved;
+    char        configBase[MINC_CONFIGBASE_LEN];   /* hashed config FILENAME, e.g. config-acescg-84aa8926.ocio */
+    char        passportWorking[MINC_SPACE_LEN];   /* working space at last healthy sync */
+} MincSeqData;
+
 enum MincStatus {
     MINC_STATUS_OK = 0,
     MINC_STATUS_PASS_EMPTY,
@@ -38,9 +54,10 @@ typedef struct {                       /* handed to instances via AEGP_EffectCal
 } MincSyncPayload;
 
 /* Authority.cpp: instance registry — AE clones render-side sequence data from stale snapshots,
-   so mutable state flows through this map keyed by the instanceId baked into the data. */
-void MincRegistrySet(uint32_t id, const MinColorArb *arb);
-bool MincRegistryGet(uint32_t id, MinColorArb *out);
+   so mutable state flows through this map keyed by the instanceId baked into the data.
+   Stores the WHOLE seq struct so registry and seq clone are interchangeable at render. */
+void MincRegistrySet(uint32_t id, const MincSeqData *sd);
+bool MincRegistryGet(uint32_t id, MincSeqData *out);
 
 int MincOcioProbeStatus(const MincAuthoritySnapshot *auth, const MinColorArb *arb);  /* ladder check, no pixels */
 int MincOcioApplyRows(const MincAuthoritySnapshot *auth, const MinColorArb *arb,

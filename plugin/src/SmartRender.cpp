@@ -21,27 +21,38 @@ static PF_Err CheckoutArb(PF_InData *in_data, MinColorArb *out) {
     return err;
 }
 
-void MincResolveArb(PF_InData *in_data, MinColorArb *arb) {      /* param first, then seq+registry */
-    memset(arb, 0, sizeof(*arb));
-    CheckoutArb(in_data, arb);
-    uint32_t seqId = 0;
-    if (arb->space[0] == '\0') {
-        PF_ConstHandle ch = nullptr;
-        const void *ssV = nullptr;
-        if (in_data->pica_basicP->AcquireSuite(kPFEffectSequenceDataSuite, kPFEffectSequenceDataSuiteVersion1, &ssV) == kSPNoError && ssV) {
-            const PF_EffectSequenceDataSuite1 *ss = reinterpret_cast<const PF_EffectSequenceDataSuite1*>(ssV);
-            ss->PF_GetConstSequenceData(in_data->effect_ref, &ch);
-            in_data->pica_basicP->ReleaseSuite(kPFEffectSequenceDataSuite, kPFEffectSequenceDataSuiteVersion1);
-        }
-        const MinColorArb *sa = ch ? *reinterpret_cast<const MinColorArb* const*>(ch) : nullptr;
-        if (!sa && in_data->sequence_data) sa = *reinterpret_cast<const MinColorArb* const*>(in_data->sequence_data);
-        if (sa && sa->magic == MINC_ARB_MAGIC) {
-            *arb = *sa; seqId = sa->instanceId;
-            MinColorArb reg;
-            if (MincRegistryGet(sa->instanceId, &reg)) { reg.instanceId = sa->instanceId; *arb = reg; }
-        }
+void MincResolveSeq(PF_InData *in_data, MincSeqData *sd) {
+    /* ALWAYS read the seq clone: it carries instanceId + the passport, which the param never has.
+       Precedence: seq clone -> registry (fresher, main-thread-written) -> param arb fields. */
+    memset(sd, 0, sizeof(*sd));
+    PF_ConstHandle ch = nullptr;
+    const void *ssV = nullptr;
+    if (in_data->pica_basicP->AcquireSuite(kPFEffectSequenceDataSuite, kPFEffectSequenceDataSuiteVersion1, &ssV) == kSPNoError && ssV) {
+        const PF_EffectSequenceDataSuite1 *ss = reinterpret_cast<const PF_EffectSequenceDataSuite1*>(ssV);
+        ss->PF_GetConstSequenceData(in_data->effect_ref, &ch);
+        in_data->pica_basicP->ReleaseSuite(kPFEffectSequenceDataSuite, kPFEffectSequenceDataSuiteVersion1);
     }
-    MincDebugLog("resolve: seqId=%u space='%s' dir=%d", seqId ? seqId : arb->instanceId, arb->space, (int)arb->direction);
+    const MincSeqData *sa = ch ? *reinterpret_cast<const MincSeqData* const*>(ch) : nullptr;
+    if (!sa && in_data->sequence_data) sa = *reinterpret_cast<const MincSeqData* const*>(in_data->sequence_data);
+    if (sa && sa->arb.magic == MINC_ARB_MAGIC && sa->seqVersion == MINC_SEQ_VERSION) {
+        *sd = *sa;
+        MincSeqData reg;
+        if (MincRegistryGet(sa->arb.instanceId, &reg)) { reg.arb.instanceId = sa->arb.instanceId; *sd = reg; }
+    }
+    MinColorArb pa; memset(&pa, 0, sizeof(pa));
+    CheckoutArb(in_data, &pa);
+    if (pa.space[0]) {                                    /* param overrides ARB FIELDS only — its own
+                                                             nonce id and absent passport must not win */
+        sd->arb.direction = pa.direction;
+        memcpy(sd->arb.space, pa.space, sizeof(sd->arb.space));
+        sd->arb.magic = MINC_ARB_MAGIC; sd->arb.version = MINC_ARB_VERSION;
+    }
+    MincDebugLog("resolve: seqId=%u space='%s' dir=%d base='%s'", sd->arb.instanceId, sd->arb.space, (int)sd->arb.direction, sd->configBase);
+}
+
+void MincResolveArb(PF_InData *in_data, MinColorArb *arb) {      /* thin wrapper: arb view of the seq resolve */
+    MincSeqData sd; MincResolveSeq(in_data, &sd);
+    *arb = sd.arb;
 }
 
 PF_Err MincSmartPreRender(PF_InData *in_data, PF_OutData *out_data, PF_PreRenderExtra *extra) {
