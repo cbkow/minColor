@@ -19,7 +19,8 @@ static PF_Err GlobalSetup(PF_InData *in_data, PF_OutData *out_data) {
                            PF_OutFlag_SEQUENCE_DATA_NEEDS_FLATTENING;   /* render clones come from the flat snapshot — keep it fresh */
     out_data->out_flags2 = PF_OutFlag2_SUPPORTS_SMART_RENDER |
                            PF_OutFlag2_FLOAT_COLOR_AWARE     |
-                           PF_OutFlag2_SUPPORTS_THREADED_RENDERING;
+                           PF_OutFlag2_SUPPORTS_THREADED_RENDERING |
+                           PF_OutFlag2_I_MIX_GUID_DEPENDENCIES;   /* we call GuidMixInPtr in PreRender */
     MincAuthorityGlobalSetup(in_data);          /* register with AEGP, install hooks */
     return PF_Err_NONE;
 }

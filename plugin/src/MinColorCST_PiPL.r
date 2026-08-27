@@ -21,7 +21,7 @@ resource 'PiPL' (16000) {
         AE_Effect_Version { 0x00080001 },   /* 1.0, develop; keep in sync with PF_VERSION */
         AE_Effect_Info_Flags { 0 },
         AE_Effect_Global_OutFlags  { 0x06008410 },
-        AE_Effect_Global_OutFlags_2 { 0x08001400 },
+        AE_Effect_Global_OutFlags_2 { 0x08201400 },
         AE_Effect_Match_Name { "MINC CST" },
         AE_Reserved_Info { 0 },
         AE_Effect_Support_URL { "https://github.com/" }
