@@ -119,6 +119,9 @@
   function refreshDoctor() {
     try {
       var d = MinColor.doctor();
+      if (d.status === "yellow" && d.canRepair) {                    // filename-match self-heal (agreed 2026-08-27)
+        try { MinColor.repair(); d = MinColor.doctor(); if (d.status === "green") log("auto-repaired config pin"); } catch (eAR) {}
+      }
       var colors = { green: [0.28, 0.82, 0.4, 1], yellow: [0.95, 0.78, 0.18, 1], red: [0.94, 0.32, 0.28, 1], unmanaged: [0.55, 0.55, 0.55, 1] };
       dot.dotColor = colors[d.status] || colors.unmanaged;
       dot.helpTip = "Doctor: " + d.status + " \u2014 " + d.text + "  (click to re-check)";

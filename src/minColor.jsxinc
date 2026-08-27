@@ -40,6 +40,18 @@ var MinColor = (function () {
     }
   }
   function sidecarDir() { var p2 = app.project; if (!p2.file) return null; return p2.file.parent.fsName + "/_minColor"; }
+  // ---------- central config store (2026-08-27): configs live beside the plugin in MediaCore ----------
+  // Projects pin the central path by default; the sidecar is materialized only for handoff/archive.
+  var CENTRAL_ROOT = ($.os.indexOf("Windows") >= 0)
+    ? "C:/Program Files/Adobe/Common/Plug-ins/7.0/MediaCore/minColor"
+    : "/Library/Application Support/Adobe/Common/Plug-ins/7.0/MediaCore/minColor";
+  function centralConfigs() { return CENTRAL_ROOT + "/configs"; }
+  function pinConfig(presetKey) {                                    // preferred pin target for a preset
+    var pr = presets()[presetKey]; if (!pr) throw new Error("unknown preset " + presetKey);
+    var central = new File(centralConfigs() + "/" + pr.config);
+    if (central.exists) return central.fsName;
+    return ensureSidecar(presetKey);                                 // central store not installed -> classic sidecar
+  }
   function ensureSidecar(presetKey) {                                // copy config (+luts) next to the project; returns pinned path
     var sd = sidecarDir(); if (!sd) throw new Error("save the project first");
     var pr = presets()[presetKey]; if (!pr) throw new Error("unknown preset " + presetKey);
@@ -61,24 +73,34 @@ var MinColor = (function () {
     mf.write('{ "projects": {\n  ' + parts.join(",\n  ") + '\n} }'); mf.close();
     return cfgTarget.fsName;
   }
-  function sidecarInfo() {                                           // this project's entry in the sidecar, or null
-    var sd = sidecarDir(); if (!sd) return null;
-    var mf = new File(sd + "/minColor.json"); if (!mf.exists) return null;
-    try {
-      var j = readJSON(sd + "/minColor.json");
-      var key = app.project.file ? app.project.file.displayName : null;
-      var ent = (j.projects && key && j.projects[key]) ? j.projects[key] : null;
-      if (!ent) {                                                    // unlisted: claim the project ONLY if it is already pinned into this sidecar
-        var cfg = (app.project.ocioConfigurationFile || "").replace(/\\/g, "/");   // separator-agnostic (Windows returns backslashes)
-        var sdN = sd.replace(/\\/g, "/");
-        if (cfg.indexOf(sdN + "/") !== 0) return null;
-        var base = cfg.substring(sdN.length + 1);
-        var m = base.match(/^config-([A-Za-z0-9]+)-[0-9a-f]+\.ocio$/);
-        ent = { preset: m ? m[1] : (j.preset || "?"), config: base };
-      }
-      var cf = new File(sd + "/" + ent.config);
-      return { preset: ent.preset, configPath: cf.exists ? cf.fsName : null, config: ent.config };
-    } catch (e) { return null; }
+  var CONFIG_PATTERN = /config-([A-Za-z0-9]+)-[0-9a-f]+\.ocio$/;
+  function sidecarInfo() {                                           // pin-anywhere recognition: identity comes from the hashed FILENAME
+    var p2 = app.project;
+    var cfg = (p2.ocioConfigurationFile || "").replace(/\\/g, "/");
+    var m = cfg.match(CONFIG_PATTERN);
+    if (m) {
+      var base = cfg.substring(cfg.lastIndexOf("/") + 1);
+      return { preset: m[1], configPath: new File(cfg).exists ? cfg : null, config: base, pinned: cfg };
+    }
+    /* pointer empty or foreign (e.g. Adobe-mode fallback wiped it): fall back to the sidecar listing */
+    var sd = p2.file ? p2.file.parent.fsName + "/_minColor" : null;
+    if (sd && new File(sd + "/minColor.json").exists) {
+      try {
+        var j = readJSON(sd + "/minColor.json");
+        var key = p2.file ? p2.file.displayName : null;
+        var ent = (j.projects && key && j.projects[key]) ? j.projects[key] : null;
+        if (ent) { var cf = new File(sd + "/" + ent.config); return { preset: ent.preset, configPath: cf.exists ? cf.fsName : null, config: ent.config, pinned: null }; }
+      } catch (eJ) {}
+    }
+    return null;
+  }
+  function findConfigByName(base) {                                  // filename-match search: central, project sidecar, dev payload
+    var cands = [centralConfigs() + "/" + base];
+    var p2 = app.project;
+    if (p2.file) cands.push(p2.file.parent.fsName + "/_minColor/" + base);
+    try { cands.push(payloadRoot() + "/" + base); } catch (ePr) {}
+    for (var i = 0; i < cands.length; i++) if (new File(cands[i]).exists) return new File(cands[i]).fsName;
+    return null;
   }
   function doctor() {                                                // diagnose; returns {status:"green"|"yellow"|"red"|"unmanaged", text, canRepair}
     var p2 = app.project, info = sidecarInfo();
@@ -109,18 +131,19 @@ var MinColor = (function () {
       return { status: "green", text: info.preset + " · " + p2.workingSpace, canRepair: false };
     }
     if (!wsOk) return { status: "red", text: "working space is " + p2.workingSpace + " (want " + (pr ? pr.workingSpaceLabel : "?") + ") — run Set Up / Migrate", canRepair: false };
-    return { status: "yellow", text: (!cmsOk ? "engine fell back to Adobe mode; " : "") + (!cfgOk ? "config path needs re-pointing" : ""), canRepair: info.configPath !== null };
+    return { status: "yellow", text: (!cmsOk ? "engine fell back to Adobe mode; " : "") + (!cfgOk ? "config path needs re-pointing" : ""), canRepair: (info.configPath !== null) || (findConfigByName(info.config) !== null) };
   }
-  function repair() {                                                // the one-click fix for yellow states
+  function repair() {                                                // one-click / auto: re-point at any local copy of the SAME hashed config
     var p2 = app.project, info = sidecarInfo();
-    if (!info || !info.configPath) throw new Error("no repairable sidecar config found");
+    if (!info || !info.config) throw new Error("no repairable minColor pin found");
+    var target = info.configPath || findConfigByName(info.config);
+    if (!target) throw new Error("config '" + info.config + "' not found locally (central store, sidecar, payload)");
     if (p2.colorManagementSystem !== 1) p2.colorManagementSystem = 1;
-    p2.ocioConfigurationFile = info.configPath;
+    p2.ocioConfigurationFile = target;
     var d2 = doctor();
-    return d2.status + " — " + d2.text;
+    if (d2.status !== "green") throw new Error("repair incomplete: " + d2.text);
+    return "repaired \u2192 " + target;
   }
-
-  // ---------- pre-flight ----------
   function preflight() {
     var r = { ok: true, notes: [] };
     function need(cond, msg) { if (!cond) { r.ok = false; r.notes.push("FAIL " + msg); } }
@@ -135,7 +158,6 @@ var MinColor = (function () {
     return r;
   }
 
-  // ---------- sticky pref / new project ----------
   function seedStickyPref(presetKey) {
     var pr = presets()[presetKey]; if (!pr) throw new Error("unknown preset " + presetKey);
     var orig = app.preferences.getPrefAsString(STICKY_SEC, STICKY_KEY, PREFType.PREF_Type_MACHINE_INDEPENDENT);
@@ -147,6 +169,7 @@ var MinColor = (function () {
     app.preferences.saveToDisk();
     return pr;
   }
+
   function newProject(presetKey, opts) {
     var p0 = app.project;
     if (p0.dirty) {                                                 // never let app.newProject() raise a modal save prompt
@@ -166,7 +189,7 @@ var MinColor = (function () {
       else p.save(new File(Folder.temp.fsName + "/minColor_new_" + (new Date()).getTime() + ".aep"));
       p = app.project;
     }
-    var pinned = ensureSidecar(presetKey);
+    var pinned = pinConfig(presetKey);
     p.ocioConfigurationFile = pinned;
     if (p.workingSpace !== pr.workingSpaceLabel) {
       // AE resolved the seeded working space against its DEFAULT config and dropped it (RESULTS 15):
@@ -266,9 +289,14 @@ var MinColor = (function () {
   // ---------- engine translation: native CST <-> MINC CST plugin (stage two) ----------
   var MINC_MATCH = "MINC CST";
   function pluginAvailable() {
-    // never iterate app.effects (~1200 entries through the scripting bridge = >10 s at panel boot);
-    // the plugin's AEGP menu command is a single instant lookup and proves the loaded state
-    try { return app.findMenuCommandId("minColor: Sync From Names") !== 0; } catch (e) { return false; }
+    // never iterate app.effects (>10 s at panel boot). The AEGP menu command only exists after the
+    // effect's first instantiation (AE defers GLOBAL_SETUP), so check the installed bundle on disk;
+    // the menu command is confirmation once the session has touched the effect.
+    try { if (app.findMenuCommandId("minColor: Sync From Names") !== 0) return true; } catch (e) {}
+    var bin = ($.os.indexOf("Windows") >= 0)
+      ? CENTRAL_ROOT + "/minColorCST.aex"
+      : CENTRAL_ROOT + "/minColorCST.plugin/Contents/MacOS/minColorCST";
+    return new File(bin).exists;
   }
   function translateEffects(target) {                                // "plugin" | "native"
     if (target === "plugin" && !pluginAvailable()) throw new Error("minColor CST plugin not installed");
@@ -321,6 +349,10 @@ var MinColor = (function () {
     if (target === "plugin") {
       var id = app.findMenuCommandId("minColor: Sync From Names");
       if (id) app.executeCommand(id);
+      try { var inf = sidecarInfo(); if (inf) app.project.ocioConfigurationFile = pinConfig(inf.preset); } catch (eP2) {}
+    } else {
+      /* handoff to plugin-less machines: make the project self-contained */
+      try { var inf2 = sidecarInfo(); if (inf2 && app.project.file) app.project.ocioConfigurationFile = ensureSidecar(inf2.preset); } catch (eS2) {}
     }
     return out;
   }
@@ -353,7 +385,7 @@ var MinColor = (function () {
   function applyPresetToCurrent(presetKey) {
     var pr = presets()[presetKey]; var p = app.project;
     if (!p.file) throw new Error("save the project first");
-    p.ocioConfigurationFile = ensureSidecar(presetKey);
+    p.ocioConfigurationFile = pinConfig(presetKey);
     p.save();
     var bpath = backupProject("prepatch");
     AEPPatch.patchFile(p.file.fsName, { working: { name: pr.working, family: pr.family } });
@@ -420,7 +452,7 @@ var MinColor = (function () {
     for (var k in items) { out += (first ? "" : ",") + '"' + k + '":{"name":"' + items[k].name.replace(/"/g, "") + '"}'; first = false; }
     hf.write(out + "} }"); hf.close();
     // one ceremony: sidecar + config + working space + strip, single patch/reopen
-    p.ocioConfigurationFile = ensureSidecar(presetKey);
+    p.ocioConfigurationFile = pinConfig(presetKey);
     p.save();
     var bpath = backupProject("premigrate");
     AEPPatch.patchFile(p.file.fsName, { working: { name: pr.working, family: pr.family }, footage: strip });
@@ -702,7 +734,7 @@ var MinColor = (function () {
   function addViewGuideLayer(comp, viewColorspace) { return upsertUtilityLayer(comp, "view", viewColorspace || "sRGB"); }
   function addRenderLayer(comp, renderSpace) { return upsertUtilityLayer(comp, "render", renderSpace || "Gamma 2.4 Encoded Rec.709"); }
 
-  return { VERSION: VERSION, presets: presets, menuLists: menuLists, preflight: preflight, payloadRoot: payloadRoot, ensureSidecar: ensureSidecar, sidecarInfo: sidecarInfo, doctor: doctor, repair: repair, migrateProject: migrateProject, interpretPass: interpretPass, extDefaults: extDefaults, saveExtDefaults: saveExtDefaults, suggestionFor: suggestionFor, collectDetected: collectDetected, readHarvest: readHarvest, harvestPath: harvestPath, seedStickyPref: seedStickyPref, newProject: newProject,
+  return { VERSION: VERSION, presets: presets, menuLists: menuLists, preflight: preflight, payloadRoot: payloadRoot, ensureSidecar: ensureSidecar, sidecarInfo: sidecarInfo, doctor: doctor, repair: repair, pinConfig: pinConfig, findConfigByName: findConfigByName, migrateProject: migrateProject, interpretPass: interpretPass, extDefaults: extDefaults, saveExtDefaults: saveExtDefaults, suggestionFor: suggestionFor, collectDetected: collectDetected, readHarvest: readHarvest, harvestPath: harvestPath, seedStickyPref: seedStickyPref, newProject: newProject,
            assertProject: assertProject, applyPresetToCurrent: applyPresetToCurrent,
            syncReport: syncReport, syncApply: syncApply, rebuildMinColorEffects: rebuildMinColorEffects, translateEffects: translateEffects, pluginAvailable: pluginAvailable, uiState: uiState, saveUiState: saveUiState,
            setPopupByName: setPopupByName, addInputTransform: addInputTransform, addViewGuideLayer: addViewGuideLayer, addRenderLayer: addRenderLayer, findUtilityLayer: findUtilityLayer };
