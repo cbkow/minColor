@@ -193,7 +193,7 @@ var MinColor = (function () {
     // added; after a preset switch that stale state can hard-crash AE inside
     // OCIOWrapper::ValidateOCIOColorSpace. Names encode intent:
     // "minColor: view X" / "minColor: render X" / "minColor: X \u2192 working".
-    var p = app.project, out = { rebuilt: [], failed: [], foreign: [], viewRender: 0, orphans: [] };   // foreign = CSTs we did not add (can't reconstruct intent; same stale-config crash risk)
+    var p = app.project, out = { rebuilt: [], failed: [], foreign: [], viewRender: 0, orphans: [], strippedPipeline: [], gradesLeft: [] };   // foreign = CSTs we did not add (can't reconstruct intent; same stale-config crash risk)
     $.global.__minColorViewerId = null;
     for (var i = 1; i <= p.numItems; i++) {
       var it = p.item(i); if (!(it instanceof CompItem)) continue;
@@ -208,8 +208,28 @@ var MinColor = (function () {
         }
         for (var k = 1; k <= fxp.numProperties; k++) {
           var nm = fxp.property(k).name;
-          if (fxp.property(k).matchName !== "ADBE OCIO Color Space Transform") continue;
-          if (nm.indexOf(FX_PREFIX) !== 0) { out.foreign.push(it.name + "/" + ly.name + " [" + nm + "]"); continue; }
+          var mn0 = fxp.property(k).matchName;
+          /* migrate policy (2026-08-27): pipeline OCIO effects outside minColor are competition +
+             stale-config crash bait -> STRIP (project is backed up; every removal reported).
+             CDL = a grade, FILE = a look: CONTENT -> rebuild in place with values copied.       */
+          if (mn0 === "ADBE OCIO Display Transform" || mn0 === "ADBE OCIO Look Transform" ||
+              (mn0 === "ADBE OCIO Color Space Transform" && nm.indexOf(FX_PREFIX) !== 0)) {
+            var desc = it.name + "/" + ly.name + " [" + nm + "]";
+            try {
+              var wl1 = ly.locked; if (wl1) ly.locked = false;
+              try { fxp.property(k).remove(); } finally { if (wl1) ly.locked = true; }
+              out.strippedPipeline.push(desc); k--;
+            } catch (eS) { out.failed.push(desc + " \u2014 " + eS.toString()); }
+            continue;
+          }
+          if (mn0 === "ADBE OCIO CDL Transform" || mn0 === "ADBE OCIO FILE Transform") {
+            /* file-driven grade/look: the File path param is unreadable from scripting, so a
+               rebuild would destroy the reference. They also cite files, not config colorspace
+               names — not the validator-crash class. LEAVE UNTOUCHED, report for review. */
+            out.gradesLeft.push(it.name + "/" + ly.name + " [" + nm + "]");
+            continue;
+          }
+          if (mn0 !== "ADBE OCIO Color Space Transform") continue;
           var label = it.name + "/" + ly.name, rest = nm.substring(FX_PREFIX.length);
           try {
             var wasLocked = ly.locked; if (wasLocked) ly.locked = false;
@@ -409,7 +429,7 @@ var MinColor = (function () {
     // post-audit
     var audit = syncReport(), bad = 0;
     for (var a2 = 0; a2 < audit.rows.length; a2++) if (!audit.rows[a2].okFlag) bad++;
-    return { preset: presetKey, working: app.project.workingSpace, stripped: strip.length, residual: bad, backup: bpath, harvested: strip.length, effectsRebuilt: rebuilt.rebuilt.length, effectsFailed: rebuilt.failed, effectsForeign: rebuilt.foreign, viewRenderRetargeted: rebuilt.viewRender || 0, orphanLayers: rebuilt.orphans || [], backups: backupStats() };
+    return { preset: presetKey, working: app.project.workingSpace, stripped: strip.length, residual: bad, backup: bpath, harvested: strip.length, effectsRebuilt: rebuilt.rebuilt.length, effectsFailed: rebuilt.failed, effectsForeign: rebuilt.foreign, strippedPipeline: rebuilt.strippedPipeline, gradesLeft: rebuilt.gradesLeft, viewRenderRetargeted: rebuilt.viewRender || 0, orphanLayers: rebuilt.orphans || [], backups: backupStats() };
   }
 
   // ---------- suggestions & interpret passes (single-authority model: effects only) ----------

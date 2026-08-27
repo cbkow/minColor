@@ -183,7 +183,8 @@
         var r = MinColor.migrateProject(dd.selection.text);
         var warn = [];
         if (r.effectsFailed && r.effectsFailed.length) warn.push("CST REBUILD FAILED:\n  " + r.effectsFailed.join("\n  "));
-        if (r.effectsForeign && r.effectsForeign.length) warn.push("MANUALLY ADDED OCIO CSTs \u2014 NOT rebuilt (re-create these by hand under the new config, or they can crash AE):\n  " + r.effectsForeign.join("\n  "));
+        if (r.strippedPipeline && r.strippedPipeline.length) warn.push("REMOVED non-minColor OCIO pipeline effects (competing interpretation + crash risk; project is backed up):\n  " + r.strippedPipeline.join("\n  "));
+        if (r.gradesLeft && r.gradesLeft.length) warn.push("OCIO CDL/File grades left in place (file-based \u2014 verify their look under the new working space):\n  " + r.gradesLeft.join("\n  "));
         if (r.orphanLayers && r.orphanLayers.length) warn.push("EMPTY minColor VIEW/RENDER layers (artifacts of an old bug \u2014 safe to delete):\n  " + r.orphanLayers.join("\n  "));
         if (warn.length) alert("minColor \u2014 migrate warnings\n\n" + warn.join("\n\n").substr(0, 3000));
         return "working=" + r.working + " stripped=" + r.stripped + " rebuilt=" + (r.effectsRebuilt || 0) + " view/render retargeted=" + (r.viewRenderRetargeted || 0) + " residual=" + r.residual + " | backups: " + (r.backups ? r.backups.count + " (" + r.backups.mb + " MB)" : "?");
