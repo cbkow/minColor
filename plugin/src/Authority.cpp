@@ -155,6 +155,16 @@ static void SyncFromNames(SPBasicSuite *bp) {
     Acq<AEGP_StreamSuite6>        sts(bp, kAEGPStreamSuite,        kAEGPStreamSuiteVersion6);
     Acq<AEGP_EffectSuite5>        efs(bp, kAEGPEffectSuite,        kAEGPEffectSuiteVersion5);
     if (!pjs || !its || !cps || !lys || !dss || !sts || !efs) { AuthLog("sync: suite acquire failed"); return; }
+    /* passport source: the CURRENT healthy authority. Written into every synced instance so the
+       .aep carries the content-addressed config basename + working space across platforms. */
+    MincAuthoritySnapshot snap = {}; MincAuthorityGet(&snap);
+    bool authHealthy = snap.ocioOn && snap.configPath[0] && snap.workingSpace[0];
+    char passBase[MINC_CONFIGBASE_LEN] = "";
+    if (authHealthy) {
+        const char *b = snap.configPath;
+        for (const char *p = snap.configPath; *p; ++p) if (*p == '/' || *p == '\\') b = p + 1;
+        if (b[0] && !strstr(b, "..") && strlen(b) < sizeof(passBase)) strncpy(passBase, b, sizeof(passBase) - 1);
+    }
     int seen = 0, wrote = 0, badname = 0;
     AEGP_ProjectH projH = nullptr;
     if (pjs->AEGP_GetProjectByIndex(0, &projH) != A_Err_NONE || !projH) return;
@@ -215,6 +225,11 @@ static void SyncFromNames(SPBasicSuite *bp) {
                                         /* transport: CallGeneric -> seq data + registry (names are the durable store; auto-sync re-derives on project open) */
                                         MincSyncPayload pay; memset(&pay, 0, sizeof(pay));
                                         pay.magic = MINC_ARB_MAGIC; pay.arb = want;
+                                        pay.payVersion = 2;
+                                        if (passBase[0]) {           /* refresh when healthy; empty = receiver keeps its passport */
+                                            strncpy(pay.configBase, passBase, sizeof(pay.configBase) - 1);
+                                            strncpy(pay.passportWorking, snap.workingSpace, sizeof(pay.passportWorking) - 1);
+                                        }
                                         A_Time tg = {0, 100};
                                         if (efs->AEGP_EffectCallGeneric(g_aegpID, effH, &tg, PF_Cmd_COMPLETELY_GENERAL, &pay) == A_Err_NONE) ++wrote;
                                         efs->AEGP_DisposeEffect(effH);
@@ -239,9 +254,10 @@ static void SyncFromNames(SPBasicSuite *bp) {
 static A_Err CommandHook(AEGP_GlobalRefcon, AEGP_CommandRefcon, AEGP_Command command,
                          AEGP_HookPriority, A_Boolean, A_Boolean *handledPB) {
     if (command == g_syncCmd && g_pica) {
-        SyncFromNames(g_pica);
         PF_InData fake = {}; fake.pica_basicP = g_pica;
-        MincAuthorityRefresh(&fake);
+        MincAuthorityRefresh(&fake);                 /* refresh FIRST — the sync payload now carries
+                                                        authority state (idle hook already does this order) */
+        SyncFromNames(g_pica);
         if (handledPB) *handledPB = TRUE;
     }
     return A_Err_NONE;

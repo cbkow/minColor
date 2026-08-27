@@ -48,9 +48,16 @@ typedef struct {
     uint32_t generation;
 } MincAuthoritySnapshot;
 
-typedef struct {                       /* handed to instances via AEGP_EffectCallGeneric */
+typedef struct {                       /* handed to instances via AEGP_EffectCallGeneric.
+                                          v2 fields APPENDED after arb — the {magic, arb} prefix
+                                          stays v1-compatible (sender and receiver are always the
+                                          same binary; the check is belt-and-braces). */
     uint32_t    magic;                 /* MINC_ARB_MAGIC */
     MinColorArb arb;
+    uint16_t    payVersion;            /* 2 */
+    uint16_t    reserved2;
+    char        configBase[MINC_CONFIGBASE_LEN];   /* empty when authority is sick at sync time */
+    char        passportWorking[MINC_SPACE_LEN];
 } MincSyncPayload;
 
 /* Authority.cpp: instance registry — AE clones render-side sequence data from stale snapshots,

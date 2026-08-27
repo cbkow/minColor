@@ -130,13 +130,22 @@ static PF_Err HandleGeneric(PF_InData *in_data, PF_OutData *out_data, PF_ParamDe
     }
     if (!in_data->sequence_data) {
         MincSeqData init; memset(&init, 0, sizeof(init)); init.arb = pay->arb;
+        if (pay->payVersion >= 2 && pay->configBase[0]) {
+            memcpy(init.configBase, pay->configBase, sizeof(init.configBase));
+            memcpy(init.passportWorking, pay->passportWorking, sizeof(init.passportWorking));
+        }
         PF_Err e = SeqNew(in_data, out_data, &init); MincDebugLog("generic: seq created space='%s'", pay->arb.space); return e;
     }
     AEGP_SuiteHandler suites(in_data->pica_basicP);
     MincSeqData *sd = reinterpret_cast<MincSeqData*>(suites.HandleSuite1()->host_lock_handle(in_data->sequence_data));
     if (sd) {
         uint32_t keep = sd->arb.instanceId;
-        sd->arb = pay->arb; sd->arb.instanceId = keep;               /* passport fields untouched here (payload v2 = M3) */
+        sd->arb = pay->arb; sd->arb.instanceId = keep;
+        if (pay->payVersion >= 2 && pay->configBase[0]) {            /* refresh when healthy — NEVER cleared
+                                                                        when the payload arrives passport-less */
+            memcpy(sd->configBase, pay->configBase, sizeof(sd->configBase));
+            memcpy(sd->passportWorking, pay->passportWorking, sizeof(sd->passportWorking));
+        }
         MincRegistrySet(keep, sd);                                   /* the render-visible copy */
         MincDebugLog("generic: id=%u space='%s' dir=%d -> registry", keep, sd->arb.space, (int)sd->arb.direction);
     }
