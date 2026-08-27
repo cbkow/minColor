@@ -1,0 +1,5 @@
+sdk/
+build/
+external/src/
+external/build/
+external/install/
