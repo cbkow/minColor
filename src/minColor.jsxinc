@@ -47,8 +47,14 @@ var MinColor = (function () {
     : "/Library/Application Support/Adobe/Common/Plug-ins/7.0/MediaCore/minColor";
   function centralConfigs() { return CENTRAL_ROOT + "/configs"; }
   var OCIO_ENGINE_VERSION = "2.5.2";                                 // static OCIO linked into the MINC plugin (keep in sync with plugin/external/build.sh TAG)
-  function pluginBundleVersion() {                                   // CFBundleVersion of the installed plugin, or null
+  function pluginBundleVersion() {                                   // installed plugin version, or null
     try {
+      if ($.os.indexOf("Windows") >= 0) {                            // the Windows build drops version.txt beside the .aex
+        var vt = new File(CENTRAL_ROOT + "/version.txt");
+        if (!vt.exists) return null;
+        vt.open("r"); var v = vt.read(); vt.close();
+        return v.replace(/^\s+|\s+$/g, "") || null;
+      }
       var plist = new File(CENTRAL_ROOT + "/minColorCST.plugin/Contents/Info.plist");
       if (!plist.exists) return null;
       plist.open("r"); var s = plist.read(); plist.close();
@@ -188,7 +194,8 @@ var MinColor = (function () {
           if (bad > 0) return { status: "red", text: bad + " footage item(s) carry footage-level assignments — run Set Up / Migrate to strip", canRepair: false };
         }
       } catch (eAud) {}
-      return { status: "green", text: info.preset + " · " + p2.workingSpace, canRepair: false };
+      var locus = ((p2.ocioConfigurationFile || "").indexOf(CENTRAL_ROOT) === 0) ? "central" : "sidecar";
+      return { status: "green", text: info.preset + " · " + p2.workingSpace + " · " + locus, canRepair: false };
     }
     if (!wsOk) return { status: "red", text: "working space is " + p2.workingSpace + " (want " + (pr ? pr.workingSpaceLabel : "?") + ") — run Set Up / Migrate", canRepair: false };
     return { status: "yellow", text: (!cmsOk ? "engine fell back to Adobe mode; " : "") + (!cfgOk ? "config path needs re-pointing" : ""), canRepair: (info.configPath !== null) || (findConfigByName(info.config) !== null) };
