@@ -114,4 +114,17 @@ elseif(WIN32)
     COMMENT "PiPL (cl /EP -> PiPLtool -> rc)"
     VERBATIM)
   target_sources(minColorCST PRIVATE "${PIPL_RC}")
+
+  # --- version.txt beside the .aex: the panel's Windows contract for pluginBundleVersion()
+  #     (macOS reads CFBundleVersion from the bundle plist; Info.plist.in is the single source) ---
+  file(READ "${CMAKE_CURRENT_SOURCE_DIR}/src/Info.plist.in" _plist)
+  string(REGEX MATCH "CFBundleVersion</key>[ 	]*<string>([^<]+)</string>" _m "${_plist}")
+  set(MINC_PLUGIN_VERSION "${CMAKE_MATCH_1}")
+  if(NOT MINC_PLUGIN_VERSION)
+    message(FATAL_ERROR "CFBundleVersion not found in src/Info.plist.in")
+  endif()
+  message(STATUS "plugin version (version.txt): ${MINC_PLUGIN_VERSION}")
+  add_custom_command(TARGET minColorCST POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E echo "${MINC_PLUGIN_VERSION}" > "$<TARGET_FILE_DIR:minColorCST>/version.txt"
+    COMMENT "version.txt = ${MINC_PLUGIN_VERSION}" VERBATIM)
 endif()
