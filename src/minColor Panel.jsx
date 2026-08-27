@@ -126,7 +126,7 @@
       dot.dotColor = colors[d.status] || colors.unmanaged;
       dot.helpTip = "Doctor: " + d.status + " \u2014 " + d.text + "  (click to re-check)";
       docText.text = d.text; bRepair.visible = (d.status === "yellow" && d.canRepair);
-      syncEngineUI();
+      syncEngineUI(d.status !== "unmanaged");
     } catch (e) { docText.text = "status unavailable: " + e; }
     unstick();
   }
@@ -138,17 +138,17 @@
   var b = pSetup.add("button", undefined, "Set Up / Migrate Project…");
   var rowE = pSetup.add("group"); rowE.alignChildren = ["left", "center"];
   var stE = rowE.add("statictext", undefined, "Engine:");
-  var ddEng = rowE.add("dropdownlist", undefined, ["Native FX", "Plugin FX"]);
+  var ddEng = rowE.add("dropdownlist", undefined, ["Adobe", "minColor"]);
   ddEng.preferredSize.width = 110; ddEng.selection = 0;
-  ddEng.helpTip = "The project's colour engine. Plugin FX = crash-proof preset switches, pinned OCIO 2.5 (needs the plugin on every machine). Native FX = vanilla AE handoff, self-contained sidecar.";
+  ddEng.helpTip = "Whose colour engine renders the minColor effects. minColor = our plugin: crash-proof preset switches, pinned OCIO 2.5 (needs the plugin installed everywhere). Adobe = AE's native OCIO effects: vanilla handoff, self-contained sidecar.";
   var engSyncing = false;
-  function syncEngineUI() {
+  function syncEngineUI(managed) {
     engSyncing = true;
     try {
       var e = MinColor.readEngine();
-      ddEng.selection = (e === "plugin") ? 1 : 0;
-      ddEng.enabled = (e !== null);                                  // no engine mark = not a minColor project yet
-    } catch (eE) {} 
+      ddEng.selection = (e === "plugin") ? 1 : 0;                    // unmarked project reads as Adobe (the authoring default)
+      ddEng.enabled = (managed !== false);                           // enabled for any managed project, marked or not
+    } catch (eE) {}
     engSyncing = false;
   }
   ddEng.onChange = function () {
