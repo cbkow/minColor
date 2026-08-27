@@ -654,8 +654,14 @@ var MinColor = (function () {
     for (var i = 0; i < ml.inputSpaces.length; i++) valid[ml.inputSpaces[i]] = true;
     return { valid: valid, extMap: extDefaults() };
   }
-  function suggestionFor(item, detectedMap, harvest, ctx) {          // ranked: harvest > detected metadata > extension default
+  function suggestionFor(item, detectedMap, harvest, ctx) {          // ranked: EXTENSION RULE (user policy) > harvest (provenance) > detected metadata
     ctx = ctx || suggestCtx();
+    if (item.mainSource && item.mainSource.file) {                   // the user's table is deliberate batch POLICY — it outranks
+      var m = item.mainSource.file.name.match(/\.([A-Za-z0-9]+)$/); // whatever an old project happened to have assigned
+      var ed = m ? ctx.extMap[m[1].toLowerCase()] : null;
+      if (ed === "working") return { space: null, why: "extension rule: identity" };
+      if (ed) { var en = normalizeSpace(ed, ctx.valid); if (en) return { space: en, why: "extension rule" }; return { space: null, why: "extension rule '" + ed + "' not in config — skipped" }; }
+    }
     var h = harvest[String(item.id)];
     if (h && h.name) {
       var raw = h.name.replace(/^[^\/]*\//, "");
@@ -665,12 +671,6 @@ var MinColor = (function () {
     }
     var det = normalizeSpace(suggestFromDetected(detectedMap[String(item.id)], item.mainSource && item.mainSource.isStill), ctx.valid);
     if (det) return { space: det, why: "detected metadata" };
-    if (item.mainSource && item.mainSource.file) {
-      var m = item.mainSource.file.name.match(/\.([A-Za-z0-9]+)$/);
-      var ed = m ? ctx.extMap[m[1].toLowerCase()] : null;
-      if (ed === "working") return { space: null, why: "extension default: identity" };
-      if (ed) { var en = normalizeSpace(ed, ctx.valid); if (en) return { space: en, why: "extension default" }; return { space: null, why: "extension default '" + ed + "' not in config — skipped" }; }
-    }
     return { space: null, why: "no suggestion — skipped" };
   }
   function hasMinColorFx(layer) {
