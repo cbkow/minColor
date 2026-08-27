@@ -82,6 +82,19 @@ var MinColor = (function () {
       return m ? m[1].replace(/&lt;/g, "<").replace(/&amp;/g, "&") : null;
     } catch (e) { return null; }
   }
+  function stampEngine(engine) {                                     // "native" | "plugin", tracked in project XMP (cheap heartbeat reads)
+    try {
+      var xmp = app.project.xmpPacket;
+      if (xmp.indexOf("minColor:engine") >= 0)
+        xmp = xmp.replace(/(<minColor:engine>)[^<]*(<\/minColor:engine>)/, "$1" + engine + "$2");
+      else
+        xmp = xmp.replace("</rdf:RDF>", '<rdf:Description rdf:about="" xmlns:minColor="https://bialkow.ski/minColor/ns/"><minColor:engine>' + engine + '</minColor:engine></rdf:Description></rdf:RDF>');
+      app.project.xmpPacket = xmp;
+    } catch (e) {}
+  }
+  function readEngine() {
+    try { var m = app.project.xmpPacket.match(/<minColor:engine>([^<]*)<\/minColor:engine>/); return m ? m[1] : null; } catch (e) { return null; }
+  }
   function pinConfig(presetKey) {                                    // preferred pin target for a preset
     var pr = presets()[presetKey]; if (!pr) throw new Error("unknown preset " + presetKey);
     var central = new File(centralConfigs() + "/" + pr.config);
@@ -227,6 +240,7 @@ var MinColor = (function () {
     }
     var pinned = pinConfig(presetKey);
     try { stampProvenance(presetKey, presets()[presetKey].config); } catch (eSt2) {}
+    if (!readEngine()) stampEngine("native");
     p.ocioConfigurationFile = pinned;
     if (p.workingSpace !== pr.workingSpaceLabel) {
       // AE resolved the seeded working space against its DEFAULT config and dropped it (RESULTS 15):
@@ -423,7 +437,9 @@ var MinColor = (function () {
       var id = app.findMenuCommandId("minColor: Sync From Names");
       if (id) app.executeCommand(id);
       try { var inf = sidecarInfo(); if (inf) app.project.ocioConfigurationFile = pinConfig(inf.preset); } catch (eP2) {}
+      stampEngine("plugin");
     } else {
+      stampEngine("native");
       /* handoff to plugin-less machines: make the project self-contained */
       try { var inf2 = sidecarInfo(); if (inf2 && app.project.file) app.project.ocioConfigurationFile = ensureSidecar(inf2.preset); } catch (eS2) {}
     }
@@ -809,7 +825,7 @@ var MinColor = (function () {
   function addViewGuideLayer(comp, viewColorspace) { return upsertUtilityLayer(comp, "view", viewColorspace || "sRGB"); }
   function addRenderLayer(comp, renderSpace) { return upsertUtilityLayer(comp, "render", renderSpace || "Gamma 2.4 Encoded Rec.709"); }
 
-  return { VERSION: VERSION, presets: presets, menuLists: menuLists, preflight: preflight, payloadRoot: payloadRoot, ensureSidecar: ensureSidecar, sidecarInfo: sidecarInfo, doctor: doctor, repair: repair, pinConfig: pinConfig, findConfigByName: findConfigByName, stampProvenance: stampProvenance, readProvenance: readProvenance, archiveProject: archiveProject, migrateProject: migrateProject, interpretPass: interpretPass, extDefaults: extDefaults, saveExtDefaults: saveExtDefaults, suggestionFor: suggestionFor, collectDetected: collectDetected, readHarvest: readHarvest, harvestPath: harvestPath, seedStickyPref: seedStickyPref, newProject: newProject,
+  return { VERSION: VERSION, presets: presets, menuLists: menuLists, preflight: preflight, payloadRoot: payloadRoot, ensureSidecar: ensureSidecar, sidecarInfo: sidecarInfo, doctor: doctor, repair: repair, pinConfig: pinConfig, findConfigByName: findConfigByName, stampProvenance: stampProvenance, readProvenance: readProvenance, archiveProject: archiveProject, stampEngine: stampEngine, readEngine: readEngine, migrateProject: migrateProject, interpretPass: interpretPass, extDefaults: extDefaults, saveExtDefaults: saveExtDefaults, suggestionFor: suggestionFor, collectDetected: collectDetected, readHarvest: readHarvest, harvestPath: harvestPath, seedStickyPref: seedStickyPref, newProject: newProject,
            assertProject: assertProject, applyPresetToCurrent: applyPresetToCurrent,
            syncReport: syncReport, syncApply: syncApply, rebuildMinColorEffects: rebuildMinColorEffects, translateEffects: translateEffects, pluginAvailable: pluginAvailable, uiState: uiState, saveUiState: saveUiState,
            setPopupByName: setPopupByName, addInputTransform: addInputTransform, addViewGuideLayer: addViewGuideLayer, addRenderLayer: addRenderLayer, findUtilityLayer: findUtilityLayer };

@@ -126,6 +126,7 @@
       dot.dotColor = colors[d.status] || colors.unmanaged;
       dot.helpTip = "Doctor: " + d.status + " \u2014 " + d.text + "  (click to re-check)";
       docText.text = d.text; bRepair.visible = (d.status === "yellow" && d.canRepair);
+      syncEngineUI();
     } catch (e) { docText.text = "status unavailable: " + e; }
     unstick();
   }
@@ -137,9 +138,30 @@
   var b = pSetup.add("button", undefined, "Set Up / Migrate Project…");
   var rowE = pSetup.add("group"); rowE.alignChildren = ["left", "center"];
   var stE = rowE.add("statictext", undefined, "Engine:");
-  var bPlug = rowE.add("button", undefined, "Use plugin FX"); bPlug.preferredSize.width = 105;
-  bPlug.helpTip = "Convert every minColor effect to the MINC CST plugin (crash-proof across preset switches; destination follows the working space live)";
-  var bNat = rowE.add("button", undefined, "Use native FX"); bNat.preferredSize.width = 105;
+  var ddEng = rowE.add("dropdownlist", undefined, ["Native FX", "Plugin FX"]);
+  ddEng.preferredSize.width = 110; ddEng.selection = 0;
+  ddEng.helpTip = "The project's colour engine. Plugin FX = crash-proof preset switches, pinned OCIO 2.5 (needs the plugin on every machine). Native FX = vanilla AE handoff, self-contained sidecar.";
+  var engSyncing = false;
+  function syncEngineUI() {
+    engSyncing = true;
+    try {
+      var e = MinColor.readEngine();
+      ddEng.selection = (e === "plugin") ? 1 : 0;
+      ddEng.enabled = (e !== null);                                  // no engine mark = not a minColor project yet
+    } catch (eE) {} 
+    engSyncing = false;
+  }
+  ddEng.onChange = function () {
+    if (engSyncing || !ddEng.selection) return;
+    var target = (ddEng.selection.index === 1) ? "plugin" : "native";
+    if (MinColor.readEngine() === target) return;
+    guard("Engine \u2192 " + target, function () {
+      var r = MinColor.translateEffects(target);
+      if (r.failed.length) alert("minColor \u2014 translate\n\n" + r.failed.join("\n").substr(0, 3000));
+      return "converted " + r.converted.length + ", failed " + r.failed.length;
+    });
+    syncEngineUI();                                                  // reflect reality (reverts on failure)
+  };
   var bArch = rowE.add("button", undefined, "Archive"); bArch.preferredSize.width = 70;
   bArch.helpTip = "Make the project self-contained for handoff/archival: sidecar config + provenance.json + a golden reference frame in _minColor/";
   bArch.onClick = function () {
