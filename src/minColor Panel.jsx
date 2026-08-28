@@ -48,6 +48,8 @@
     row("Engine", eng === "plugin" ? "minColor (plugin)" : eng === "native" ? "Adobe (native)" : "\u2014");
     row("Pinned to", (inf && inf.pinned) ? inf.pinned : "(no pin)");
     row("Provenance", prov || "(none)");
+    var uisD = {}; try { uisD = MinColor.uiState() || {}; } catch (eU2) {}
+    row("Last heal", uisD.lastHeal || "—");
     var rowB = dlg.add("group"); rowB.alignment = ["fill", "top"];
     var bArch2 = rowB.add("button", undefined, "Archive");
     bArch2.helpTip = "Freeze dependencies, keep working: sidecar + provenance.json + golden reference frame. Purely additive.";
@@ -158,12 +160,25 @@
     try {
       var d = MinColor.doctor();
       if (d.status === "yellow" && d.canRepair) {                    // filename-match self-heal (agreed 2026-08-27)
-        try { MinColor.repair(); d = MinColor.doctor(); if (d.status === "green") log("auto-repaired config pin"); } catch (eAR) {}
+        try {
+          var oldPin = app.project.ocioConfigurationFile || "(empty)";
+          MinColor.repair(); d = MinColor.doctor();
+          if (d.status === "green") {
+            log("auto-repaired config pin");
+            $.global.__minColorHealTicks = 6;                        // status line announces for ~30 s of heartbeats
+            var hn = new Date(), hz = function (n) { return (n < 10 ? "0" : "") + n; };
+            UIS.lastHeal = hn.getFullYear() + "-" + hz(hn.getMonth() + 1) + "-" + hz(hn.getDate()) + " " +
+                           hz(hn.getHours()) + ":" + hz(hn.getMinutes()) + " — " + oldPin + " → " +
+                           app.project.ocioConfigurationFile;        // the gear dialog remembers, across sessions
+            try { MinColor.saveUiState(UIS); } catch (eHS) {}
+          }
+        } catch (eAR) {}
       }
       var colors = { green: [0.28, 0.82, 0.4, 1], yellow: [0.95, 0.78, 0.18, 1], red: [0.94, 0.32, 0.28, 1], unmanaged: [0.55, 0.55, 0.55, 1] };
       dot.dotColor = colors[d.status] || colors.unmanaged;
       dot.helpTip = "Doctor: " + d.status + " \u2014 " + d.text + "  (click to re-check)";
       docText.text = d.text; bRepair.visible = (d.status === "yellow" && d.canRepair);
+      if ($.global.__minColorHealTicks > 0) { docText.text = d.text + "  · healed ✓"; $.global.__minColorHealTicks--; }
     } catch (e) { docText.text = "status unavailable: " + e; }
     unstick();
   }
