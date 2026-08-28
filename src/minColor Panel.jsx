@@ -246,6 +246,24 @@
   var bComp = rowA.add("button", undefined, "Interpret timeline"); bComp.alignment = ["fill", "center"];
   bComp.helpTip = "Active comp + nested precomps, auto-suggested per item; contained precomps are treated as media";
   var bMatches = rowA.add("button", undefined, "Matches\u2026"); bMatches.preferredSize.width = 90;
+  var rowSt = pTL.add("group");
+  var bStrip = rowSt.add("button", undefined, "Strip foreign OCIO"); bStrip.alignment = ["fill", "center"];
+  bStrip.helpTip = "Remove non-minColor OCIO pipeline effects (Display/Look/CST) from this timeline + precomps — stale-config crash bait. File grades (CDL/FILE) and minColor effects stay; contained precomps are skipped. Undoable.";
+  bStrip.onClick = function () {
+    guard("Strip foreign OCIO", function () {
+      app.beginUndoGroup("minColor strip foreign OCIO");
+      var r = MinColor.stripForeignOcio();
+      app.endUndoGroup();
+      var detail = [];
+      if (r.stripped.length) detail.push("STRIPPED:\n  " + r.stripped.join("\n  "));
+      if (r.gradesLeft.length) detail.push("FILE GRADES LEFT (review):\n  " + r.gradesLeft.join("\n  "));
+      if (r.contained.length) detail.push("CONTAINED (untouched):\n  " + r.contained.join("\n  "));
+      if (r.failed.length) detail.push("FAILED:\n  " + r.failed.join("\n  "));
+      if (detail.length) alert("minColor \u2014 strip\n\n" + detail.join("\n\n").substr(0, 4000));
+      return "stripped " + r.stripped.length + ", grades left " + r.gradesLeft.length;
+    });
+  };
+
   var pCont = section("Interpret Precomp", GLYPH.precomp);
   var rowC = pCont.add("group"); rowC.add("statictext", undefined, "As:");
   var ddContain = rowC.add("dropdownlist", undefined, lists.inputSpaces); ddContain.selection = 0;

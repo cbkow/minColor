@@ -1087,6 +1087,44 @@ var MinColor = (function () {
     if (pluginAvailable()) syncPluginNames();
     return out;
   }
+  function stripForeignOcio(compOpt) {                               // surgical sibling of migrate's strip: THIS timeline, recursive, undoable.
+    var comp = compOpt || app.project.activeItem;                    // Policy identical: foreign Display/Look/CST stripped, CDL/FILE grades left,
+    if (!(comp instanceof CompItem)) throw new Error("open a comp"); // minColor-named effects untouched, contained precomp interiors skipped.
+    var out = { stripped: [], gradesLeft: [], contained: [], failed: [] };
+    function containOn(ly) {
+      var fxp2 = null; try { fxp2 = ly.property("ADBE Effect Parade"); } catch (e2) { return false; }
+      if (fxp2) for (var f2 = 1; f2 <= fxp2.numProperties; f2++) if (fxp2.property(f2).name.indexOf(FX_PREFIX + "contain ") === 0) return true;
+      return false;
+    }
+    function walk(c, seen) {
+      if (seen[c.id]) return; seen[c.id] = true;
+      for (var L = 1; L <= c.numLayers; L++) {
+        var ly = c.layer(L), src = null;
+        try { src = ly.source; } catch (eS) {}
+        var fxp = null; try { fxp = ly.property("ADBE Effect Parade"); } catch (eF) { continue; }
+        var label = c.name + "/" + ly.name;
+        if (fxp) for (var k = 1; k <= fxp.numProperties; k++) {
+          var mn = fxp.property(k).matchName, nm = fxp.property(k).name;
+          if ((mn === "ADBE OCIO Display Transform" || mn === "ADBE OCIO Look Transform" ||
+               mn === "ADBE OCIO Color Space Transform") && nm.indexOf(FX_PREFIX) !== 0) {
+            try {
+              var wl = ly.locked; if (wl) ly.locked = false;
+              try { fxp.property(k).remove(); } finally { if (wl) ly.locked = true; }
+              out.stripped.push(label + " [" + nm + "]"); k--;
+            } catch (eR) { out.failed.push(label + " [" + nm + "] — " + eR.toString()); }
+          } else if (mn === "ADBE OCIO CDL Transform" || mn === "ADBE OCIO FILE Transform") {
+            out.gradesLeft.push(label + " [" + nm + "]");
+          }
+        }
+        if (src instanceof CompItem) {
+          if (containOn(ly)) { out.contained.push(label + " — interior is media, left untouched"); continue; }
+          walk(src, seen);
+        }
+      }
+    }
+    walk(comp, {});
+    return out;
+  }
   function renderPresets() {
     /* settings dir first (user edits), then the shipped payload default — an EXISTING settings
        dir from an older install never re-seeds, so new seed files need this fallback. */
@@ -1110,5 +1148,5 @@ var MinColor = (function () {
            assertProject: assertProject, applyPresetToCurrent: applyPresetToCurrent,
            syncReport: syncReport, syncApply: syncApply, rebuildMinColorEffects: rebuildMinColorEffects, translateEffects: translateEffects, pluginAvailable: pluginAvailable, uiState: uiState, saveUiState: saveUiState,
            setPopupByName: setPopupByName, addInputTransform: addInputTransform, addViewGuideLayer: addViewGuideLayer, addRenderLayer: addRenderLayer, findUtilityLayer: findUtilityLayer,
-           renderPresets: renderPresets, applyRenderPreset: applyRenderPreset, configLooks: configLooks, applyLook: applyLook, containPrecomp: containPrecomp };
+           renderPresets: renderPresets, applyRenderPreset: applyRenderPreset, configLooks: configLooks, applyLook: applyLook, containPrecomp: containPrecomp, stripForeignOcio: stripForeignOcio };
 })();
