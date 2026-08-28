@@ -647,25 +647,33 @@ var MinColor = (function () {
   function dirWritable(d) {                                          // a panel under Program Files (Windows) exists but rejects writes
     try { var probe = new File(d + "/.minColor-write-probe"); if (!probe.open("w")) return false; probe.close(); probe.remove(); return true; } catch (eW) { return false; }
   }
-  function settingsDir() {                                           // first candidate that is BOTH present and writable; else fall back
-    var cands = [];                                                  // to the machine-wide root, seeded from the read-only payload
-    if (SCRIPT_DATA) cands.push(SCRIPT_DATA + "/settings");
-    cands.push(SHARED_ROOT + "/settings", ROOT + "/config");
-    var readable = null;
-    for (var i = 0; i < cands.length; i++) if (new Folder(cands[i]).exists) {
-      if (dirWritable(cands[i])) return new Folder(cands[i]).fsName;
-      if (!readable) readable = cands[i];
-    }
-    var mk = new Folder(SHARED_ROOT + "/settings");
-    if (!mk.exists && !mk.create()) return readable ? new Folder(readable).fsName : Folder.temp.fsName;
-    if (readable) {                                                  // seed once so falling back never loses the shipped defaults
+  function settingsDir() {
+    /* Durable state home — OUTSIDE the replaceable payload. Field finding: state that lives in
+       minColor-data/settings dies with every panel update ("copy everything" wipes it — sticky
+       dropdowns, the extension table, Last heal all silently reset). The machine-wide root
+       survives updates on both platforms; missing files seed from legacy panel settings first
+       (migrating any existing user state), then the shipped payload defaults. */
+    var home = new Folder(SHARED_ROOT + "/settings");
+    if (home.exists || home.create()) {
       var seeds = ["extension-defaults.json", "ui-state.json", "render-presets.json"];
+      var sources = [];
+      if (SCRIPT_DATA) sources.push(SCRIPT_DATA + "/settings");
+      sources.push(ROOT + "/config");
       for (var s = 0; s < seeds.length; s++) {
-        var srcF = new File(readable + "/" + seeds[s]), dstF = new File(mk.fsName + "/" + seeds[s]);
-        if (srcF.exists && !dstF.exists) try { srcF.copy(dstF.fsName); } catch (eC) {}
+        var dstF = new File(home.fsName + "/" + seeds[s]);
+        if (dstF.exists) continue;
+        for (var q = 0; q < sources.length; q++) {
+          var srcF = new File(sources[q] + "/" + seeds[s]);
+          if (srcF.exists) { try { srcF.copy(dstF.fsName); } catch (eC) {} break; }
+        }
       }
+      if (dirWritable(home.fsName)) return home.fsName;
     }
-    return mk.fsName;
+    var cands = [];                                                  // fallback: previous writable-candidate chain
+    if (SCRIPT_DATA) cands.push(SCRIPT_DATA + "/settings");
+    cands.push(ROOT + "/config");
+    for (var i = 0; i < cands.length; i++) if (new Folder(cands[i]).exists && dirWritable(cands[i])) return new Folder(cands[i]).fsName;
+    return Folder.temp.fsName;
   }
   function extDefaults() { try { return readJSON(settingsDir() + "/extension-defaults.json").defaults; } catch (e) { return {}; } }
   function uiState() { try { return readJSON(settingsDir() + "/ui-state.json") || {}; } catch (e) { return {}; } }
