@@ -1087,10 +1087,16 @@ var MinColor = (function () {
     if (pluginAvailable()) syncPluginNames();
     return out;
   }
-  function stripForeignOcio(compOpt) {                               // surgical sibling of migrate's strip: THIS timeline, recursive, undoable.
-    var comp = compOpt || app.project.activeItem;                    // Policy identical: foreign Display/Look/CST stripped, CDL/FILE grades left,
-    if (!(comp instanceof CompItem)) throw new Error("open a comp"); // minColor-named effects untouched, contained precomp interiors skipped.
-    var out = { stripped: [], gradesLeft: [], contained: [], failed: [] };
+  function stripForeignOcio(compOpt, mode) {                         // surgical sibling of migrate's strip: THIS timeline, recursive, undoable.
+    // mode "foreign" (default): foreign Display/Look/CST stripped, CDL/FILE grades left,
+    //   minColor-named effects untouched, contained precomp interiors skipped.
+    // mode "all": DEMOLITION — every OCIO effect goes (ours included, CDL/FILE included,
+    //   loudly reported), minColor VIEW/RENDER utility layers are deleted, containment is
+    //   ignored (the boundary effect itself is being removed). One undo reverses everything.
+    var all = (mode === "all");
+    var comp = compOpt || app.project.activeItem;
+    if (!(comp instanceof CompItem)) throw new Error("open a comp");
+    var out = { stripped: [], gradesLeft: [], contained: [], failed: [], layersRemoved: [] };
     function containOn(ly) {
       var fxp2 = null; try { fxp2 = ly.property("ADBE Effect Parade"); } catch (e2) { return false; }
       if (fxp2) for (var f2 = 1; f2 <= fxp2.numProperties; f2++) if (fxp2.property(f2).name.indexOf(FX_PREFIX + "contain ") === 0) return true;
@@ -1101,23 +1107,34 @@ var MinColor = (function () {
       for (var L = 1; L <= c.numLayers; L++) {
         var ly = c.layer(L), src = null;
         try { src = ly.source; } catch (eS) {}
-        var fxp = null; try { fxp = ly.property("ADBE Effect Parade"); } catch (eF) { continue; }
         var label = c.name + "/" + ly.name;
+        if (all && ly.adjustmentLayer && /^minColor (VIEW|RENDER)/.test(ly.name)) {
+          try {
+            var wl0 = ly.locked; if (wl0) ly.locked = false;
+            ly.remove(); out.layersRemoved.push(label); L--;
+            continue;
+          } catch (eLR) { out.failed.push(label + " — " + eLR.toString()); }
+        }
+        var fxp = null; try { fxp = ly.property("ADBE Effect Parade"); } catch (eF) { continue; }
         if (fxp) for (var k = 1; k <= fxp.numProperties; k++) {
           var mn = fxp.property(k).matchName, nm = fxp.property(k).name;
-          if ((mn === "ADBE OCIO Display Transform" || mn === "ADBE OCIO Look Transform" ||
-               mn === "ADBE OCIO Color Space Transform") && nm.indexOf(FX_PREFIX) !== 0) {
+          var isPipeline = (mn === "ADBE OCIO Display Transform" || mn === "ADBE OCIO Look Transform" ||
+                            mn === "ADBE OCIO Color Space Transform" || mn === MINC_MATCH);
+          var isGrade = (mn === "ADBE OCIO CDL Transform" || mn === "ADBE OCIO FILE Transform");
+          var doomed = all ? (isPipeline || isGrade)
+                           : (isPipeline && mn !== MINC_MATCH && nm.indexOf(FX_PREFIX) !== 0);
+          if (doomed) {
             try {
               var wl = ly.locked; if (wl) ly.locked = false;
               try { fxp.property(k).remove(); } finally { if (wl) ly.locked = true; }
-              out.stripped.push(label + " [" + nm + "]"); k--;
+              out.stripped.push(label + " [" + nm + "]" + (isGrade ? "  ← FILE GRADE" : "")); k--;
             } catch (eR) { out.failed.push(label + " [" + nm + "] — " + eR.toString()); }
-          } else if (mn === "ADBE OCIO CDL Transform" || mn === "ADBE OCIO FILE Transform") {
+          } else if (isGrade) {
             out.gradesLeft.push(label + " [" + nm + "]");
           }
         }
         if (src instanceof CompItem) {
-          if (containOn(ly)) { out.contained.push(label + " — interior is media, left untouched"); continue; }
+          if (!all && containOn(ly)) { out.contained.push(label + " — interior is media, left untouched"); continue; }
           walk(src, seen);
         }
       }

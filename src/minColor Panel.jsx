@@ -248,6 +248,22 @@
   var bMatches = rowA.add("button", undefined, "Matches\u2026"); bMatches.preferredSize.width = 90;
   var rowSt = pTL.add("group");
   var bStrip = rowSt.add("button", undefined, "Strip foreign OCIO"); bStrip.alignment = ["fill", "center"];
+  var bStripAll = rowSt.add("button", undefined, "Strip ALL"); bStripAll.preferredSize.width = 90;
+  bStripAll.helpTip = "DEMOLITION: remove EVERY OCIO effect from this timeline + precomps — foreign AND minColor, file grades included (listed), view/render layers deleted, containment ignored. One undo reverses it.";
+  bStripAll.onClick = function () {
+    if (!confirm("minColor — Strip ALL OCIO\n\nRemove EVERY OCIO effect from this timeline and its precomps?\n\n• foreign AND minColor effects\n• CDL/FILE grades too (listed in the report)\n• minColor view/render layers deleted\n• contained precomps NOT spared\n\nOne undo reverses everything.")) return;
+    guard("Strip ALL OCIO", function () {
+      app.beginUndoGroup("minColor strip ALL OCIO");
+      var r = MinColor.stripForeignOcio(null, "all");
+      app.endUndoGroup();
+      var detail = [];
+      if (r.stripped.length) detail.push("STRIPPED:\n  " + r.stripped.join("\n  "));
+      if (r.layersRemoved.length) detail.push("LAYERS REMOVED:\n  " + r.layersRemoved.join("\n  "));
+      if (r.failed.length) detail.push("FAILED:\n  " + r.failed.join("\n  "));
+      if (detail.length) alert("minColor \u2014 strip ALL\n\n" + detail.join("\n\n").substr(0, 4000));
+      return "stripped " + r.stripped.length + ", layers removed " + r.layersRemoved.length;
+    });
+  };
   bStrip.helpTip = "Remove non-minColor OCIO pipeline effects (Display/Look/CST) from this timeline + precomps — stale-config crash bait. File grades (CDL/FILE) and minColor effects stay; contained precomps are skipped. Undoable.";
   bStrip.onClick = function () {
     guard("Strip foreign OCIO", function () {
