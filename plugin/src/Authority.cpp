@@ -123,6 +123,7 @@ static bool ParseGrammar(const char *utf8, MinColorArb *out) {
     memset(out, 0, sizeof(*out));
     out->magic = MINC_ARB_MAGIC; out->version = MINC_ARB_VERSION;
     if (!strncmp(rest, "look ", 5))   { out->direction = MINC_DIR_LOOK;         snprintf(out->space, MINC_SPACE_LEN, "%s", rest + 5); return true; }
+    if (!strncmp(rest, "contain ", 8)) { out->direction = MINC_DIR_TO_WORKING;   snprintf(out->space, MINC_SPACE_LEN, "%s", rest + 8); return true; }   /* boundary: comp output IS media in X */
     if (!strncmp(rest, "view ", 5))   { out->direction = MINC_DIR_FROM_WORKING; snprintf(out->space, MINC_SPACE_LEN, "%s", rest + 5); return true; }
     if (!strncmp(rest, "render ", 7)) { out->direction = MINC_DIR_FROM_WORKING; snprintf(out->space, MINC_SPACE_LEN, "%s", rest + 7); return true; }
     const char *arrow = strstr(rest, " \xe2\x86\x92 working");        /* " -> working", real arrow */

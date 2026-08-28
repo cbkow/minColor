@@ -239,8 +239,31 @@
   var pTL = section("Interpret Timeline", GLYPH.bars);
   var rowA = pTL.add("group");
   var bComp = rowA.add("button", undefined, "Interpret timeline"); bComp.alignment = ["fill", "center"];
-  bComp.helpTip = "Active comp + nested precomps, auto-suggested per item";
+  bComp.helpTip = "Active comp + nested precomps, auto-suggested per item; contained precomps are treated as media";
   var bMatches = rowA.add("button", undefined, "Matches\u2026"); bMatches.preferredSize.width = 90;
+  var rowC = pTL.add("group"); rowC.add("statictext", undefined, "Contain:");
+  var ddContain = rowC.add("dropdownlist", undefined, lists.inputSpaces); ddContain.selection = 0;
+  ddContain.alignment = ["fill", "center"]; ddContain.preferredSize.width = 120;
+  bindDD(ddContain, "containSpace");
+  var bContainSet = rowC.add("button", undefined, "Set"); bContainSet.preferredSize.width = 44;
+  bContainSet.helpTip = "Declare the selected precomp(s) a BOUNDARY: their output is media in this space; the walk never looks inside";
+  var bContainClear = rowC.add("button", undefined, "Clear"); bContainClear.preferredSize.width = 48;
+  bContainClear.helpTip = "Remove the boundary from the selected precomp(s) — the walk recurses into them again";
+  function runContain(space) {
+    guard("Contain", function () {
+      app.beginUndoGroup("minColor contain");
+      var r = MinColor.containPrecomp(space);
+      app.endUndoGroup();
+      var parts = [];
+      if (r.set.length) parts.push("set: " + r.set.join("; "));
+      if (r.removed.length) parts.push("removed: " + r.removed.join("; "));
+      if (r.skipped.length) parts.push("skipped: " + r.skipped.join("; "));
+      if (r.warned.length) alert("minColor \u2014 contain\n\n" + r.warned.join("\n"));
+      return parts.join(" | ") || "nothing to do";
+    });
+  }
+  bContainSet.onClick = function () { runContain(ddContain.selection.text); };
+  bContainClear.onClick = function () { runContain(null); };
   function runPass(label, scope, space) {
     guard(label, function () {
       var r = MinColor.interpretPass(scope, space || null);
@@ -250,6 +273,7 @@
       if (r.failed && r.failed.length) detail.push("FAILED:\n  " + cap(r.failed));
       if (r.flagged.length) detail.push("FLAGGED:\n  " + cap(r.flagged));
       if (r.identity && r.identity.length) detail.push("ALREADY WORKING-SPACE (identity, no CST needed):\n  " + cap(r.identity));
+      if (r.contained && r.contained.length) detail.push("CONTAINED (treated as media, interior skipped):\n  " + cap(r.contained));
       if (r.skipped.length) detail.push("SKIPPED:\n  " + cap(r.skipped));
       if (detail.length) alert("minColor \u2014 " + label + "\n\n" + detail.join("\n\n"));   // per-bucket caps: a big ADDED list must never hide the skipped/identity buckets
       return "added " + r.added.length + ", failed " + (r.failed ? r.failed.length : 0) + ", identity " + (r.identity ? r.identity.length : 0) + ", skipped " + r.skipped.length;

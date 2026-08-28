@@ -357,6 +357,19 @@ var MinColor = (function () {
                 if (vfx.propertyIndex !== idxV) vfx.moveTo(idxV);
                 out.viewRender = (out.viewRender || 0) + 1;
               } else {
+                var mc = rest.match(/^contain (.+)$/);
+                if (mc) {                                            // boundary in native dialect: retarget in place, name preserved
+                  var idxC = k;
+                  fxp.property(k).remove();
+                  if ($.global.__minColorViewerId !== it.id) { it.openInViewer(); $.global.__minColorViewerId = it.id; }
+                  var cfx = fxp.addProperty("ADBE OCIO Color Space Transform");
+                  cfx.name = nm;
+                  setPopupRetrying(cfx, 1, mc[1], it);
+                  setPopupRetrying(cfx, 2, "default", it);
+                  if (cfx.propertyIndex !== idxC) cfx.moveTo(idxC);
+                  out.rebuilt.push(label + " (" + rest + ")");
+                  continue;
+                }
                 var ai = rest.indexOf(" \u2192 working");
                 if (ai <= 0) continue;
                 var space = rest.substring(0, ai), idx = k;
@@ -488,8 +501,10 @@ var MinColor = (function () {
                   out.converted.push(label);
                   continue;
                 }
+                var mc2 = rest.match(/^contain (.+)$/);
                 var mv = rest.match(/^(view|render) (.+)$/);
-                if (mv) { src2 = "default"; dst2 = mv[2]; }
+                if (mc2) { src2 = mc2[1]; dst2 = "default"; }
+                else if (mv) { src2 = "default"; dst2 = mv[2]; }
                 else { var ai = rest.indexOf(" \u2192 working"); if (ai > 0) { src2 = rest.substring(0, ai); dst2 = "default"; } }
                 if (!src2) { out.skipped.push(label + " (unparsed name)"); continue; }
                 var idx2 = k;
@@ -753,7 +768,7 @@ var MinColor = (function () {
     var p = app.project;
     var detected = (space ? {} : collectDetected());
     var harvest = (space ? {} : readHarvest());
-    var report = { added: [], skipped: [], flagged: [], failed: [], identity: [] };
+    var report = { added: [], skipped: [], flagged: [], failed: [], identity: [], contained: [] };
     var ctx = suggestCtx();
     $.global.__minColorViewerId = null;
     var inScope = function (item) {
@@ -814,14 +829,35 @@ var MinColor = (function () {
         report.added.push(label + " \u2190 " + pick.space + " [" + pick.why + "]");
       } catch (e) { report.failed.push(label + " \u2014 " + e.toString()); }
     }
+    function containSpace(ly) {                                      // "minColor: contain X" on a precomp layer = LEAF: never descend
+      var fxp2 = null; try { fxp2 = ly.property("ADBE Effect Parade"); } catch (e2) { return null; }
+      if (fxp2) for (var f2 = 1; f2 <= fxp2.numProperties; f2++)
+        if (fxp2.property(f2).name.indexOf(FX_PREFIX + "contain ") === 0) return fxp2.property(f2).name.substring((FX_PREFIX + "contain ").length);
+      return null;
+    }
     function walkComp(comp, recursive, seen) {
       if (seen[comp.id]) return; seen[comp.id] = true;
       for (var L = 1; L <= comp.numLayers; L++) {
         var ly = comp.layer(L), src = null;
         try { src = ly.source; } catch (e) {}
-        if (src instanceof CompItem) { if (recursive) walkComp(src, true, seen); }
+        if (src instanceof CompItem) {
+          var csp = containSpace(ly);
+          if (csp) { report.contained.push(comp.name + "/" + ly.name + " ← " + csp); continue; }
+          if (recursive) walkComp(src, true, seen);
+        }
         else if (src instanceof FootageItem) doLayer(ly);
       }
+    }
+    function containedCompIds() {                                    // comps used as a boundary ANYWHERE: flat scopes must not walk their interior
+      var ids = {};
+      for (var ci = 1; ci <= p.numItems; ci++) {
+        var it2 = p.item(ci); if (!(it2 instanceof CompItem)) continue;
+        for (var L2 = 1; L2 <= it2.numLayers; L2++) {
+          var s3 = null; try { s3 = it2.layer(L2).source; } catch (e3) {}
+          if (s3 instanceof CompItem && containSpace(it2.layer(L2))) ids[s3.id] = it2.layer(L2).name;
+        }
+      }
+      return ids;
     }
     var homeComp = (app.project.activeItem instanceof CompItem) ? app.project.activeItem : null;
     app.beginUndoGroup("minColor interpret");
@@ -838,11 +874,17 @@ var MinColor = (function () {
         for (var si = 0; si < sel2.length; si++) if (sel2[si] instanceof FootageItem) { ids[sel2[si].id] = true; n++; }
         if (!n) throw new Error("select footage item(s) in the Project panel");
         var keep = inScope; inScope = function (item) { return ids[item.id] === true && keep(item); };
-        var seen2 = {};
-        for (var i2 = 1; i2 <= p.numItems; i2++) if (p.item(i2) instanceof CompItem) walkComp(p.item(i2), false, seen2);
+        var seen2 = {}, cids2 = containedCompIds();
+        for (var i2 = 1; i2 <= p.numItems; i2++) if (p.item(i2) instanceof CompItem) {
+          if (cids2[p.item(i2).id]) { report.contained.push("(comp) " + p.item(i2).name + " — interior skipped, contained elsewhere"); continue; }
+          walkComp(p.item(i2), false, seen2);
+        }
       } else {
-        var seen3 = {};
-        for (var i = 1; i <= p.numItems; i++) if (p.item(i) instanceof CompItem) walkComp(p.item(i), false, seen3);
+        var seen3 = {}, cids3 = containedCompIds();
+        for (var i = 1; i <= p.numItems; i++) if (p.item(i) instanceof CompItem) {
+          if (cids3[p.item(i).id]) { report.contained.push("(comp) " + p.item(i).name + " — interior skipped, contained elsewhere"); continue; }
+          walkComp(p.item(i), false, seen3);
+        }
       }
     } finally {
       try { if (pluginAvailable()) syncPluginNames(); } catch (eSy) {}
@@ -997,6 +1039,54 @@ var MinColor = (function () {
     if (out.view === "absent" && out.render === "absent") throw new Error("no minColor view/render layers in this comp — add one first");
     return out;
   }
+  function containPrecomp(space, compOpt) {                          // boundary: "this comp's OUTPUT is media in X" (null = un-declare).
+    var comp = compOpt || app.project.activeItem;                    // The walk treats contained precomps as LEAVES and never descends.
+    if (!(comp instanceof CompItem)) throw new Error("open a comp");
+    var sel = comp.selectedLayers;
+    if (!sel.length) throw new Error("select precomp layer(s)");
+    var out = { set: [], removed: [], skipped: [], warned: [] };
+    function countInterpreted(c, seen) {                             // interpreted layers INSIDE = double-transform risk
+      if (seen[c.id]) return 0; seen[c.id] = true;
+      var n = 0;
+      for (var L = 1; L <= c.numLayers; L++) {
+        var s2 = null; try { s2 = c.layer(L).source; } catch (e2) {}
+        var fxp2 = null; try { fxp2 = c.layer(L).property("ADBE Effect Parade"); } catch (e3) {}
+        if (fxp2) for (var f2 = 1; f2 <= fxp2.numProperties; f2++) {
+          var n2 = fxp2.property(f2).name;
+          if (n2.indexOf(FX_PREFIX) === 0 && n2.indexOf(FX_PREFIX + "view ") !== 0 && n2.indexOf(FX_PREFIX + "render ") !== 0 && n2.indexOf(FX_PREFIX + "look ") !== 0) n++;
+        }
+        if (s2 instanceof CompItem) n += countInterpreted(s2, seen);
+      }
+      return n;
+    }
+    for (var i = 0; i < sel.length; i++) {
+      var ly = sel[i], src = null;
+      try { src = ly.source; } catch (eS) {}
+      if (!(src instanceof CompItem)) { out.skipped.push(ly.name + " (not a precomp)"); continue; }
+      var label = comp.name + "/" + ly.name;
+      var fxp = ly.property("ADBE Effect Parade"), have = null;
+      for (var k = 1; k <= fxp.numProperties; k++) if (fxp.property(k).name.indexOf(FX_PREFIX + "contain ") === 0) { have = k; break; }
+      var wl = ly.locked; if (wl) ly.locked = false;
+      try {
+        if (!space) {
+          if (have) { fxp.property(have).remove(); out.removed.push(label); } else out.skipped.push(label + " (no boundary)");
+          continue;
+        }
+        var inside = countInterpreted(src, {});
+        if (inside > 0) out.warned.push(label + " — " + inside + " interpreted layer(s) INSIDE the contained subtree: likely double transform");
+        if (have) { var hf = fxp.property(have); hf.name = FX_PREFIX + "contain " + space; if (hf.matchName === MINC_MATCH) stampSerial(hf); }
+        else {
+          var cf = fxp.addProperty(pluginAvailable() ? MINC_MATCH : "ADBE OCIO Color Space Transform");
+          cf.name = FX_PREFIX + "contain " + space;
+          if (cf.matchName === MINC_MATCH) stampSerial(cf);
+          else { setPopupRetrying(cf, 1, space, comp); setPopupRetrying(cf, 2, "default", comp); }
+        }
+        out.set.push(label + " ← " + space);
+      } finally { if (wl) ly.locked = true; }
+    }
+    if (pluginAvailable()) syncPluginNames();
+    return out;
+  }
   function renderPresets() {
     /* settings dir first (user edits), then the shipped payload default — an EXISTING settings
        dir from an older install never re-seeds, so new seed files need this fallback. */
@@ -1020,5 +1110,5 @@ var MinColor = (function () {
            assertProject: assertProject, applyPresetToCurrent: applyPresetToCurrent,
            syncReport: syncReport, syncApply: syncApply, rebuildMinColorEffects: rebuildMinColorEffects, translateEffects: translateEffects, pluginAvailable: pluginAvailable, uiState: uiState, saveUiState: saveUiState,
            setPopupByName: setPopupByName, addInputTransform: addInputTransform, addViewGuideLayer: addViewGuideLayer, addRenderLayer: addRenderLayer, findUtilityLayer: findUtilityLayer,
-           renderPresets: renderPresets, applyRenderPreset: applyRenderPreset, configLooks: configLooks, applyLook: applyLook };
+           renderPresets: renderPresets, applyRenderPreset: applyRenderPreset, configLooks: configLooks, applyLook: applyLook, containPrecomp: containPrecomp };
 })();
