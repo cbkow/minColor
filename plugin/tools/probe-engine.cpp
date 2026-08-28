@@ -1,5 +1,5 @@
 /* Standalone harness: exercises MincOcioApplyRows against a real sidecar config.
-   Usage: probe-engine <config.ocio> <working-space> <direction:to|from> <space> r g b [r g b ...] */
+   Usage: probe-engine <config.ocio> <working-space> <direction:to|from|look> <space-or-look> r g b [r g b ...] */
 #include "../src/MincTypes.h"
 #include <cstdio>
 #include <cstring>
@@ -11,7 +11,8 @@ int main(int argc, char **argv) {
     snprintf(auth.configPath, sizeof(auth.configPath), "%s", argv[1]);
     snprintf(auth.workingSpace, sizeof(auth.workingSpace), "%s", argv[2]);
     MinColorArb arb = {}; arb.magic = MINC_ARB_MAGIC; arb.version = MINC_ARB_VERSION;
-    arb.direction = strcmp(argv[3], "to") == 0 ? MINC_DIR_TO_WORKING : MINC_DIR_FROM_WORKING;
+    arb.direction = strcmp(argv[3], "look") == 0 ? MINC_DIR_LOOK :
+                    strcmp(argv[3], "to")   == 0 ? MINC_DIR_TO_WORKING : MINC_DIR_FROM_WORKING;
     snprintf(arb.space, sizeof(arb.space), "%s", argv[4]);
     int n = (argc - 5) / 3;
     std::vector<float> px((size_t)n * 4, 1.0f);

@@ -7,7 +7,7 @@
 #define MINC_ARB_VERSION 1
 #define MINC_SPACE_LEN   200
 
-enum MinColorDirection { MINC_DIR_TO_WORKING = 0, MINC_DIR_FROM_WORKING = 1 };
+enum MinColorDirection { MINC_DIR_TO_WORKING = 0, MINC_DIR_FROM_WORKING = 1, MINC_DIR_LOOK = 2 };
 
 typedef struct {
     uint32_t magic;                     /* fixed-width: this struct IS the flat serialized form */

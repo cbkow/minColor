@@ -55,6 +55,11 @@ int MincOcioProbeStatus(const MincAuthoritySnapshot *auth, const MinColorArb *ar
     try {
         OCIO::ConstConfigRcPtr cfg = GetConfig(auth->configPath);
         if (!cfg) return MINC_STATUS_PASS_CONFIG_ERROR;
+        if (arb->direction == MINC_DIR_LOOK) {
+            if (!cfg->getLook(arb->space)) return MINC_STATUS_PASS_UNKNOWN_SPACE;
+            if (!cfg->getColorSpace(auth->workingSpace)) return MINC_STATUS_PASS_UNKNOWN_SPACE;
+            return MINC_STATUS_OK;
+        }
         const char *src = (arb->direction == MINC_DIR_TO_WORKING) ? arb->space : auth->workingSpace;
         const char *dst = (arb->direction == MINC_DIR_TO_WORKING) ? auth->workingSpace : arb->space;
         if (!cfg->getColorSpace(src) || !cfg->getColorSpace(dst)) return MINC_STATUS_PASS_UNKNOWN_SPACE;
@@ -73,10 +78,16 @@ int MincOcioBegin(const MincAuthoritySnapshot *auth, const MinColorArb *arb, voi
     try {
         OCIO::ConstConfigRcPtr cfg = GetConfig(auth->configPath);
         if (!cfg) return MINC_STATUS_PASS_CONFIG_ERROR;
-        const char *src = (arb->direction == MINC_DIR_TO_WORKING) ? arb->space : auth->workingSpace;
-        const char *dst = (arb->direction == MINC_DIR_TO_WORKING) ? auth->workingSpace : arb->space;
-        if (!cfg->getColorSpace(src) || !cfg->getColorSpace(dst)) return MINC_STATUS_PASS_UNKNOWN_SPACE;
-        std::string pkey = std::string(cfg->getCacheID()) + "|" + src + "|" + dst;
+        bool isLook = (arb->direction == MINC_DIR_LOOK);
+        const char *src = isLook ? auth->workingSpace : (arb->direction == MINC_DIR_TO_WORKING) ? arb->space : auth->workingSpace;
+        const char *dst = isLook ? auth->workingSpace : (arb->direction == MINC_DIR_TO_WORKING) ? auth->workingSpace : arb->space;
+        if (isLook) {
+            if (!cfg->getLook(arb->space) || !cfg->getColorSpace(auth->workingSpace)) return MINC_STATUS_PASS_UNKNOWN_SPACE;
+        } else if (!cfg->getColorSpace(src) || !cfg->getColorSpace(dst)) return MINC_STATUS_PASS_UNKNOWN_SPACE;
+        /* dirTag prevents key collisions: a LOOK (src==dst==working) must never share a cache
+           entry with an identity colorspace transform in the same working space */
+        std::string pkey = std::string(cfg->getCacheID()) + "|d" + std::to_string((int)arb->direction)
+                         + "|" + src + "|" + dst + (isLook ? std::string("|") + arb->space : std::string());
         OCIO::ConstCPUProcessorRcPtr proc;
         {
             std::shared_lock lk(g_procMx);
@@ -84,7 +95,12 @@ int MincOcioBegin(const MincAuthoritySnapshot *auth, const MinColorArb *arb, voi
             if (it != g_procs.end()) proc = it->second;
         }
         if (!proc) {
-            proc = cfg->getProcessor(src, dst)->getDefaultCPUProcessor();
+            if (isLook) {
+                OCIO::LookTransformRcPtr lt = OCIO::LookTransform::Create();
+                lt->setSrc(src); lt->setDst(dst); lt->setLooks(arb->space);
+                proc = cfg->getProcessor(lt)->getDefaultCPUProcessor();
+            } else
+                proc = cfg->getProcessor(src, dst)->getDefaultCPUProcessor();
             std::unique_lock lk(g_procMx);
             if (g_procs.size() > 64) g_procs.clear();
             g_procs[pkey] = proc;

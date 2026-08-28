@@ -54,7 +54,9 @@ PF_Err MincHandleEvent(PF_InData *in_data, PF_OutData *out_data, PF_ParamDef *pa
         ERR(suites.surface_suiteP->FillPath(surf, brush, path, kDRAWBOT_FillType_Default));
         char line1[300], line2[300];
         if (arb.space[0])
-            snprintf(line1, sizeof(line1), (arb.direction == MINC_DIR_TO_WORKING) ? "%s -> working" : "working -> %s", arb.space);
+            snprintf(line1, sizeof(line1),
+                     arb.direction == MINC_DIR_LOOK ? "look: %s" :
+                     (arb.direction == MINC_DIR_TO_WORKING) ? "%s -> working" : "working -> %s", arb.space);
         else snprintf(line1, sizeof(line1), "(unset - name the effect and Sync)");
         switch (status) {
             case MINC_STATUS_OK:                snprintf(line2, sizeof(line2), viaPassport ? "OK (passport)  \xc2\xb7  working: %s" : "OK  \xc2\xb7  working: %s", auth.workingSpace); break;

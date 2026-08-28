@@ -122,6 +122,7 @@ static bool ParseGrammar(const char *utf8, MinColorArb *out) {
     const char *rest = utf8 + 10;
     memset(out, 0, sizeof(*out));
     out->magic = MINC_ARB_MAGIC; out->version = MINC_ARB_VERSION;
+    if (!strncmp(rest, "look ", 5))   { out->direction = MINC_DIR_LOOK;         snprintf(out->space, MINC_SPACE_LEN, "%s", rest + 5); return true; }
     if (!strncmp(rest, "view ", 5))   { out->direction = MINC_DIR_FROM_WORKING; snprintf(out->space, MINC_SPACE_LEN, "%s", rest + 5); return true; }
     if (!strncmp(rest, "render ", 7)) { out->direction = MINC_DIR_FROM_WORKING; snprintf(out->space, MINC_SPACE_LEN, "%s", rest + 7); return true; }
     const char *arrow = strstr(rest, " \xe2\x86\x92 working");        /* " -> working", real arrow */
@@ -205,6 +206,28 @@ static void SyncFromNames(SPBasicSuite *bp) {
                             dss->AEGP_GetMatchName(fxRef, match);
                             if (!strcmp(match, MINC_MATCH_NAME)) {
                                 ++seen;
+                                {   /* legacy re-hide: pre-1.2 instances persist a VISIBLE Sync Serial row
+                                       (AE stores ui_flags per instance). AEGP_DynStreamFlag_HIDDEN is the
+                                       one flag legal to set non-undoably; only touch it when not set. */
+                                    A_long nkids2 = 0;
+                                    if (dss->AEGP_GetNumStreamsInGroup(fxRef, &nkids2) == A_Err_NONE) {
+                                        for (A_long ci = 0; ci < nkids2; ++ci) {
+                                            AEGP_StreamRefH kid2 = nullptr;
+                                            if (dss->AEGP_GetNewStreamRefByIndex(g_aegpID, fxRef, ci, &kid2) != A_Err_NONE || !kid2) continue;
+                                            AEGP_MemHandle knameH = nullptr; char kname[128] = "";
+                                            if (sts->AEGP_GetStreamName(g_aegpID, kid2, FALSE, &knameH) == A_Err_NONE)
+                                                Utf16HandleToUtf8(suites, knameH, kname, sizeof(kname));
+                                            if (!strcmp(kname, "Sync Serial")) {
+                                                AEGP_DynStreamFlags kf = 0;
+                                                if (dss->AEGP_GetDynamicStreamFlags(kid2, &kf) == A_Err_NONE &&
+                                                    !(kf & AEGP_DynStreamFlag_HIDDEN))
+                                                    dss->AEGP_SetDynamicStreamFlag(kid2, AEGP_DynStreamFlag_HIDDEN, FALSE, TRUE);
+                                            }
+                                            sts->AEGP_DisposeStream(kid2);
+                                            if (kname[0] && !strcmp(kname, "Sync Serial")) break;
+                                        }
+                                    }
+                                }
                                 AEGP_MemHandle nameH = nullptr;
                                 char name8[512] = "";
                                 if (sts->AEGP_GetStreamName(g_aegpID, fxRef, FALSE, &nameH) == A_Err_NONE)

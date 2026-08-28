@@ -105,6 +105,7 @@ PF_Err MincHandleArbitrary(PF_InData *in_data, PF_OutData *out_data,
         case PF_Arbitrary_PRINT_FUNC: {
             const MinColorArb *a = reinterpret_cast<const MinColorArb*>(hs->host_lock_handle(extra->u.print_func_params.arbH));
             snprintf(extra->u.print_func_params.print_bufferPC, MINC_SPACE_LEN + 32, "%s:%s",
+                     a->direction == MINC_DIR_LOOK ? "look" :
                      a->direction == MINC_DIR_TO_WORKING ? "to_working" : "from_working", a->space);
             hs->host_unlock_handle(extra->u.print_func_params.arbH);
             break;
@@ -117,6 +118,7 @@ PF_Err MincHandleArbitrary(PF_InData *in_data, PF_OutData *out_data,
                 if (s) {
                     if      (!strncmp(s, "to_working:",   11)) { a->direction = MINC_DIR_TO_WORKING;   strncpy(a->space, s + 11, MINC_SPACE_LEN - 1); }
                     else if (!strncmp(s, "from_working:", 13)) { a->direction = MINC_DIR_FROM_WORKING; strncpy(a->space, s + 13, MINC_SPACE_LEN - 1); }
+                    else if (!strncmp(s, "look:",          5)) { a->direction = MINC_DIR_LOOK;         strncpy(a->space, s + 5,  MINC_SPACE_LEN - 1); }
                 }
                 hs->host_unlock_handle(*extra->u.scan_func_params.arbPH);
             }
