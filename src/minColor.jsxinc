@@ -474,7 +474,20 @@ var MinColor = (function () {
                 out.converted.push(label);
               } else if (target === "native" && prop.matchName === MINC_MATCH) {
                 var rest = nm.substring(FX_PREFIX.length), src2 = null, dst2 = null;
-                if (/^look /.test(rest)) { out.skipped.push(label + " (look->native pending Look Transform popup probe)"); continue; }
+                var mlk = rest.match(/^look (.+)$/);
+                if (mlk) {                                           /* probed 2026-08-28: param 2 = Look popup (settable by
+                                                                        name); Input/Output color space popups left at their
+                                                                        defaults = working-space semantics (pixel-verified) */
+                  var idxK = k;
+                  fxp.property(k).remove();
+                  if ($.global.__minColorViewerId !== it.id) { it.openInViewer(); $.global.__minColorViewerId = it.id; }
+                  var nlk = fxp.addProperty("ADBE OCIO Look Transform");
+                  nlk.name = nm;
+                  setPopupRetrying(nlk, 2, mlk[1], it);
+                  if (nlk.propertyIndex !== idxK) nlk.moveTo(idxK);  // moveTo INVALIDATES nlk
+                  out.converted.push(label);
+                  continue;
+                }
                 var mv = rest.match(/^(view|render) (.+)$/);
                 if (mv) { src2 = "default"; dst2 = mv[2]; }
                 else { var ai = rest.indexOf(" \u2192 working"); if (ai > 0) { src2 = rest.substring(0, ai); dst2 = "default"; } }
