@@ -5,7 +5,13 @@
 #include <cstdio>
 
 static void Ascii16(const char *s, DRAWBOT_UTF16Char *out, int cap) {
-    int i = 0; for (; s[i] && i < cap - 1; ++i) out[i] = (DRAWBOT_UTF16Char)(unsigned char)s[i];
+    /* byte-per-slot mangled 2-byte UTF-8 (the middle dot drew as "A^·") — decode 2-byte sequences */
+    int i = 0; const unsigned char *p = (const unsigned char *)s;
+    while (*p && i < cap - 1) {
+        if ((p[0] & 0xE0) == 0xC0 && (p[1] & 0xC0) == 0x80) {
+            out[i++] = (DRAWBOT_UTF16Char)(((p[0] & 0x1F) << 6) | (p[1] & 0x3F)); p += 2;
+        } else out[i++] = (DRAWBOT_UTF16Char)*p++;
+    }
     out[i] = 0;
 }
 

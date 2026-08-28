@@ -46,7 +46,11 @@ static PF_Err ParamsSetup(PF_InData *in_data, PF_OutData *out_data) {
         /* scriptable per-instance serial: the panel stamps a unique value on every instance so
            byte-identical comps can never share a cached frame, and bumps it after each sync to
            invalidate stale frames. Floats are the one param type ExtendScript can set. */
-        PF_ADD_FLOAT_SLIDERX("Sync Serial", 0, 1000000, 0, 1000000, 0, PF_Precision_INTEGER, PF_PUI_INVISIBLE, 0, SERIAL_DISK_ID);
+        /* NOT the X macro: its 8th arg is DISP (display flags), not ui_flags — passing
+           PF_PUI_INVISIBLE there left the param visible. Set ui_flags explicitly. */
+        AEFX_CLR_STRUCT(def);
+        def.ui_flags = PF_PUI_INVISIBLE;
+        PF_ADD_FLOAT_SLIDER("Sync Serial", 0, 1000000, 0, 1000000, 0, 0, PF_Precision_INTEGER, 0, 0, SERIAL_DISK_ID);
     }
     if (!err) {                                                     /* register for ECW events */
         PF_CustomUIInfo ci;
