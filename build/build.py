@@ -27,7 +27,7 @@ def main():
     open(os.path.join(OUT, "minColor.jsx"), "w", encoding="utf-8").write(inline(panel))
     open(os.path.join(OUT, "README.txt"), "w", encoding="utf-8").write(
         "minColor — install\n"
-        "version: " + re.search(r'var VERSION = \"([^\"]+)\"', open(os.path.join(SRC, "minColor.jsxinc")).read()).group(1) + "\n"
+        "version: " + re.search(r'var VERSION = \"([^\"]+)\"', open(os.path.join(SRC, "minColor.jsxinc"), encoding="utf-8").read()).group(1) + "\n"
         "requires: After Effects 2025 or later\n\n"
         "Copy BOTH items into your After Effects ScriptUI Panels folder:\n\n"
         "    minColor.jsx\n    minColor-data/\n\n"
@@ -58,7 +58,7 @@ def main():
             shutil.copy(srcp, cfgs)
     shutil.copy(os.path.join(ROOT, "config", "extension-defaults.json"), os.path.join(pay, "settings"))
     shutil.copy(os.path.join(ROOT, "config", "render-presets.json"), os.path.join(pay, "settings"))
-    ver = re.search(r'var VERSION = "([^"]+)"', open(os.path.join(SRC, "minColor.jsxinc")).read()).group(1)
+    ver = re.search(r'var VERSION = "([^"]+)"', open(os.path.join(SRC, "minColor.jsxinc"), encoding="utf-8").read()).group(1)
     zpath = os.path.join(OUT, "minColor-v%s.zip" % ver)
     with zipfile.ZipFile(zpath, "w", zipfile.ZIP_DEFLATED) as z:
         for dp, _, fs in os.walk(OUT):
