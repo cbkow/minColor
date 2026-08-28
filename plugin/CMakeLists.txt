@@ -33,10 +33,13 @@ if(NOT EXISTS "${OCIO_INSTALL}/lib")
   message(FATAL_ERROR "OCIO not built — run plugin/external/build.sh (macOS) or build.bat (Windows) first")
 endif()
 list(PREPEND CMAKE_PREFIX_PATH "${OCIO_INSTALL}")
-if(WIN32)
-  # OpenColorIOConfig.cmake find_dependency()s the ext packages it was built against
-  list(APPEND CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/external/build/ext/dist")
-endif()
+# OpenColorIOConfig.cmake find_dependency()s the ext packages it was built against — the
+# vendored dist must outrank system package managers on EVERY platform (without this, mac
+# resolved Imath/pystring/yaml-cpp/minizip to homebrew DYLIBS: plugin failed to load on
+# machines without homebrew).
+list(APPEND CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/external/build/ext/dist")
+set(ZLIB_USE_STATIC_LIBS ON)   # ext/dist ships static AND shared zlib; the shared one links as
+                               # @rpath/libz.1.dylib which resolves NOWHERE (no rpath) — force .a
 find_package(OpenColorIO REQUIRED CONFIG)
 
 add_library(minColorCST MODULE
