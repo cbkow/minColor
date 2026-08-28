@@ -57,6 +57,7 @@ def main():
         else:
             shutil.copy(srcp, cfgs)
     shutil.copy(os.path.join(ROOT, "config", "extension-defaults.json"), os.path.join(pay, "settings"))
+    shutil.copy(os.path.join(ROOT, "config", "render-presets.json"), os.path.join(pay, "settings"))
     ver = re.search(r'var VERSION = "([^"]+)"', open(os.path.join(SRC, "minColor.jsxinc")).read()).group(1)
     zpath = os.path.join(OUT, "minColor-v%s.zip" % ver)
     with zipfile.ZipFile(zpath, "w", zipfile.ZIP_DEFLATED) as z:

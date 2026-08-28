@@ -1,0 +1,6 @@
+{ "_comment": "Render preset RECIPES - authoring conveniences only. Applying one rewrites the view/render utility layers' effect stacks; the project depends only on the resulting effect names, never on this file. look: null means no look effect. Edited via the minColor panel.",
+  "presets": {
+    "offline": { "look": "ACES 1.3 - Reference Gamut Compression", "view": "sRGB", "render": "Gamma 2.4 Encoded Rec.709" },
+    "online":  { "look": null, "view": "sRGB", "render": "Gamma 2.4 Encoded Rec.709" }
+  }
+}

@@ -315,6 +315,25 @@
     });
   };
 
+  var presetNames = (function () { var ks = [], k, m = MinColor.renderPresets(); for (k in m) ks.push(k); ks.sort(); return ks; })();
+  if (presetNames.length) {
+    var rowP = pAdj.add("group"); rowP.add("statictext", undefined, "Preset:");
+    var ddPreset = rowP.add("dropdownlist", undefined, presetNames); ddPreset.selection = 0;
+    ddPreset.alignment = ["fill", "center"]; ddPreset.preferredSize.width = 150;
+    bindDD(ddPreset, "renderPreset");
+    var bPreset = rowP.add("button", undefined, "Apply"); bPreset.preferredSize.width = 80;
+    bPreset.helpTip = "Apply a render preset recipe: rewrites BOTH view and render layers (look + spaces); view stays enabled";
+    bPreset.onClick = function () {
+      guard("Render preset", function () {
+        app.beginUndoGroup("minColor render preset");
+        var r = MinColor.applyRenderPreset(ddPreset.selection.text);
+        app.endUndoGroup();
+        var lk = (r.view.lookAction !== "none" || r.render.lookAction !== "none") ? ("; look " + r.view.lookAction) : "";
+        return r.preset + " (view " + r.view.action + ", render " + r.render.action + lk + ")";
+      });
+    };
+  }
+
   // ---- footer ----
   var rowF = win.add("group");
   var status = rowF.add("statictext", undefined, "ready \u00b7 v" + (MinColor.VERSION || "?"), { truncate: "end" }); status.alignment = ["fill", "center"];
