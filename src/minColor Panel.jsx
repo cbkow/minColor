@@ -129,6 +129,40 @@
     btn.addEventListener("mouseout", function () { this.hov = false; try { win.update(); } catch (e) {} });
     return btn;
   }
+  function flatButton(parent, label, opts) {                        // PILOT: owner-drawn flat button (modern-AE look)
+    opts = opts || {};
+    var b = parent.add("iconbutton", undefined, undefined, { style: "toolbutton" });
+    b.textLabel = label; b.hov = false; b.dn = false;
+    if (opts.width) { b.preferredSize = [opts.width, 24]; b.maximumSize = [opts.width, 24]; }
+    else { b.preferredSize.height = 24; b.alignment = ["fill", "center"]; }
+    if (opts.tip) b.helpTip = opts.tip;
+    b.onDraw = function () {
+      var g = this.graphics, s = this.size;
+      function pill(x, y, w, h, col) {                              /* capsule = caps + rect as ONE path, ONE fill —
+                                                                       separate fills double-stack alpha at the overlaps */
+        g.newPath();
+        g.ellipsePath(x, y, h, h);
+        g.ellipsePath(x + w - h, y, h, h);
+        g.rectPath(x + h / 2, y, w - h, h);
+        g.fillPath(g.newBrush(g.BrushType.SOLID_COLOR, col));
+      }
+      var base = opts.color ? [opts.color[0], opts.color[1], opts.color[2], 1]
+               : opts.primary ? [0.24, 0.40, 0.90, 1] : [0.235, 0.235, 0.235, 1];
+      var fill = this.dn ? [base[0] * 0.72, base[1] * 0.72, base[2] * 0.72, 1]
+               : this.hov ? [base[0] + 0.06, base[1] + 0.06, base[2] + 0.06, 1] : base;
+      pill(0, 0, s[0], s[1], [1, 1, 1, opts.primary ? 0.25 : 0.16]); /* border layer */
+      pill(1, 1, s[0] - 2, s[1] - 2, fill);                          /* inset fill = clean 1px rim, no stroke seams */
+      var f = ScriptUI.newFont("dialog", opts.primary ? "BOLD" : "REGULAR", 11);
+      var ts = g.measureString(this.textLabel, f);
+      g.drawString(this.textLabel, g.newPen(g.PenType.SOLID_COLOR, [0.95, 0.95, 0.95, 1], 1),
+                   Math.max(2, (s[0] - ts.width) / 2), Math.max(0, (s[1] - ts.height) / 2 - 1), f);
+    };
+    b.addEventListener("mouseover", function () { this.hov = true;  try { win.update(); } catch (e) {} });
+    b.addEventListener("mouseout",  function () { this.hov = false; this.dn = false; try { win.update(); } catch (e) {} });
+    b.addEventListener("mousedown", function () { this.dn = true;  try { win.update(); } catch (e) {} });
+    b.addEventListener("mouseup",   function () { this.dn = false; try { win.update(); } catch (e) {} });
+    return b;
+  }
   function section(title, glyph) {                                  // slim drawn header (icon + bold label + hairline) over an indented body group
     var hdr = win.add("group"); hdr.spacing = 6; hdr.alignChildren = ["left", "center"]; hdr.alignment = ["fill", "top"]; hdr.margins = [0, 6, 0, 0];
     var ic = hdr.add("iconbutton", undefined, undefined, { style: "toolbutton" }); ic.preferredSize = [18, 18];
@@ -154,7 +188,7 @@
     g.fillPath(g.newBrush(g.BrushType.SOLID_COLOR, [1, 1, 1, 0.28]));
   };
   var docText = rowDoc.add("statictext", undefined, "…", { truncate: "end" }); docText.alignment = ["fill", "center"];
-  var bRepair = rowDoc.add("button", undefined, "Repair"); bRepair.preferredSize.width = 60; bRepair.visible = false;
+  var bRepair = flatButton(rowDoc, "Repair", { width: 60 }); bRepair.visible = false;
   var bProj = iconize(rowDoc.add("iconbutton", undefined, undefined, { style: "toolbutton" }), GLYPH.gear,
     "Project\u2026 \u2014 status, provenance, Archive / Package / Adopt");
   bProj.preferredSize = [20, 20]; bProj.minimumSize = [20, 20]; bProj.maximumSize = [20, 20];   // ScriptUI stretches toolbuttons unless hard-clamped
@@ -192,7 +226,7 @@
 
   // ---- Set Up / Migrate dialog ----
   var pSetup = section("Setup Project", GLYPH.gear);
-  var b = pSetup.add("button", undefined, "Set Up / Migrate Project…");
+  var b = flatButton(pSetup, "Set Up / Migrate Project…");
 
   b.onClick = function () {
     var dlg = new Window("dialog", "minColor — Set Up / Migrate");
@@ -238,17 +272,17 @@
   var rowS = pFtg.add("group"); rowS.add("statictext", undefined, "Selected as:");
   var ddSrc = rowS.add("dropdownlist", undefined, lists.inputSpaces); ddSrc.selection = 0;
   ddSrc.alignment = ["fill", "center"]; ddSrc.preferredSize.width = 150;
-  var bSel = rowS.add("button", undefined, "Apply"); bSel.preferredSize.width = 60;
+  var bSel = flatButton(rowS, "Apply", { width: 60 });
   bindDD(ddSrc, "interpretSpace");
   bSel.onClick = function () { runPass("Interpret selected", { mode: "selection" }, ddSrc.selection.text); };
   var pTL = section("Interpret Timeline", GLYPH.bars);
   var rowA = pTL.add("group");
-  var bComp = rowA.add("button", undefined, "Interpret timeline"); bComp.alignment = ["fill", "center"];
+  var bComp = flatButton(rowA, "Interpret timeline", { primary: true });
   bComp.helpTip = "Active comp + nested precomps, auto-suggested per item; contained precomps are treated as media";
-  var bMatches = rowA.add("button", undefined, "Matches\u2026"); bMatches.preferredSize.width = 90;
+  var bMatches = flatButton(rowA, "Matches\u2026", { width: 90 });
   var rowSt = pTL.add("group");
-  var bStrip = rowSt.add("button", undefined, "Strip foreign OCIO"); bStrip.alignment = ["fill", "center"];
-  var bStripAll = rowSt.add("button", undefined, "Strip ALL"); bStripAll.preferredSize.width = 90;
+  var bStrip = flatButton(rowSt, "Strip foreign OCIO", { color: [0.36, 0.12, 0.12] });
+  var bStripAll = flatButton(rowSt, "Strip ALL", { width: 90, color: [0.70, 0.19, 0.17] });
   bStripAll.helpTip = "DEMOLITION: remove EVERY OCIO effect from this timeline + precomps — foreign AND minColor, file grades included (listed), view/render layers deleted, containment ignored. One undo reverses it.";
   bStripAll.onClick = function () {
     if (!confirm("minColor — Strip ALL OCIO\n\nRemove EVERY OCIO effect from this timeline and its precomps?\n\n• foreign AND minColor effects\n• CDL/FILE grades too (listed in the report)\n• minColor view/render layers deleted\n• contained precomps NOT spared\n\nOne undo reverses everything.")) return;
@@ -285,9 +319,9 @@
   var ddContain = rowC.add("dropdownlist", undefined, lists.inputSpaces); ddContain.selection = 0;
   ddContain.alignment = ["fill", "center"]; ddContain.preferredSize.width = 120;
   bindDD(ddContain, "containSpace");
-  var bContainSet = rowC.add("button", undefined, "Set"); bContainSet.preferredSize.width = 44;
+  var bContainSet = flatButton(rowC, "Set", { width: 44 });
   bContainSet.helpTip = "Interpret the selected precomp(s) AS MEDIA in this space (a boundary: the timeline walk treats them as footage and never looks inside)";
-  var bContainClear = rowC.add("button", undefined, "Clear"); bContainClear.preferredSize.width = 48;
+  var bContainClear = flatButton(rowC, "Clear", { width: 48, color: [0.70, 0.19, 0.17] });
   bContainClear.helpTip = "Stop treating the selected precomp(s) as media — the timeline walk recurses into them again";
   function runContain(space) {
     guard("Contain", function () {
@@ -363,7 +397,7 @@
   var ddView = rowV.add("dropdownlist", undefined, lists.viewSpaces); ddView.selection = 0;
   ddView.alignment = ["fill", "center"]; ddView.preferredSize.width = 150;
   bindDD(ddView, "viewSpace");
-  var bView = rowV.add("button", undefined, "Add guide"); bView.preferredSize.width = 80;
+  var bView = flatButton(rowV, "Add guide", { width: 80 });
   bView.helpTip = "Add / update the VIEW guide layer \u2014 viewport only, never renders";
   bView.onClick = function () {
     guard("View guide", function () {
@@ -381,7 +415,7 @@
   ddRender.selection = 0;
   for (var rdi = 0; rdi < ddRender.items.length; rdi++) if (ddRender.items[rdi].text === "Gamma 2.4 Encoded Rec.709") { ddRender.selection = rdi; break; }
   bindDD(ddRender, "renderSpace");
-  var bRender = rowR.add("button", undefined, "Add render"); bRender.preferredSize.width = 80;
+  var bRender = flatButton(rowR, "Add render", { width: 80 });
   bRender.helpTip = "Add / update the RENDER layer \u2014 renders in output: working \u2192 delivery space";
   bRender.helpTip = "Adjustment layer (NOT a guide \u2014 it renders): working space \u2192 delivery space";
   bRender.onClick = function () {
@@ -400,7 +434,7 @@
     var ddLook = rowL.add("dropdownlist", undefined, ["(none)"].concat(lookNames)); ddLook.selection = 0;
     ddLook.alignment = ["fill", "center"]; ddLook.preferredSize.width = 150;
     bindDD(ddLook, "lookChoice");
-    var bLook = rowL.add("button", undefined, "Apply"); bLook.preferredSize.width = 80;
+    var bLook = flatButton(rowL, "Apply", { width: 80 });
     bLook.helpTip = "Set or remove the look on the existing view/render layers (applies before the display transform; spaces untouched)";
     bLook.onClick = function () {
       guard("Look", function () {
@@ -418,7 +452,7 @@
     var ddPreset = rowP.add("dropdownlist", undefined, presetNames); ddPreset.selection = 0;
     ddPreset.alignment = ["fill", "center"]; ddPreset.preferredSize.width = 150;
     bindDD(ddPreset, "renderPreset");
-    var bPreset = rowP.add("button", undefined, "Apply"); bPreset.preferredSize.width = 80;
+    var bPreset = flatButton(rowP, "Apply", { width: 80 });
     bPreset.helpTip = "Apply a render preset recipe: rewrites BOTH view and render layers (look + spaces); view stays enabled";
     bPreset.onClick = function () {
       guard("Render preset", function () {
