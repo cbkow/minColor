@@ -146,12 +146,20 @@
         g.rectPath(x + h / 2, y, w - h, h);
         g.fillPath(g.newBrush(g.BrushType.SOLID_COLOR, col));
       }
-      var base = opts.color ? [opts.color[0], opts.color[1], opts.color[2], 1]
-               : opts.primary ? [0.24, 0.40, 0.90, 1] : [0.235, 0.235, 0.235, 1];
-      var fill = this.dn ? [base[0] * 0.72, base[1] * 0.72, base[2] * 0.72, 1]
-               : this.hov ? [base[0] + 0.06, base[1] + 0.06, base[2] + 0.06, 1] : base;
-      pill(0, 0, s[0], s[1], [1, 1, 1, opts.primary ? 0.25 : 0.16]); /* border layer */
-      pill(1, 1, s[0] - 2, s[1] - 2, fill);                          /* inset fill = clean 1px rim, no stroke seams */
+      /* Palette discipline: AE's drawing pipe remaps non-neutral hues to theme colors, so the
+         three states are built ONLY from reliables — grey fill, the theme-primary fill, and
+         NEUTRAL outline (rim + near-panel center): filled = act, outlined = remove/undo. */
+      var base = opts.primary ? [0.24, 0.40, 0.90, 1] : [0.235, 0.235, 0.235, 1];
+      if (opts.outline) {
+        var rimA = this.dn ? 0.55 : this.hov ? 0.45 : 0.32;
+        pill(0, 0, s[0], s[1], [1, 1, 1, rimA]);                     /* rim */
+        pill(1.5, 1.5, s[0] - 3, s[1] - 3, [0.13, 0.13, 0.13, 1]);   /* near-panel center = "transparent" */
+      } else {
+        var fill = this.dn ? [base[0] * 0.72, base[1] * 0.72, base[2] * 0.72, 1]
+                 : this.hov ? [base[0] + 0.06, base[1] + 0.06, base[2] + 0.06, 1] : base;
+        pill(0, 0, s[0], s[1], [1, 1, 1, opts.primary ? 0.25 : 0.16]); /* border layer */
+        pill(1, 1, s[0] - 2, s[1] - 2, fill);                          /* inset fill = clean 1px rim, no stroke seams */
+      }
       var f = ScriptUI.newFont("dialog", opts.primary ? "BOLD" : "REGULAR", 11);
       var ts = g.measureString(this.textLabel, f);
       g.drawString(this.textLabel, g.newPen(g.PenType.SOLID_COLOR, [0.95, 0.95, 0.95, 1], 1),
@@ -281,8 +289,8 @@
   bComp.helpTip = "Active comp + nested precomps, auto-suggested per item; contained precomps are treated as media";
   var bMatches = flatButton(rowA, "Matches\u2026", { width: 90 });
   var rowSt = pTL.add("group");
-  var bStrip = flatButton(rowSt, "Strip foreign OCIO", { color: [0.36, 0.12, 0.12] });
-  var bStripAll = flatButton(rowSt, "Strip ALL", { width: 90, color: [0.70, 0.19, 0.17] });
+  var bStrip = flatButton(rowSt, "Strip foreign OCIO", { outline: true });
+  var bStripAll = flatButton(rowSt, "Strip ALL", { width: 90, outline: true });
   bStripAll.helpTip = "DEMOLITION: remove EVERY OCIO effect from this timeline + precomps — foreign AND minColor, file grades included (listed), view/render layers deleted, containment ignored. One undo reverses it.";
   bStripAll.onClick = function () {
     if (!confirm("minColor — Strip ALL OCIO\n\nRemove EVERY OCIO effect from this timeline and its precomps?\n\n• foreign AND minColor effects\n• CDL/FILE grades too (listed in the report)\n• minColor view/render layers deleted\n• contained precomps NOT spared\n\nOne undo reverses everything.")) return;
@@ -321,7 +329,7 @@
   bindDD(ddContain, "containSpace");
   var bContainSet = flatButton(rowC, "Set", { width: 44 });
   bContainSet.helpTip = "Interpret the selected precomp(s) AS MEDIA in this space (a boundary: the timeline walk treats them as footage and never looks inside)";
-  var bContainClear = flatButton(rowC, "Clear", { width: 48, color: [0.70, 0.19, 0.17] });
+  var bContainClear = flatButton(rowC, "Clear", { width: 48, outline: true });
   bContainClear.helpTip = "Stop treating the selected precomp(s) as media — the timeline walk recurses into them again";
   function runContain(space) {
     guard("Contain", function () {
