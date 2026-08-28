@@ -1,55 +1,69 @@
 # minColor
 
-An OCIO colour-management pipeline for After Effects — no compiled plugin, just AE's
-native OCIO mode, its native Color Space Transform effect, and a dockable ScriptUI panel.
+An OCIO colour-management pipeline for After Effects: a dockable ScriptUI panel plus a
+compiled plugin engine (macOS and Windows).
+
+Panel 0.7.0 · engine 1.3.0 · requires After Effects 2025+.
+
+## Components
+
+- **Panel** (`minColor.jsx` + `minColor-data/`) — project setup/migration, footage and
+  timeline interpretation, precomp containment, OCIO-effect stripping, view/render
+  adjustment layers, looks, and a Doctor status line that diagnoses and repairs project
+  colour state.
+- **Plugin engine** (`minColor CST`, matchName `MINC CST`) — a SmartFX effect that stores
+  only a colourspace name and direction. At render it resolves the project's current OCIO
+  config and working space and processes with its own statically linked OCIO 2.5.2.
+- **Config family** — one OCIO config per working-space preset (ACEScg, ACES2065-1,
+  Linear Rec.709, Linear Rec.2020, SDR/sRGB), generated from a vendored master.
+  Filenames are content-hashed; the hash is the config's identity.
 
 ## Model
 
-- **Working-space presets**: ACEScg, ACES2065-1, Linear Rec.709, Linear Rec.2020, SDR (sRGB) —
-  one generated OCIO 2.4 config per preset, derived from the Blender 5.2 master config.
-- **Identity import**: every config's Default file rule, `default` role and working space agree,
-  so ALL footage imports as *nothing* — AE never guesses.
-- **Single interpretation authority — the timeline**: footage is interpreted exclusively by
-  per-layer `OCIO Color Space Transform` effects (source space → working), applied by the panel's
-  interpret passes (per selection, or a recursive timeline walk with per-extension suggestions).
-- **Self-contained projects**: the active config (plus its LUTs) is copied into
-  `<project>/_minColor/` and the project is pinned to it. The panel's **Doctor** line diagnoses
-  broken states (engine fallback, dead config path, foreign working space, footage-level
-  assignments) and repairs in one click where possible.
-- **View / Render adjustment layers**: one guide layer for viewport transforms (never renders),
-  one render layer for delivery encoding (working → sRGB / Rec.1886 / …) — singletons that
-  toggle each other.
-
-## Layout
-
-- `src/` — panel + libraries (`minColor.jsxinc` core, `AEPPatch.jsxinc` RIFX .aep reader/patcher)
-- `config/` — `generate.py` builds `config/dist/` (per-preset configs, content-hashed filenames)
-  from the vendored master in `config/master/`
-- `build/build.py` — builds the distributable in `dist-panel/`: a single-file `minColor.jsx`
-  plus its `minColor-data/` folder (configs, LUTs, presets, settings)
+- **Identity import**: each config's Default rule, `default` role and working space agree,
+  so all footage imports untransformed. AE never guesses.
+- **The timeline is the only interpretation authority**: interpretation is per-layer
+  minColor effects. Effect display names are the durable store; the plugin's
+  "Sync From Names" command derives effect state from them.
+- **Effect grammar**: `minColor: <space> → working` (interpret footage) ·
+  `minColor: view <space>` · `minColor: render <space>` (utility layers) ·
+  `minColor: look <name>` (OCIO look, applied before the transform on the same layer) ·
+  `minColor: contain <space>` (a precomp's output is media in that space; interpret
+  passes do not descend into it).
+- **Central config store**: projects pin the config beside the plugin in Adobe's shared
+  MediaCore folder. Per-project sidecars are produced only by "Package for any AE".
+- **Passport**: each effect's sequence data carries the config's hashed filename and the
+  working space. If the project's pin is dead (typically after crossing platforms), the
+  plugin resolves the config from the local store and renders identically — including
+  under aerender. The panel additionally re-pins the project and records the repair.
+- **Provenance**: preset, config identity and tool versions are stamped into the project's
+  XMP. Repairs and migrations key off it; projects without it are never touched.
+- **User settings** (dropdown state, extension table, repair history) live outside the
+  install and survive updates: `/Users/Shared/minColor/settings/` on macOS,
+  `C:\ProgramData\minColor\settings\` on Windows.
 
 ## Install
 
-Build (or download) the distributable, then copy **both** items into your After Effects
-**ScriptUI Panels** folder:
+Use a release zip: two copy steps, described in its `README.txt` — the panel pair into
+ScriptUI Panels, and the platform's `minColor` folder into
+`…/Adobe/Common/Plug-ins/7.0/MediaCore/`.
+
+## Build from source
 
 ```
-python3 build/build.py
-# then copy dist-panel/minColor.jsx and dist-panel/minColor-data/ into:
-#   macOS:   ~/Library/Preferences/Adobe/After Effects/<version>/Scripts/ScriptUI Panels/
-#   Windows: %APPDATA%\Adobe\After Effects\<version>\Scripts\ScriptUI Panels\
+python3 config/generate.py          # config family -> config/dist/
+plugin/external/build.sh            # static OCIO 2.5.2 (build.bat on Windows)
+cmake -S plugin -B plugin/build && cmake --build plugin/build
+python3 build/build.py              # distributable + zip -> dist-panel/
 ```
 
-Restart After Effects; the panel appears under **Window ▸ minColor.jsx**. The data
-folder is invisible to AE's Window menu. That copy is the whole install — nothing else
-runs or writes outside AE.
+`plugin/scripts/dev-install.sh|.bat` installs the built plugin (and, on Windows, the
+config store); `dev-install-panel.bat` builds and installs the panel. The Windows release
+`.aex` is committed at `plugin/prebuilt/windows/` and bundled by `build.py`.
 
-**Optional — the minColor plugin engine** (macOS/Apple silicon; Windows build pending):
-copy `plugin-macOS/minColorCST.plugin` from the distributable into
-`/Library/Application Support/Adobe/Common/Plug-ins/7.0/MediaCore/minColor/`, ideally with
-the `configs` folder beside it (machine-wide store; projects fall back to sidecars without it).
-The panel authors plugin effects automatically when it detects the installed bundle.
+## Layout
 
-The panel finds its data next to itself first; a machine-wide copy at
-`/Users/Shared/minColor` (or `C:\ProgramData\minColor`) acts as a facility-managed
-fallback for studios that prefer centrally updated configs.
+- `src/` — panel and libraries (`minColor.jsxinc` core, `AEPPatch.jsxinc` RIFX reader/patcher)
+- `config/` — `generate.py`, vendored master, generated `dist/`
+- `plugin/` — effect/AEGP sources, CMake build, PiPL, probe tool
+- `build/` — distributable build
