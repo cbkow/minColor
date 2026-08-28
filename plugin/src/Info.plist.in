@@ -9,7 +9,7 @@
 	<key>CFBundleName</key>                   <string>minColorCST</string>
 	<key>CFBundlePackageType</key>            <string>eFKT</string>
 	<key>CFBundleSignature</key>              <string>FXTC</string>
-	<key>CFBundleVersion</key>                <string>1.2.0</string>
-	<key>CFBundleShortVersionString</key>     <string>1.2.0</string>
+	<key>CFBundleVersion</key>                <string>1.3.0</string>
+	<key>CFBundleShortVersionString</key>     <string>1.3.0</string>
 </dict>
 </plist>
