@@ -36,16 +36,25 @@ def main():
         "Windows: %APPDATA%\\Adobe\\After Effects\\<version>\\Scripts\\ScriptUI Panels\\\n"
         "         (or Program Files\\Adobe\\...\\Support Files\\Scripts\\ScriptUI Panels\\, needs admin)\n\n"
         "Restart After Effects; the panel appears under Window > minColor.jsx.\n\n"
-        "OPTIONAL - the minColor plugin engine (macOS, Apple silicon):\n"
-        "Copy plugin-macOS/minColorCST.plugin into:\n"
+        "OPTIONAL - the minColor plugin engine (v1.3.0):\n"
+        "macOS (Apple silicon): copy plugin-macOS/minColorCST.plugin into:\n"
         "    /Library/Application Support/Adobe/Common/Plug-ins/7.0/MediaCore/minColor/\n"
-        "(create the minColor folder if needed). Recommended: also copy the contents of\n"
-        "minColor-data/configs into that same minColor folder as 'configs' so projects pin\n"
-        "the machine-wide store; without it, projects fall back to per-project sidecars.\n"
-        "Windows plugin: not yet built.\n")
+        "Windows: copy plugin-windows/minColorCST.aex AND version.txt into:\n"
+        "    C:\\Program Files\\Adobe\\Common\\Plug-ins\\7.0\\MediaCore\\minColor\\\n"
+        "(create the minColor folder if needed; if a plugin-windows folder is absent from\n"
+        "this zip, the Windows engine was not bundled in this build).\n"
+        "BOTH platforms, recommended: also copy the contents of minColor-data/configs into\n"
+        "that same minColor folder as 'configs' so projects pin the machine-wide store;\n"
+        "without it, projects fall back to per-project sidecars.\n\n"
+        "Your panel choices and settings live OUTSIDE this install and survive updates:\n"
+        "    macOS:   /Users/Shared/minColor/settings/\n"
+        "    Windows: C:\\ProgramData\\minColor\\settings\\\n")
     plugin_src = os.path.join(ROOT, "plugin", "build", "minColorCST.plugin")
     if os.path.isdir(plugin_src):
         shutil.copytree(plugin_src, os.path.join(OUT, "plugin-macOS", "minColorCST.plugin"))
+    win_src = os.path.join(ROOT, "plugin", "prebuilt", "windows")   # the Windows session commits its
+    if os.path.isdir(win_src):                                      # Release .aex + version.txt here
+        shutil.copytree(win_src, os.path.join(OUT, "plugin-windows"))
     pay = os.path.join(OUT, "minColor-data")
     os.makedirs(os.path.join(pay, "settings"))
     cfgs = os.path.join(pay, "configs")
