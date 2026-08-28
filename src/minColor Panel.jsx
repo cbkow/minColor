@@ -246,15 +246,15 @@
   var bComp = rowA.add("button", undefined, "Interpret timeline"); bComp.alignment = ["fill", "center"];
   bComp.helpTip = "Active comp + nested precomps, auto-suggested per item; contained precomps are treated as media";
   var bMatches = rowA.add("button", undefined, "Matches\u2026"); bMatches.preferredSize.width = 90;
-  var pCont = section("Contain Precomp", GLYPH.precomp);
+  var pCont = section("Interpret Precomp", GLYPH.precomp);
   var rowC = pCont.add("group"); rowC.add("statictext", undefined, "As:");
   var ddContain = rowC.add("dropdownlist", undefined, lists.inputSpaces); ddContain.selection = 0;
   ddContain.alignment = ["fill", "center"]; ddContain.preferredSize.width = 120;
   bindDD(ddContain, "containSpace");
   var bContainSet = rowC.add("button", undefined, "Set"); bContainSet.preferredSize.width = 44;
-  bContainSet.helpTip = "Declare the selected precomp(s) a BOUNDARY: their output is media in this space; the walk never looks inside";
+  bContainSet.helpTip = "Interpret the selected precomp(s) AS MEDIA in this space (a boundary: the timeline walk treats them as footage and never looks inside)";
   var bContainClear = rowC.add("button", undefined, "Clear"); bContainClear.preferredSize.width = 48;
-  bContainClear.helpTip = "Remove the boundary from the selected precomp(s) — the walk recurses into them again";
+  bContainClear.helpTip = "Stop treating the selected precomp(s) as media — the timeline walk recurses into them again";
   function runContain(space) {
     guard("Contain", function () {
       app.beginUndoGroup("minColor contain");
