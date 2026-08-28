@@ -27,34 +27,35 @@ def main():
     open(os.path.join(OUT, "minColor.jsx"), "w", encoding="utf-8").write(inline(panel))
     open(os.path.join(OUT, "README.txt"), "w", encoding="utf-8").write(
         "minColor — install\n"
-        "version: " + re.search(r'var VERSION = \"([^\"]+)\"', open(os.path.join(SRC, "minColor.jsxinc"), encoding="utf-8").read()).group(1) + "\n"
+        "panel: " + re.search(r'var VERSION = \"([^\"]+)\"', open(os.path.join(SRC, "minColor.jsxinc"), encoding="utf-8").read()).group(1) + "   engine: 1.3.0\n"
         "requires: After Effects 2025 or later\n\n"
-        "Copy BOTH items into your After Effects ScriptUI Panels folder:\n\n"
-        "    minColor.jsx\n    minColor-data/\n\n"
-        "macOS:   ~/Library/Preferences/Adobe/After Effects/<version>/Scripts/ScriptUI Panels/\n"
-        "         (or the app's Scripts/ScriptUI Panels folder)\n"
-        "Windows: %APPDATA%\\Adobe\\After Effects\\<version>\\Scripts\\ScriptUI Panels\\\n"
-        "         (or Program Files\\Adobe\\...\\Support Files\\Scripts\\ScriptUI Panels\\, needs admin)\n\n"
-        "Restart After Effects; the panel appears under Window > minColor.jsx.\n\n"
-        "OPTIONAL - the minColor plugin engine (v1.3.0):\n"
-        "macOS (Apple silicon): copy plugin-macOS/minColorCST.plugin into:\n"
-        "    /Library/Application Support/Adobe/Common/Plug-ins/7.0/MediaCore/minColor/\n"
-        "Windows: copy plugin-windows/minColorCST.aex AND version.txt into:\n"
-        "    C:\\Program Files\\Adobe\\Common\\Plug-ins\\7.0\\MediaCore\\minColor\\\n"
-        "(create the minColor folder if needed; if a plugin-windows folder is absent from\n"
-        "this zip, the Windows engine was not bundled in this build).\n"
-        "BOTH platforms, recommended: also copy the contents of minColor-data/configs into\n"
-        "that same minColor folder as 'configs' so projects pin the machine-wide store;\n"
-        "without it, projects fall back to per-project sidecars.\n\n"
-        "Your panel choices and settings live OUTSIDE this install and survive updates:\n"
-        "    macOS:   /Users/Shared/minColor/settings/\n"
-        "    Windows: C:\\ProgramData\\minColor\\settings\\\n")
+        "Two copy steps. Nothing to create — if a minColor folder already exists,\n"
+        "let your OS merge/replace.\n\n"
+        "1) PANEL — copy BOTH items into your ScriptUI Panels folder:\n\n"
+        "       minColor.jsx\n"
+        "       minColor-data/\n\n"
+        "   macOS:   ~/Library/Preferences/Adobe/After Effects/<version>/Scripts/ScriptUI Panels/\n"
+        "   Windows: %APPDATA%\\Adobe\\After Effects\\<version>\\Scripts\\ScriptUI Panels\\\n\n"
+        "2) ENGINE — copy the minColor folder for your platform into Adobe's shared\n"
+        "   MediaCore plug-ins folder:\n\n"
+        "   macOS:   plugin-macOS/minColor   ->  /Library/Application Support/Adobe/Common/Plug-ins/7.0/MediaCore/\n"
+        "   Windows: plugin-windows/minColor ->  C:\\Program Files\\Adobe\\Common\\Plug-ins\\7.0\\MediaCore\\\n\n"
+        "Restart After Effects. The panel appears under Window > minColor.jsx.\n\n"
+        "Your choices and settings live outside the install and survive updates:\n"
+        "   macOS:   /Users/Shared/minColor/settings/\n"
+        "   Windows: C:\\ProgramData\\minColor\\settings\\\n")
+    # engine dirs mirror their DESTINATION: users copy "minColor" into MediaCore and the
+    # OS merges — no folder creation, no separate configs step (each carries the store).
     plugin_src = os.path.join(ROOT, "plugin", "build", "minColorCST.plugin")
     if os.path.isdir(plugin_src):
-        shutil.copytree(plugin_src, os.path.join(OUT, "plugin-macOS", "minColorCST.plugin"))
-    win_src = os.path.join(ROOT, "plugin", "prebuilt", "windows")   # the Windows session commits its
-    if os.path.isdir(win_src):                                      # Release .aex + version.txt here
-        shutil.copytree(win_src, os.path.join(OUT, "plugin-windows"))
+        mac_root = os.path.join(OUT, "plugin-macOS", "minColor")
+        shutil.copytree(plugin_src, os.path.join(mac_root, "minColorCST.plugin"))
+        shutil.copytree(DIST, os.path.join(mac_root, "configs"))
+    win_src = os.path.join(ROOT, "plugin", "prebuilt", "windows")   # Windows session commits Release .aex + version.txt here
+    if os.path.isdir(win_src):
+        win_root = os.path.join(OUT, "plugin-windows", "minColor")
+        shutil.copytree(win_src, win_root)
+        shutil.copytree(DIST, os.path.join(win_root, "configs"))
     pay = os.path.join(OUT, "minColor-data")
     os.makedirs(os.path.join(pay, "settings"))
     cfgs = os.path.join(pay, "configs")
