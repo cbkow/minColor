@@ -925,7 +925,18 @@ var MinColor = (function () {
     if (fx.matchName === MINC_MATCH) stampSerial(fx);
     else { setPopupRetrying(fx, 1, "default", comp); setPopupRetrying(fx, 2, space, comp); }
     /* look partner: [1] look, [2] transform on the SAME layer = look-then-display.
-       Meaning is the name; refs die at moveTo — locate by name at time of use, move LAST. */
+       Meaning is the name; refs die at moveTo — locate by name at time of use, move LAST.
+       Contract: look === undefined -> INHERIT (keep own; else copy the sibling's — a comp's
+       look lives on whichever utility layer exists, so a later-created or retargeted sibling
+       picks it up); null -> remove; string -> set. */
+    if (typeof look === "undefined") {
+      if (lookFx) look = lookFx.name.substring((FX_PREFIX + "look ").length);
+      else {
+        var sib = findUtilityLayer(comp, isView ? "render" : "view");
+        look = (sib && sib.lookFx) ? sib.lookFx.name.substring((FX_PREFIX + "look ").length) : null;
+        if (look) res.lookAction = "inherited";
+      }
+    }
     if (look) {
       if (!pluginAvailable() && !lookFx) { res.lookAction = "skipped (look requires the minColor plugin)"; }
       else {
@@ -940,7 +951,7 @@ var MinColor = (function () {
           if (lookFx.matchName === MINC_MATCH) stampSerial(lookFx);
           if (lookFx.propertyIndex !== 1) lookFx.moveTo(1);          // ref dead after
           res.lookAction = "updated";
-        } else if (lookFx.propertyIndex !== 1) { lookFx.moveTo(1); res.lookAction = "reordered"; }
+        } else if (lookFx.propertyIndex !== 1) { lookFx.moveTo(1); if (res.lookAction === "none") res.lookAction = "reordered"; }
       }
     }
     if (!look && lookFx) { try { lookFx.remove(); res.lookAction = "removed"; } catch (eLR) {} }
