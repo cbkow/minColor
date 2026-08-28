@@ -101,6 +101,11 @@
       for (var a = 90; a <= 270; a += 15) g.lineTo(9 + 5.5 * Math.cos(a * Math.PI / 180), 9 - 5.5 * Math.sin(a * Math.PI / 180));
       g.fillPath(brush(g));
     },
+    precomp: function (g) {                                          /* comp-within-comp: the boundary made visible */
+      g.newPath(); g.rectPath(3, 3.6, 12, 10.8); g.strokePath(pen(g, 1.4));
+      g.newPath(); g.rectPath(7.2, 7.2, 5.6, 5.0); g.strokePath(pen(g, 1.2));
+      g.newPath(); g.rectPath(8.6, 8.5, 2.8, 2.4); g.fillPath(brush(g));
+    },
     eye: function (g) {
       g.newPath(); g.ellipsePath(2.5, 5.5, 13, 7); g.strokePath(pen(g, 1.4));
       g.newPath(); g.ellipsePath(7.4, 7.4, 3.2, 3.2); g.fillPath(brush(g));
@@ -241,7 +246,8 @@
   var bComp = rowA.add("button", undefined, "Interpret timeline"); bComp.alignment = ["fill", "center"];
   bComp.helpTip = "Active comp + nested precomps, auto-suggested per item; contained precomps are treated as media";
   var bMatches = rowA.add("button", undefined, "Matches\u2026"); bMatches.preferredSize.width = 90;
-  var rowC = pTL.add("group"); rowC.add("statictext", undefined, "Contain:");
+  var pCont = section("Contain Precomp", GLYPH.precomp);
+  var rowC = pCont.add("group"); rowC.add("statictext", undefined, "As:");
   var ddContain = rowC.add("dropdownlist", undefined, lists.inputSpaces); ddContain.selection = 0;
   ddContain.alignment = ["fill", "center"]; ddContain.preferredSize.width = 120;
   bindDD(ddContain, "containSpace");
