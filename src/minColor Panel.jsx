@@ -165,10 +165,10 @@
       g.drawString(this.textLabel, g.newPen(g.PenType.SOLID_COLOR, [0.95, 0.95, 0.95, 1], 1),
                    Math.max(2, (s[0] - ts.width) / 2), Math.max(0, (s[1] - ts.height) / 2 - 1), f);
     };
-    b.addEventListener("mouseover", function () { this.hov = true;  try { win.update(); } catch (e) {} });
-    b.addEventListener("mouseout",  function () { this.hov = false; this.dn = false; try { win.update(); } catch (e) {} });
-    b.addEventListener("mousedown", function () { this.dn = true;  try { win.update(); } catch (e) {} });
-    b.addEventListener("mouseup",   function () { this.dn = false; try { win.update(); } catch (e) {} });
+    b.addEventListener("mouseover", function () { this.hov = true;  try { this.window.update(); } catch (e) {} });
+    b.addEventListener("mouseout",  function () { this.hov = false; this.dn = false; try { this.window.update(); } catch (e) {} });
+    b.addEventListener("mousedown", function () { this.dn = true;  try { this.window.update(); } catch (e) {} });
+    b.addEventListener("mouseup",   function () { this.dn = false; try { this.window.update(); } catch (e) {} });
     return b;
   }
   function section(title, glyph) {                                  // slim drawn header (icon + bold label + hairline) over an indented body group
@@ -238,7 +238,13 @@
 
   b.onClick = function () {
     var dlg = new Window("dialog", "minColor — Set Up / Migrate");
-    dlg.orientation = "column"; dlg.alignChildren = ["fill", "top"]; dlg.margins = 12; dlg.spacing = 8;
+    dlg.orientation = "column"; dlg.alignChildren = ["fill", "top"]; dlg.margins = 14; dlg.spacing = 8;
+    var hdr = dlg.add("group"); hdr.spacing = 6; hdr.alignChildren = ["left", "center"]; hdr.alignment = ["fill", "top"];
+    var hic = hdr.add("iconbutton", undefined, undefined, { style: "toolbutton" }); hic.preferredSize = [18, 18];
+    hic.onDraw = function () { GLYPH.gear(this.graphics); };
+    var hst = hdr.add("statictext", undefined, "Set Up / Migrate");
+    try { hst.graphics.font = ScriptUI.newFont("dialog", "BOLD", 11); } catch (eHd) {}
+    var hln = hdr.add("panel"); hln.alignment = ["fill", "center"]; hln.preferredSize.height = 2; hln.minimumSize.width = 20;
     var r1 = dlg.add("group"); r1.add("statictext", undefined, "Working-space preset:");
     var dd = r1.add("dropdownlist", undefined, keys); dd.selection = 0;
     bindDD(dd, "setupPreset");
@@ -246,9 +252,11 @@
     dlg.add("statictext", undefined, "Migrate Current: strips footage assignments (harvested as suggestions),");
     dlg.add("statictext", undefined, "sets working space + sidecar config, one save/backup/reopen.");
     var r2 = dlg.add("group"); r2.alignment = ["right", "top"];
-    var bNew = r2.add("button", undefined, "New Project");
-    var bMig = r2.add("button", undefined, "Migrate Current");
-    r2.add("button", undefined, "Cancel", { name: "cancel" });
+    var bNew = flatButton(r2, "New Project", { width: 100 });
+    var bMig = flatButton(r2, "Migrate Current", { width: 124, primary: true });
+    var bCxl = flatButton(r2, "Cancel", { width: 72, outline: true });
+    bCxl.onClick = function () { dlg.close(2); };
+    try { dlg.cancelElement = bCxl; } catch (eCE) {}                 // keep Escape if ScriptUI accepts an iconbutton here
     var choice = null;
     bNew.onClick = function () { choice = "new"; dlg.close(1); };
     bMig.onClick = function () { choice = "migrate"; dlg.close(1); };
