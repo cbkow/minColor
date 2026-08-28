@@ -405,7 +405,7 @@
   var ddView = rowV.add("dropdownlist", undefined, lists.viewSpaces); ddView.selection = 0;
   ddView.alignment = ["fill", "center"]; ddView.preferredSize.width = 150;
   bindDD(ddView, "viewSpace");
-  var bView = flatButton(rowV, "Add guide", { width: 80 });
+  var bView = flatButton(rowV, "Add guide", { width: 80, primary: true });
   bView.helpTip = "Add / update the VIEW guide layer \u2014 viewport only, never renders";
   bView.onClick = function () {
     guard("View guide", function () {
@@ -423,7 +423,7 @@
   ddRender.selection = 0;
   for (var rdi = 0; rdi < ddRender.items.length; rdi++) if (ddRender.items[rdi].text === "Gamma 2.4 Encoded Rec.709") { ddRender.selection = rdi; break; }
   bindDD(ddRender, "renderSpace");
-  var bRender = flatButton(rowR, "Add render", { width: 80 });
+  var bRender = flatButton(rowR, "Add render", { width: 80, primary: true });
   bRender.helpTip = "Add / update the RENDER layer \u2014 renders in output: working \u2192 delivery space";
   bRender.helpTip = "Adjustment layer (NOT a guide \u2014 it renders): working space \u2192 delivery space";
   bRender.onClick = function () {
