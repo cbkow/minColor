@@ -315,6 +315,24 @@
     });
   };
 
+  var lookNames = (function () { try { return MinColor.configLooks(); } catch (eL) { return []; } })();
+  if (lookNames.length) {
+    var rowL = pAdj.add("group"); rowL.add("statictext", undefined, "Look:");
+    var ddLook = rowL.add("dropdownlist", undefined, ["(none)"].concat(lookNames)); ddLook.selection = 0;
+    ddLook.alignment = ["fill", "center"]; ddLook.preferredSize.width = 150;
+    bindDD(ddLook, "lookChoice");
+    var bLook = rowL.add("button", undefined, "Apply"); bLook.preferredSize.width = 80;
+    bLook.helpTip = "Set or remove the look on the existing view/render layers (applies before the display transform; spaces untouched)";
+    bLook.onClick = function () {
+      guard("Look", function () {
+        app.beginUndoGroup("minColor look");
+        var lk = (ddLook.selection.index === 0) ? null : ddLook.selection.text;
+        var r = MinColor.applyLook(lk);
+        app.endUndoGroup();
+        return (lk || "none") + " (view " + r.view + ", render " + r.render + ")";
+      });
+    };
+  }
   var presetNames = (function () { var ks = [], k, m = MinColor.renderPresets(); for (k in m) ks.push(k); ks.sort(); return ks; })();
   if (presetNames.length) {
     var rowP = pAdj.add("group"); rowP.add("statictext", undefined, "Preset:");

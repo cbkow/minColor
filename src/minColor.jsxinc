@@ -950,6 +950,42 @@ var MinColor = (function () {
     res.layer = sol;
     return res;
   }
+  function configLooks() {                                           // look NAMES parsed from the pinned config (payload bootstrap as fallback)
+    try {
+      var path = app.project.ocioConfigurationFile;
+      if (!path || !(new File(path)).exists) { var pr0 = presets(); var k0; for (k0 in pr0) { path = payloadRoot() + "/" + pr0[k0].config; break; } }
+      var f = new File(path); if (!f.open("r")) return [];
+      var s = f.read(); f.close();
+      var li = s.indexOf("\nlooks:"); if (li < 0) return [];
+      var tail = s.substring(li + 7);
+      var end = tail.search(/\n[a-z_]+:/);                            // next top-level key
+      if (end > 0) tail = tail.substring(0, end);
+      var names = [], re = /\n\s+name:\s*(.+)/g, m;
+      while ((m = re.exec(tail)) !== null) names.push(m[1].replace(/^\s+|\s+$/g, ""));
+      return names;
+    } catch (e) { return []; }
+  }
+  function applyLook(look, compOpt) {                                // set/replace/remove the look on EXISTING utility layers, spaces untouched
+    var comp = compOpt || app.project.activeItem;
+    if (!(comp instanceof CompItem)) throw new Error("open a comp");
+    var out = { view: "absent", render: "absent" };
+    var kinds = ["render", "view"], st = {}, i;
+    for (i = 0; i < kinds.length; i++) {                             // snapshot BEFORE any upsert: the sibling
+      var u0 = findUtilityLayer(comp, kinds[i]);                     // auto-disable would clobber restores done
+      if (u0) st[kinds[i]] = { space: u0.fx.name.substring((FX_PREFIX + kinds[i] + " ").length), enabled: u0.layer.enabled };
+    }
+    for (i = 0; i < kinds.length; i++) {
+      if (!st[kinds[i]]) continue;
+      out[kinds[i]] = upsertUtilityLayer(comp, kinds[i], st[kinds[i]].space, look || null).lookAction;
+    }
+    for (i = 0; i < kinds.length; i++) {                             // restore AFTER all upserts
+      if (!st[kinds[i]]) continue;
+      var u1 = findUtilityLayer(comp, kinds[i]);
+      if (u1) u1.layer.enabled = st[kinds[i]].enabled;
+    }
+    if (out.view === "absent" && out.render === "absent") throw new Error("no minColor view/render layers in this comp — add one first");
+    return out;
+  }
   function renderPresets() {
     /* settings dir first (user edits), then the shipped payload default — an EXISTING settings
        dir from an older install never re-seeds, so new seed files need this fallback. */
@@ -973,5 +1009,5 @@ var MinColor = (function () {
            assertProject: assertProject, applyPresetToCurrent: applyPresetToCurrent,
            syncReport: syncReport, syncApply: syncApply, rebuildMinColorEffects: rebuildMinColorEffects, translateEffects: translateEffects, pluginAvailable: pluginAvailable, uiState: uiState, saveUiState: saveUiState,
            setPopupByName: setPopupByName, addInputTransform: addInputTransform, addViewGuideLayer: addViewGuideLayer, addRenderLayer: addRenderLayer, findUtilityLayer: findUtilityLayer,
-           renderPresets: renderPresets, applyRenderPreset: applyRenderPreset };
+           renderPresets: renderPresets, applyRenderPreset: applyRenderPreset, configLooks: configLooks, applyLook: applyLook };
 })();
