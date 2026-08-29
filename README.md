@@ -1,70 +1,56 @@
 # minColor
 
-OCIO colour management for After Effects: a dockable panel plus a compiled plug-in engine, on
-macOS and Windows. Projects import everything untransformed, interpretation lives on the timeline
-as named effects, and the colour engine is pinned so a project renders the same on every
-machine — including years later.
+**minColor** is OCIO colour management for After Effects: a dockable panel and a compiled plug-in
+engine, on macOS and Windows. Footage imports untouched, interpretation lives on the timeline as
+named effects, and the colour engine travels with the project — so a comp renders the same on
+every machine, now and years from now.
 
 Panel 0.9.1 · engine 1.3.1 · After Effects 2025 or later.
 
 ## Install
 
-Download the release for your platform:
+### macOS
 
-- **macOS** — `minColor-<ver>.pkg`. Quit After Effects, run the installer. It places the plug-in
-  and config store in Adobe's shared MediaCore folder, the panel in every After Effects 2025+ you
-  have launched, and seeds settings under `/Users/Shared/minColor/settings`. Signed and notarized;
-  nothing to approve beyond the normal installer prompts. Remove with
-  `packaging/macos/uninstall.command` from the repository.
-- **Windows** — `minColor-<ver>.msi`. Quit After Effects, run it (or `msiexec /i minColor-<ver>.msi /qn`
-  for silent deployment). It is unsigned, so Windows shows one "unknown publisher" prompt per
-  machine. Uninstall from Add/Remove Programs.
-- **Zip** (either platform, manual): copy `minColor.jsx` + `minColor-data/` into your ScriptUI
-  Panels folder and the platform's `minColor` folder into
-  `…/Adobe/Common/Plug-ins/7.0/MediaCore/` — details in the zip's `README.txt`.
+Download `minColor-<version>.pkg` from [GitHub Releases](https://github.com/cbkow/minColor/releases/latest),
+quit After Effects, and run it. Signed and notarized.
 
-Then start After Effects and open **Window → minColor.jsx**. Updates install over the previous
-version; your settings and every config a project might be pinned to are kept.
+### Windows
 
-## Use
+Download `minColor-<version>.msi`, quit After Effects, and run it. The installer is unsigned, so
+Windows asks once per machine.
 
-**Set Up / Migrate Project…** — pick a preset and either create a **New Project** or **Migrate
-Current**. Presets are working spaces: four linear ones (ACEScg, ACES2065-1, Linear Rec.709,
-Linear Rec.2020) for CG, VFX and HDR work, and **SDR** (`Rec.709 Gamma 2.2`) for display-referred
-motion graphics where the working values are the deliverable. Migrate strips any footage-level
-colour assignments (keeping them as suggestions), sets the working space and config, rebuilds
-minColor effects, and gives the open comp its view and render layers — one save, backup and reopen.
+Both installers put the plug-in and config store in Adobe's shared MediaCore folder and the panel
+in every After Effects 2025+ on the machine. Updates install over the previous version and keep
+your settings. Then open **Window → minColor.jsx**.
 
-**Interpret Footage** — *Selected as:* a colourspace, **Apply**: the selected layers get a
-`minColor: <space> → working` effect.
+A zip is also attached to each release for manual copying; its `README.txt` has the two paths.
 
-**Interpret Timeline** — **Interpret timeline** walks the active comp and its precomps, suggesting a
-space per item (your extension table first — **Matches…** edits it — then what the project had
-before, then detected metadata) and finishes by putting the view and render layers on the comp.
-In SDR, Rec.709 video is left untouched: it already *is* the working space. **Strip foreign OCIO**
-removes non-minColor OCIO effects that would fight the pipeline; **Strip ALL** removes every OCIO
-effect (undoable).
+## What it does
 
-**Adjustment Layer** — *View* is a guide layer for the viewport only; *Render* is what your output
-goes through. Choose and **Apply**. Views: `macOS Desktop View` / `Windows Desktop View` show what
-the numbers mean on that platform's screen; `macOS Video View` / `Windows Video View` preview how a
-Rec.709 video delivery will play back. Renders: `Desktop Render` (sRGB) or `Video Render`
-(Rec.1886). Only one of view/render is enabled at a time; the panel remembers your choices. *Look*
-(linear presets) sets an OCIO look on both layers.
+- **Presets** — four scene-linear working spaces (ACEScg, ACES2065-1, Linear Rec.709, Linear
+  Rec.2020) and **SDR** (`Rec.709 Gamma 2.2`) for display-referred motion graphics.
+- **Interpret** — per-layer OCIO effects named for what they do (`minColor: ARRI LogC4 → working`),
+  suggested from your extension table, the project's history, or file metadata.
+- **View and Render layers** — platform-aware previews (`macOS Desktop View`, `macOS Video View`,
+  Windows equivalents) and named render targets (`Desktop Render`, `Video Render`).
+- **Doctor** — a status line that knows the project's preset, config and working space, repairs a
+  broken config path in one click, and tells you when a config update is available.
+- **Migrate** — moves an existing project into the pipeline in one save/backup/reopen.
+- **Archive / Package** — freeze a project's colour dependencies next to it, or hand it to someone
+  without minColor.
+- **Engine** — the plug-in pins its own OCIO 2.5.2 and carries a passport, so renders are
+  identical across platforms and under aerender even when the config path is dead.
 
-**Doctor** — the status line at the top. Green: preset, working space and where the config is
-pinned. Yellow with **Repair**: the config path went missing (usually a project that crossed
-platforms) — one click re-points it. Yellow "update available": your project is pinned to an
-older config of its preset; Migrate to the same preset updates it. Red: something to fix by hand,
-spelled out in the message. The gear opens **Project…** with provenance, **Archive** (freeze
-dependencies next to the project) and **Package for any AE** (hand the project to someone without
-minColor).
+| | macOS | Windows |
+|---|---|---|
+| **Panel** | ScriptUI (dockable) | ScriptUI (dockable) |
+| **Engine** | Universal-ready arm64 `.plugin`, notarized | `.aex`, x64 |
+| **Configs** | OCIO 2.4 (AE's embedded OCIO), generated from Blender 5.2 + ACES | same |
+| **Installer** | signed `.pkg` | `.msi` |
 
-## Going deeper
+## Documentation
 
-- [docs/architecture.md](docs/architecture.md) — the model: identity import, single authority,
-  the config family and the SDR preset, pins, passports, Archive vs Package, the plug-in.
-- [docs/building.md](docs/building.md) — building from source, versions, signing and
-  notarization, the installers, the release checklist, verification tools.
-- [docs/sidequest-sdr-scripting.md](docs/sidequest-sdr-scripting.md) — the probe record that led
-  to the SDR preset.
+- [Using minColor](docs/using.md)
+- [Technical overview](docs/overview.md)
+- [Building and releasing](docs/building.md)
+- [How the SDR preset came about](docs/sidequest-sdr-scripting.md)
