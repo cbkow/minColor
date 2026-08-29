@@ -24,10 +24,12 @@ def main():
         shutil.rmtree(OUT)
     os.makedirs(OUT)
     panel = open(os.path.join(SRC, "minColor Panel.jsx"), encoding="utf-8").read()
+    win_ver_path = os.path.join(ROOT, "plugin", "prebuilt", "windows", "version.txt")
+    win_ver = open(win_ver_path, encoding="utf-8").read().strip() if os.path.exists(win_ver_path) else "none"
     open(os.path.join(OUT, "minColor.jsx"), "w", encoding="utf-8").write(inline(panel))
     open(os.path.join(OUT, "README.txt"), "w", encoding="utf-8").write(
         "minColor — install\n"
-        "panel: " + re.search(r'var VERSION = \"([^\"]+)\"', open(os.path.join(SRC, "minColor.jsxinc"), encoding="utf-8").read()).group(1) + "   engine: 1.3.1 (mac) / 1.3.0 (windows prebuilt)\n"
+        "panel: " + re.search(r'var VERSION = \"([^\"]+)\"', open(os.path.join(SRC, "minColor.jsxinc"), encoding="utf-8").read()).group(1) + "   engine: 1.3.1 (mac) / " + win_ver + " (windows prebuilt)\n"
         "requires: After Effects 2025 or later\n\n"
         "Two copy steps. Nothing to create — if a minColor folder already exists,\n"
         "let your OS merge/replace.\n\n"
