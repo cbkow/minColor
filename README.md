@@ -1,113 +1,70 @@
 # minColor
 
-An OCIO colour-management pipeline for After Effects: a dockable ScriptUI panel plus a
-compiled plugin engine (macOS and Windows).
+OCIO colour management for After Effects: a dockable panel plus a compiled plug-in engine, on
+macOS and Windows. Projects import everything untransformed, interpretation lives on the timeline
+as named effects, and the colour engine is pinned so a project renders the same on every
+machine — including years later.
 
-Panel 0.9.1 · engine 1.3.1 · requires After Effects 2025+.
-
-## Components
-
-- **Panel** (`minColor.jsx` + `minColor-data/`) — project setup/migration, footage and
-  timeline interpretation, precomp containment, OCIO-effect stripping, view/render
-  adjustment layers, looks, and a Doctor status line that diagnoses and repairs project
-  colour state.
-- **Plugin engine** (`minColor CST`, matchName `MINC CST`) — a SmartFX effect that stores
-  only a colourspace name and direction. At render it resolves the project's current OCIO
-  config and working space and processes with its own statically linked OCIO 2.5.2.
-- **Config family** — one OCIO config per working-space preset, generated from a vendored
-  master. Four linear presets (ACEScg, ACES2065-1, Linear Rec.709, Linear Rec.2020) and one
-  SDR preset (`Rec.709 Gamma 2.2` working space). Filenames are content-hashed; the hash is
-  the config's identity.
-
-## Model
-
-- **Identity import**: each config's Default rule, `default` role and working space agree,
-  so all footage imports untransformed. AE never guesses.
-- **The timeline is the only interpretation authority**: interpretation is per-layer
-  minColor effects. Effect display names are the durable store; the plugin's
-  "Sync From Names" command derives effect state from them.
-- **Effect grammar**: `minColor: <space> → working` (interpret footage) ·
-  `minColor: view <space>` · `minColor: render <space>` (utility layers) ·
-  `minColor: look <name>` (OCIO look, applied before the transform on the same layer) ·
-  `minColor: contain <space>` (a precomp's output is media in that space; interpret
-  passes do not descend into it — name-level only, no panel UI).
-- **Interpret timeline** also gives the comp both utility layers from the panel's current View
-  and Render choices, with the view enabled.
-- **SDR preset**: the working space is display-referred (`Rec.709 Gamma 2.2` — Rec.709
-  primaries, pure 2.2, what a desktop display does). SDR is SDR: the working values are the
-  deliverable, Rec.709 video is working-native (no interpret effect), sRGB stills get the exact
-  sRGB→2.2 re-encode, linear/log sources get plain inverse-OETF conversions (no tone mapping —
-  that is what the linear presets are for). Only Standard/Raw views exist and there are no
-  looks; tone-mapped view/render targets are absent because on display-referred pixels they
-  would be double transforms. The render layer is explicit (the panel preselects the identity;
-  `Rec.1886`, `sRGB`, `Display P3`, `Rec.2020` are deliberate re-encodes for a specific consumer,
-  and look lifted/darkened in the viewport by construction). `macOS Desktop View` (P3 primaries, pure 2.2 — AE's macOS viewport surface) and
-  `macOS Video View` (the same after a BT.1886 encode + desktop sRGB decode: how a 709
-  delivery plays through QuickTime-style pipelines) are view targets only, never render targets.
-  `Windows Desktop View` (= sRGB) and `Windows Video View` (= Rec.1886) are the Windows
-  counterparts; `Desktop Render` (= sRGB) and `Video Render` (= Rec.1886) are the render targets.
-  Platform views head the View list, the two Renders head the Render list, and the first-use
-  defaults are the platform's own Video view with `Video Render` (the panel remembers later choices). The older `macOS View Only` display stays in every config (AE
-  stores the viewer's display choice by name) but is no longer offered; effects carrying it are
-  renamed on migrate.
-- **Central config store**: projects pin the config beside the plugin in Adobe's shared
-  MediaCore folder. Per-project sidecars are produced only by "Package for any AE".
-- **Passport**: each effect's sequence data carries the config's hashed filename and the
-  working space. If the project's pin is dead (typically after crossing platforms), the
-  plugin resolves the config from the local store and renders identically — including
-  under aerender. The panel additionally re-pins the project and records the repair.
-- **Provenance**: preset, config identity and tool versions are stamped into the project's
-  XMP. Repairs and migrations key off it; projects without it are never touched.
-- **User settings** (dropdown state, extension table, repair history) live outside the
-  install and survive updates: `/Users/Shared/minColor/settings/` on macOS,
-  `C:\ProgramData\minColor\settings\` on Windows.
+Panel 0.9.1 · engine 1.3.1 · After Effects 2025 or later.
 
 ## Install
 
-Use a release zip: two copy steps, described in its `README.txt` — the panel pair into
-ScriptUI Panels, and the platform's `minColor` folder into
-`…/Adobe/Common/Plug-ins/7.0/MediaCore/`.
+Download the release for your platform:
 
-macOS Gatekeeper: a plugin that arrives by download carries the quarantine flag, and an unsigned
-or unnotarized bundle is then reported as "damaged" (and offered for the Trash). Release builds
-are signed with Developer ID and notarized (`plugin/scripts/notarize.sh`, run before
-`build/build.py`; needs a Developer ID identity and a notarytool keychain profile), which loads
-straight from a download. For any other copy, clear the flag once
-after copying: `xattr -dr com.apple.quarantine "/Library/Application Support/Adobe/Common/Plug-ins/7.0/MediaCore/minColor"`.
-Windows has no equivalent gate for `.aex` plug-ins; the `.aex` loads unsigned.
+- **macOS** — `minColor-<ver>.pkg`. Quit After Effects, run the installer. It places the plug-in
+  and config store in Adobe's shared MediaCore folder, the panel in every After Effects 2025+ you
+  have launched, and seeds settings under `/Users/Shared/minColor/settings`. Signed and notarized;
+  nothing to approve beyond the normal installer prompts. Remove with
+  `packaging/macos/uninstall.command` from the repository.
+- **Windows** — `minColor-<ver>.msi`. Quit After Effects, run it (or `msiexec /i minColor-<ver>.msi /qn`
+  for silent deployment). It is unsigned, so Windows shows one "unknown publisher" prompt per
+  machine. Uninstall from Add/Remove Programs.
+- **Zip** (either platform, manual): copy `minColor.jsx` + `minColor-data/` into your ScriptUI
+  Panels folder and the platform's `minColor` folder into
+  `…/Adobe/Common/Plug-ins/7.0/MediaCore/` — details in the zip's `README.txt`.
 
-## Installers
+Then start After Effects and open **Window → minColor.jsx**. Updates install over the previous
+version; your settings and every config a project might be pinned to are kept.
 
-- **macOS**: `packaging/macos/build-pkg.sh` → `dist-panel/minColor-<ver>.pkg`. Signed with the
-  "Developer ID Installer" identity and notarized (keychain profile `$NOTARY_PROFILE`) when present, otherwise an
-  unsigned pkg for local testing. Payload: plug-in + config store into MediaCore, panel into every
-  After Effects ≥ 2025 for the console user, settings seeded under `/Users/Shared/minColor/settings`
-  (never overwritten). Refuses to run while After Effects is open. Log:
-  `/var/log/minColor-install.log`. Removal: `packaging/macos/uninstall.command`.
-- **Windows**: `packaging/windows/build.ps1` (WiX v5) → `dist-panel/minColor-<ver>.msi`, per-machine:
-  engine + configs into MediaCore, panel into each installed After Effects ≥ 2025 (app-level
-  `Support Files\Scripts\ScriptUI Panels`, all users), settings under `ProgramData\minColor`.
-  Unsigned (one SmartScreen prompt per machine). `msiexec /i minColor-<ver>.msi /qn` for silent
-  deployment. A dev box that used `dev-install-panel.bat` (per-user panel) should remove that copy
-  to avoid two entries in the Window menu.
-- Both merge the config store append-only (every hashed config ever shipped stays in `config/dist`).
+## Use
 
-## Build from source
+**Set Up / Migrate Project…** — pick a preset and either create a **New Project** or **Migrate
+Current**. Presets are working spaces: four linear ones (ACEScg, ACES2065-1, Linear Rec.709,
+Linear Rec.2020) for CG, VFX and HDR work, and **SDR** (`Rec.709 Gamma 2.2`) for display-referred
+motion graphics where the working values are the deliverable. Migrate strips any footage-level
+colour assignments (keeping them as suggestions), sets the working space and config, rebuilds
+minColor effects, and gives the open comp its view and render layers — one save, backup and reopen.
 
-```
-python3 config/generate.py          # config family -> config/dist/
-plugin/external/build.sh            # static OCIO 2.5.2 (build.bat on Windows)
-cmake -S plugin -B plugin/build && cmake --build plugin/build
-python3 build/build.py              # distributable + zip -> dist-panel/
-```
+**Interpret Footage** — *Selected as:* a colourspace, **Apply**: the selected layers get a
+`minColor: <space> → working` effect.
 
-`plugin/scripts/dev-install.sh|.bat` installs the built plugin (and, on Windows, the
-config store); `dev-install-panel.bat` builds and installs the panel. The Windows release
-`.aex` is committed at `plugin/prebuilt/windows/` and bundled by `build.py`.
+**Interpret Timeline** — **Interpret timeline** walks the active comp and its precomps, suggesting a
+space per item (your extension table first — **Matches…** edits it — then what the project had
+before, then detected metadata) and finishes by putting the view and render layers on the comp.
+In SDR, Rec.709 video is left untouched: it already *is* the working space. **Strip foreign OCIO**
+removes non-minColor OCIO effects that would fight the pipeline; **Strip ALL** removes every OCIO
+effect (undoable).
 
-## Layout
+**Adjustment Layer** — *View* is a guide layer for the viewport only; *Render* is what your output
+goes through. Choose and **Apply**. Views: `macOS Desktop View` / `Windows Desktop View` show what
+the numbers mean on that platform's screen; `macOS Video View` / `Windows Video View` preview how a
+Rec.709 video delivery will play back. Renders: `Desktop Render` (sRGB) or `Video Render`
+(Rec.1886). Only one of view/render is enabled at a time; the panel remembers your choices. *Look*
+(linear presets) sets an OCIO look on both layers.
 
-- `src/` — panel and libraries (`minColor.jsxinc` core, `AEPPatch.jsxinc` RIFX reader/patcher)
-- `config/` — `generate.py`, vendored master, generated `dist/`
-- `plugin/` — effect/AEGP sources, CMake build, PiPL, probe tool
-- `build/` — distributable build
+**Doctor** — the status line at the top. Green: preset, working space and where the config is
+pinned. Yellow with **Repair**: the config path went missing (usually a project that crossed
+platforms) — one click re-points it. Yellow "update available": your project is pinned to an
+older config of its preset; Migrate to the same preset updates it. Red: something to fix by hand,
+spelled out in the message. The gear opens **Project…** with provenance, **Archive** (freeze
+dependencies next to the project) and **Package for any AE** (hand the project to someone without
+minColor).
+
+## Going deeper
+
+- [docs/architecture.md](docs/architecture.md) — the model: identity import, single authority,
+  the config family and the SDR preset, pins, passports, Archive vs Package, the plug-in.
+- [docs/building.md](docs/building.md) — building from source, versions, signing and
+  notarization, the installers, the release checklist, verification tools.
+- [docs/sidequest-sdr-scripting.md](docs/sidequest-sdr-scripting.md) — the probe record that led
+  to the SDR preset.
