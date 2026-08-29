@@ -28,17 +28,48 @@ var MinColor = (function () {
     var ws = ""; try { ws = app.project.workingSpace || ""; } catch (e) {}
     return (ws.indexOf("Display/") === 0) ? "Display" : "Linear";
   }
+  var __cfgSpacesCache = { key: null, set: null };
+  function configSpaces(path) {                                      // colourspace names + aliases of a config file (cached); null when unreadable
+    try {
+      if (!path) return null;
+      var f = new File(path); if (!f.exists) return null;
+      var key = f.fsName + "|" + f.length;
+      if (__cfgSpacesCache.key === key) return __cfgSpacesCache.set;
+      if (!f.open("r")) return null;
+      var s = f.read(); f.close();
+      var set = {}, re = /^    name: (.+)$/gm, m;
+      while ((m = re.exec(s)) !== null) set[m[1].replace(/^\s+|\s+$/g, "")] = true;
+      var ra = /^    aliases: \[([^\]]*)\]/gm;
+      while ((m = ra.exec(s)) !== null) { var parts = m[1].split(","); for (var i = 0; i < parts.length; i++) { var a = parts[i].replace(/^\s+|\s+$/g, "").replace(/^"|"$/g, ""); if (a) set[a] = true; } }
+      __cfgSpacesCache = { key: key, set: set };
+      return set;
+    } catch (e) { return null; }
+  }
+  function pinnedSpaces() { try { return configSpaces(app.project.ocioConfigurationFile); } catch (e) { return null; } }
+  function pinBehind() {                                             // {pinned, current} when the project's pin is an OLDER hash of its preset's config, else null
+    try {
+      var info = sidecarInfo(); if (!info || !info.pinned) return null;
+      var pr = presets()[info.preset]; if (!pr) return null;
+      var base = info.pinned.replace(/\\/g, "/"); base = base.substring(base.lastIndexOf("/") + 1);
+      return (base !== pr.config) ? { pinned: base, current: pr.config } : null;
+    } catch (e) { return null; }
+  }
   function menuLists(presetKey) {                                    // PER-PRESET menus; top-level lists = linear-family fallback (untitled / unmanaged)
     var j = payload(), pr = presetKey ? j.presets[presetKey] : null;
     var inp = (pr && pr.inputSpaces) || j.inputSpaces || [];
     var view = (pr && pr.viewSpaces) || j.viewSpaces || [];
     var voList = (pr && pr.viewOnly) || j.viewOnly || [], vo = {}, v;
     for (v = 0; v < voList.length; v++) vo[voList[v]] = true;
-    var render = (pr && pr.renderSpaces) || null;
+    var render = (pr && pr.renderSpaces) || j.renderSpaces || null;   // top-level render list carries the render-only targets too
     if (!render) { var seen = {}, all = view.concat(inp); render = []; for (var i = 0; i < all.length; i++) if (!seen[all[i]]) { seen[all[i]] = 1; render.push(all[i]); } }
     var out = []; for (var r = 0; r < render.length; r++) if (!vo[render[r]]) out.push(render[r]);
+    /* a project pinned to an OLDER hash of this preset may lack spaces the current config has: the
+       menus follow the PINNED config, never the payload, so nothing is offered that would render
+       as pass-through ("unknown space") */
+    var behind = pr ? pinBehind() : null, ps = behind ? pinnedSpaces() : null;
+    if (ps) { var keep = function (l) { var o2 = []; for (var i2 = 0; i2 < l.length; i2++) if (ps[l[i2]]) o2.push(l[i2]); return o2; }; inp = keep(inp); view = keep(view); out = keep(out); }
     var rt = (!pr && presetKey && j.retired && j.retired[presetKey]) ? j.retired[presetKey] : null;   // retired: fallback lists, but its own family
-    return { inputSpaces: inp, viewSpaces: view, renderSpaces: out, viewOnly: voList, family: pr ? pr.family : (rt ? rt.family : "Linear"), preset: pr ? presetKey : null };
+    return { inputSpaces: inp, viewSpaces: view, renderSpaces: out, viewOnly: voList, family: pr ? pr.family : (rt ? rt.family : "Linear"), preset: pr ? presetKey : null, pinBehind: behind };
   }
 
   // ---------- payload discovery / sidecar / doctor ----------
@@ -230,6 +261,8 @@ var MinColor = (function () {
         }
       } catch (eAud) {}
       var locus = ((p2.ocioConfigurationFile || "").indexOf(CENTRAL_ROOT) === 0) ? "central" : "sidecar";
+      var behind = pinBehind();
+      if (behind) return { status: "yellow", text: info.preset + " · pinned " + behind.pinned.replace(/^config-|\.ocio$/g, "") + " \u2192 update available (" + behind.current.replace(/^config-|\.ocio$/g, "") + "): Set Up / Migrate, same preset", canRepair: false, preset: info.preset, family: fam, pinBehind: behind };
       return { status: "green", text: info.preset + (pr && pr.retired ? " (retired)" : "") + " · " + p2.workingSpace + " · " + locus, canRepair: false, preset: info.preset, family: fam };
     }
     if (!wsOk) return { status: "red", text: "working space is " + p2.workingSpace + " (want " + (pr ? pr.workingSpaceLabel : "?") + ") — run Set Up / Migrate", canRepair: false, preset: info.preset, family: fam };
@@ -672,7 +705,7 @@ var MinColor = (function () {
   }
 
   // ---------- migration ceremony (one reopen; single-authority: strip footage to nothing) ----------
-  function migrateProject(presetKey) {                               // call AFTER the user confirmed the report
+  function migrateProject(presetKey, opts) {                         // call AFTER the user confirmed the report; opts.utility = {compName, view, render}
     var pr = presets()[presetKey]; if (!pr) throw new Error("unknown preset " + presetKey);
     var p = app.project; if (!p.file) throw new Error("save the project first");
     var rep = syncReport();                                          // also saves; rows carry current assignments
@@ -694,11 +727,29 @@ var MinColor = (function () {
     AEPPatch.patchFile(p.file.fsName, { working: { name: pr.working, family: pr.family }, footage: strip });
     app.beginSuppressDialogs(); app.open(new File(p.file.fsName)); app.endSuppressDialogs(false);
     var rebuilt = rebuildMinColorEffects();                          // stale-config CSTs from a previous preset can crash AE's validator
+    /* the migrated TIMELINE (the comp that was active) gets both utility layers, view enabled —
+       the panel's dropdown values are remapped into the NEW preset's family first */
+    var utility = null;
+    if (opts && opts.utility && opts.utility.compName) {
+      try {
+        var tc = null;
+        for (var ci = 1; ci <= app.project.numItems; ci++) if (app.project.item(ci) instanceof CompItem && app.project.item(ci).name === opts.utility.compName) { tc = app.project.item(ci); break; }
+        if (tc) {
+          var uctx = suggestCtx();
+          var rvw = remapSpace("view", opts.utility.view || uctx.defaults.view, uctx), rrd = remapSpace("render", opts.utility.render || uctx.defaults.render, uctx);
+          tc.openInViewer();
+          utility = ensureUtilityLayers(tc, rvw.space, rrd.space);
+          utility.comp = tc.name;
+          if (rvw.changed) utility.viewNote = rvw.note;
+          if (rrd.changed) utility.renderNote = rrd.note;
+        } else utility = { error: "comp '" + opts.utility.compName + "' not found after reopen" };
+      } catch (eU) { utility = { error: eU.toString() }; }
+    }
     // post-audit
     var audit = syncReport(), bad = 0;
     for (var a2 = 0; a2 < audit.rows.length; a2++) if (!audit.rows[a2].okFlag) bad++;
     var pinNow = app.project.ocioConfigurationFile || "";
-    return { preset: presetKey, working: app.project.workingSpace, pinLocus: (pinNow.indexOf(CENTRAL_ROOT) === 0 ? "central" : "sidecar (central store not installed)"), stripped: strip.length, residual: bad, backup: bpath, harvested: strip.length, effectsRebuilt: rebuilt.rebuilt.length, effectsFailed: rebuilt.failed, effectsRemapped: rebuilt.remapped || [], effectsRemoved: rebuilt.removed || [], effectsForeign: rebuilt.foreign, strippedPipeline: rebuilt.strippedPipeline, gradesLeft: rebuilt.gradesLeft, viewRenderRetargeted: rebuilt.viewRender || 0, orphanLayers: rebuilt.orphans || [], backups: backupStats() };
+    return { preset: presetKey, working: app.project.workingSpace, pinLocus: (pinNow.indexOf(CENTRAL_ROOT) === 0 ? "central" : "sidecar (central store not installed)"), stripped: strip.length, residual: bad, backup: bpath, harvested: strip.length, effectsRebuilt: rebuilt.rebuilt.length, effectsFailed: rebuilt.failed, effectsRemapped: rebuilt.remapped || [], effectsRemoved: rebuilt.removed || [], utility: utility, effectsForeign: rebuilt.foreign, strippedPipeline: rebuilt.strippedPipeline, gradesLeft: rebuilt.gradesLeft, viewRenderRetargeted: rebuilt.viewRender || 0, orphanLayers: rebuilt.orphans || [], backups: backupStats() };
   }
 
   // ---------- suggestions & interpret passes (single-authority model: effects only) ----------
@@ -790,15 +841,22 @@ var MinColor = (function () {
      rendering bridge there. */
   var LEGACY_SPACE_MAP_BY_FAMILY = {
     Linear:  { "sRGB IEC61966-2.1": "sRGB", "Standard": "Gamma 2.4 Encoded Rec.709", "Rec.1886": "Gamma 2.4 Encoded Rec.709",
-               "UnionMacOS": "macOS View Only", "UnionMacOS 1886 Sim": "macOS View Only (1886 Sim)" },
+               "UnionMacOS": "macOS Desktop View", "macOS View Only": "macOS Desktop View", "macOS Desktop View Only": "macOS Desktop View",
+               "UnionMacOS 1886 Sim": "macOS Video View", "macOS View Only (1886 Sim)": "macOS Video View", "macOS Video View Only": "macOS Video View",
+               "Windows Desktop View Only": "Windows Desktop View", "Windows Video View Only": "Windows Video View" },
     /* SDR is SDR (2026-08-29): the display-referred working space IS Rec.709 video; the old
        scene-family / BT.1886 names for 709 footage mean "working-native" here -> "working"
        sentinel = identity (no effect; an existing one is removed on migrate). */
     Display: { "sRGB IEC61966-2.1": "sRGB", "Standard": "working", "Gamma 2.4 Encoded Rec.709": "working", "Camera Rec.709": "working", "Rec.1886": "working",
-               "UnionMacOS": "macOS View Only", "UnionMacOS 1886 Sim": "macOS View Only (1886 Sim)" }
+               "UnionMacOS": "macOS Desktop View", "macOS View Only": "macOS Desktop View", "macOS Desktop View Only": "macOS Desktop View",
+               "UnionMacOS 1886 Sim": "macOS Video View", "macOS View Only (1886 Sim)": "macOS Video View", "macOS Video View Only": "macOS Video View",
+               "Windows Desktop View Only": "Windows Desktop View", "Windows Video View Only": "Windows Video View" }
   };
-  var FAMILY_DEFAULTS = { Linear:  { view: "sRGB", render: "Gamma 2.4 Encoded Rec.709", video709: "Gamma 2.4 Encoded Rec.709" },
-                          Display: { view: "sRGB", render: "Rec.709 Gamma 2.2",         video709: "working" } };   // Display render default = identity
+  /* first-use defaults (persisted choices in ui-state.json win afterwards): the platform's VIDEO view
+     paired with Video Render, so what you see previews what you deliver. $.os picks the platform. */
+  var VIDEO_VIEW = ($.os.indexOf("Windows") >= 0) ? "Windows Video View" : "macOS Video View";
+  var FAMILY_DEFAULTS = { Linear:  { view: VIDEO_VIEW, render: "Video Render", video709: "Gamma 2.4 Encoded Rec.709" },   // Video Render == Gamma 2.4 Rec.709 numerically
+                          Display: { view: VIDEO_VIEW, render: "Video Render", video709: "working" } };
   function familyDefaults(f) { return FAMILY_DEFAULTS[f] || FAMILY_DEFAULTS.Linear; }
   function legacyMap(f) { return LEGACY_SPACE_MAP_BY_FAMILY[f] || LEGACY_SPACE_MAP_BY_FAMILY.Linear; }
   function normalizeSpace(name, valid, family) {                     // -> canonical name | "working" (identity) | null
@@ -1029,6 +1087,7 @@ var MinColor = (function () {
     }
   }
   function addInputTransform(layer, sourceSpace) {                  // source -> working (MINC when installed: no popups, no viewer dance)
+    assertSpaceInPin(sourceSpace);
     if (pluginAvailable()) {
       var mfx = layer.property("ADBE Effect Parade").addProperty(MINC_MATCH);
       mfx.name = "minColor: " + sourceSpace + " → working";
@@ -1060,7 +1119,13 @@ var MinColor = (function () {
     }
     return null;
   }
+  function assertSpaceInPin(space) {                                 // an effect naming a space the PINNED config lacks renders pass-through: refuse loudly
+    var ps = pinnedSpaces(); if (!ps || !space || space === "default" || ps[space]) return;
+    var b = pinBehind();
+    throw new Error("'" + space + "' is not in this project's pinned config" + (b ? " (" + b.pinned + "; current is " + b.current + ") \u2014 Set Up / Migrate to the same preset updates the pin" : ""));
+  }
   function upsertUtilityLayer(comp, kind, space, look) {             // ONE view + ONE render per comp; activating one switches the other off
+    assertSpaceInPin(space);
     comp.openInViewer();                                             // popups only populate with a viewer/ECW context
     var isView = (kind === "view");
     var res = { action: "created", disabledOther: false, lookAction: "none" };
@@ -1271,12 +1336,18 @@ var MinColor = (function () {
     var rv = upsertUtilityLayer(comp, "view",   pr.view,   pr.look || null);   // view last -> view enabled, render off
     return { preset: name, view: rv, render: rr };
   }
+  function ensureUtilityLayers(comp, viewSpace, renderSpace) {       // both utility layers on the comp, VIEW enabled (render first, view last)
+    var rr = addRenderLayer(comp, renderSpace || null);
+    var rv = addViewGuideLayer(comp, viewSpace || null);
+    return { view: rv.layer.property("ADBE Effect Parade").property(1).name.substring(FX_PREFIX.length), viewAction: rv.action,
+             render: rr.layer.property("ADBE Effect Parade").property(1).name.substring(FX_PREFIX.length), renderAction: rr.action };
+  }
   function addViewGuideLayer(comp, viewColorspace) { return upsertUtilityLayer(comp, "view", viewColorspace || familyDefaults(familyFor(currentPresetKey())).view); }
   function addRenderLayer(comp, renderSpace) { return upsertUtilityLayer(comp, "render", renderSpace || familyDefaults(familyFor(currentPresetKey())).render); }
 
-  return { VERSION: VERSION, presets: presets, presetMeta: presetMeta, currentPresetKey: currentPresetKey, familyFor: familyFor, familyDefaults: familyDefaults, parseFxName: parseFxName, menuLists: menuLists, preflight: preflight, payloadRoot: payloadRoot, ensureSidecar: ensureSidecar, sidecarInfo: sidecarInfo, doctor: doctor, repair: repair, pinConfig: pinConfig, findConfigByName: findConfigByName, stampProvenance: stampProvenance, readProvenance: readProvenance, archiveProject: archiveProject, packageForAnyAE: packageForAnyAE, syncPluginNames: syncPluginNames, stampEngine: stampEngine, readEngine: readEngine, stampHarvest: stampHarvest, migrateProject: migrateProject, interpretPass: interpretPass, extDefaults: extDefaults, saveExtDefaults: saveExtDefaults, suggestionFor: suggestionFor, collectDetected: collectDetected, readHarvest: readHarvest, harvestPath: harvestPath, seedStickyPref: seedStickyPref, newProject: newProject,
+  return { VERSION: VERSION, presets: presets, presetMeta: presetMeta, configSpaces: configSpaces, pinnedSpaces: pinnedSpaces, pinBehind: pinBehind, currentPresetKey: currentPresetKey, familyFor: familyFor, familyDefaults: familyDefaults, parseFxName: parseFxName, menuLists: menuLists, preflight: preflight, payloadRoot: payloadRoot, ensureSidecar: ensureSidecar, sidecarInfo: sidecarInfo, doctor: doctor, repair: repair, pinConfig: pinConfig, findConfigByName: findConfigByName, stampProvenance: stampProvenance, readProvenance: readProvenance, archiveProject: archiveProject, packageForAnyAE: packageForAnyAE, syncPluginNames: syncPluginNames, stampEngine: stampEngine, readEngine: readEngine, stampHarvest: stampHarvest, migrateProject: migrateProject, interpretPass: interpretPass, extDefaults: extDefaults, saveExtDefaults: saveExtDefaults, suggestionFor: suggestionFor, collectDetected: collectDetected, readHarvest: readHarvest, harvestPath: harvestPath, seedStickyPref: seedStickyPref, newProject: newProject,
            assertProject: assertProject, applyPresetToCurrent: applyPresetToCurrent,
            syncReport: syncReport, syncApply: syncApply, rebuildMinColorEffects: rebuildMinColorEffects, translateEffects: translateEffects, pluginAvailable: pluginAvailable, uiState: uiState, saveUiState: saveUiState,
-           setPopupByName: setPopupByName, addInputTransform: addInputTransform, addViewGuideLayer: addViewGuideLayer, addRenderLayer: addRenderLayer, findUtilityLayer: findUtilityLayer,
+           setPopupByName: setPopupByName, addInputTransform: addInputTransform, addViewGuideLayer: addViewGuideLayer, addRenderLayer: addRenderLayer, ensureUtilityLayers: ensureUtilityLayers, findUtilityLayer: findUtilityLayer,
            renderPresets: renderPresets, applyRenderPreset: applyRenderPreset, configLooks: configLooks, applyLook: applyLook, containPrecomp: containPrecomp, stripForeignOcio: stripForeignOcio };
 })();

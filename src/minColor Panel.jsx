@@ -302,8 +302,11 @@
                   (bad.length ? "\nAssignments to strip (harvested first):\n" + bad.join("\n") : "\nNo assignments to strip.") +
                   "\n\nSave, back up, patch and reopen now?";
         if (!confirm(msg.substr(0, 3000))) return "cancelled";
-        var r = MinColor.migrateProject(dd.selection.key);
+        var activeName = (app.project.activeItem instanceof CompItem) ? app.project.activeItem.name : null;
+        var r = MinColor.migrateProject(dd.selection.key, { utility: { compName: activeName, view: ddView.selection ? ddView.selection.text : null, render: ddRender.selection ? ddRender.selection.text : null } });
+        try { repopulateMenus(dd.selection.key); } catch (eRp2) {}   // menus follow the new preset now, not at the next tick
         var warn = [];
+        if (r.utility && r.utility.error) warn.push("VIEW/RENDER LAYERS: " + r.utility.error);
         if (r.effectsFailed && r.effectsFailed.length) warn.push("CST REBUILD FAILED:\n  " + r.effectsFailed.join("\n  "));
         if (r.effectsRemapped && r.effectsRemapped.length) warn.push("REMAPPED to this preset's spaces (review):\n  " + r.effectsRemapped.join("\n  "));
         if (r.effectsRemoved && r.effectsRemoved.length) warn.push("REMOVED \u2014 no equivalent in this preset (e.g. looks in SDR):\n  " + r.effectsRemoved.join("\n  "));
@@ -311,7 +314,8 @@
         if (r.gradesLeft && r.gradesLeft.length) warn.push("OCIO CDL/File grades left in place (file-based \u2014 verify their look under the new working space):\n  " + r.gradesLeft.join("\n  "));
         if (r.orphanLayers && r.orphanLayers.length) warn.push("EMPTY minColor VIEW/RENDER layers (artifacts of an old bug \u2014 safe to delete):\n  " + r.orphanLayers.join("\n  "));
         if (warn.length) alert("minColor \u2014 migrate warnings\n\n" + warn.join("\n\n").substr(0, 3000));
-        return "working=" + r.working + " | pin: " + (r.pinLocus || "?") + " | stripped=" + r.stripped + " rebuilt=" + (r.effectsRebuilt || 0) + " remapped=" + (r.effectsRemapped ? r.effectsRemapped.length : 0) + " view/render retargeted=" + (r.viewRenderRetargeted || 0) + " residual=" + r.residual + " | backups: " + (r.backups ? r.backups.count + " (" + r.backups.mb + " MB)" : "?");
+        var ut = r.utility && !r.utility.error ? " | " + r.utility.comp + ": view " + r.utility.view + ", render " + r.utility.render : "";
+        return "working=" + r.working + ut + " | pin: " + (r.pinLocus || "?") + " | stripped=" + r.stripped + " rebuilt=" + (r.effectsRebuilt || 0) + " remapped=" + (r.effectsRemapped ? r.effectsRemapped.length : 0) + " view/render retargeted=" + (r.viewRenderRetargeted || 0) + " residual=" + r.residual + " | backups: " + (r.backups ? r.backups.count + " (" + r.backups.mb + " MB)" : "?");
       });
     }
   };
@@ -363,30 +367,8 @@
     });
   };
 
-  var pCont = section("Interpret Precomp", GLYPH.precomp);
-  var rowC = hrow(pCont); rowC.add("statictext", undefined, "As:");
-  var ddContain = rowC.add("dropdownlist", undefined, lists.inputSpaces); ddContain.selection = 0;
-  ddContain.alignment = ["fill", "center"]; ddContain.preferredSize.width = 120;
-  bindDD(ddContain, "containSpace");
-  var bContainSet = flatButton(rowC, "Set", { width: 44 });
-  bContainSet.helpTip = "Interpret the selected precomp(s) AS MEDIA in this space (a boundary: the timeline walk treats them as footage and never looks inside)";
-  var bContainClear = flatButton(rowC, "Clear", { width: 48, outline: true });
-  bContainClear.helpTip = "Stop treating the selected precomp(s) as media — the timeline walk recurses into them again";
-  function runContain(space) {
-    guard("Contain", function () {
-      app.beginUndoGroup("minColor contain");
-      var r = MinColor.containPrecomp(space);
-      app.endUndoGroup();
-      var parts = [];
-      if (r.set.length) parts.push("set: " + r.set.join("; "));
-      if (r.removed.length) parts.push("removed: " + r.removed.join("; "));
-      if (r.skipped.length) parts.push("skipped: " + r.skipped.join("; "));
-      if (r.warned.length) alert("minColor \u2014 contain\n\n" + r.warned.join("\n"));
-      return parts.join(" | ") || "nothing to do";
-    });
-  }
-  bContainSet.onClick = function () { runContain(ddContain.selection.text); };
-  bContainClear.onClick = function () { runContain(null); };
+  /* Interpret Precomp (the `contain` grammar) left the panel 2026-08-29: too confusing as a UI;
+     the grammar, the walk semantics and the library entry point stay for advanced/name-level use. */
   function runPass(label, scope, space) {
     guard(label, function () {
       var r = MinColor.interpretPass(scope, space || null);
@@ -402,7 +384,16 @@
       return "added " + r.added.length + ", failed " + (r.failed ? r.failed.length : 0) + ", identity " + (r.identity ? r.identity.length : 0) + ", skipped " + r.skipped.length;
     });
   }
-  bComp.onClick = function () { runPass("Interpret timeline", { mode: "comp" }); };
+  bComp.onClick = function () {
+    runPass("Interpret timeline", { mode: "comp" });
+    guard("View + Render", function () {                           // the timeline gets both utility layers from the current dropdowns; VIEW ends enabled
+      var comp = app.project.activeItem; if (!(comp instanceof CompItem)) throw new Error("open a comp");
+      app.beginUndoGroup("minColor view + render");
+      var r = MinColor.ensureUtilityLayers(comp, ddView.selection ? ddView.selection.text : null, ddRender.selection ? ddRender.selection.text : null);
+      app.endUndoGroup();
+      return "view " + r.view + " (" + r.viewAction + "), render " + r.render + " (" + r.renderAction + ")";
+    });
+  };
   bMatches.onClick = function () {
     var dlg = new Window("dialog", "minColor — Extension matches");
     dlg.orientation = "column"; dlg.alignChildren = ["fill", "top"]; dlg.margins = 12; dlg.spacing = 6;
@@ -446,8 +437,8 @@
   var ddView = rowV.add("dropdownlist", undefined, lists.viewSpaces); ddView.selection = 0;
   ddView.alignment = ["fill", "center"]; ddView.preferredSize.width = 150;
   bindDD(ddView, "viewSpace");
-  var bView = flatButton(rowV, "Add guide", { width: 80, primary: true });
-  bView.helpTip = "Add / update the VIEW guide layer \u2014 viewport only, never renders";
+  var bView = flatButton(rowV, "Apply", { width: 80, primary: true });
+  bView.helpTip = "Apply this VIEW to the comp's guide layer \u2014 viewport only, never renders";
   bView.onClick = function () {
     guard("View guide", function () {
       var comp = app.project.activeItem; if (!(comp instanceof CompItem)) throw new Error("open a comp");
@@ -464,9 +455,8 @@
   var renderDefault = MinColor.familyDefaults(lists.family).render;        // Linear: Gamma 2.4 Rec.709 · Display (SDR): Rec.1886 — never auto-added
   for (var rdi = 0; rdi < ddRender.items.length; rdi++) if (ddRender.items[rdi].text === renderDefault) { ddRender.selection = rdi; break; }
   bindDD(ddRender, "renderSpace");
-  var bRender = flatButton(rowR, "Add render", { width: 80, primary: true });
-  bRender.helpTip = "Add / update the RENDER layer \u2014 renders in output: working \u2192 delivery space";
-  bRender.helpTip = "Adjustment layer (NOT a guide \u2014 it renders): working space \u2192 delivery space";
+  var bRender = flatButton(rowR, "Apply", { width: 80, primary: true });
+  bRender.helpTip = "Apply this RENDER to the comp's render layer (NOT a guide \u2014 it renders): working space \u2192 delivery space";
   bRender.onClick = function () {
     guard("Render layer", function () {
       var comp = app.project.activeItem; if (!(comp instanceof CompItem)) throw new Error("open a comp");
@@ -516,8 +506,8 @@
   }
 
   // ---- per-preset menus: dropdowns follow the project's preset (Doctor detects the change) ----
-  function refill(dd, items, key, preferred) {                      // swap items; keep current -> persisted -> family default -> first
-    var cur = dd.selection ? dd.selection.text : null, onCh = dd.onChange; dd.onChange = null;
+  function refill(dd, items, key, preferred, initial) {             // swap items; keep current -> persisted -> family default -> first (initial: no "current" yet)
+    var cur = (!initial && dd.selection) ? dd.selection.text : null, onCh = dd.onChange; dd.onChange = null;
     dd.removeAll(); for (var i = 0; i < items.length; i++) dd.add("item", items[i]);
     var want = [cur, UIS[key], preferred], sel = -1;
     for (var w = 0; w < want.length && sel < 0; w++) if (want[w]) for (var j = 0; j < dd.items.length; j++) if (dd.items[j].text === want[w]) { sel = j; break; }
@@ -525,13 +515,12 @@
     if (dd.selection) dd.helpTip = dd.selection.text;
     dd.onChange = onCh;                                              // UIS is NOT written here: only user changes persist
   }
-  function repopulateMenus(presetKey) {
+  function repopulateMenus(presetKey, initial) {
     lists = MinColor.menuLists(presetKey);                           // the Matches dialog reads `lists` lazily, so it follows too
     var fd = MinColor.familyDefaults(lists.family);
-    refill(ddSrc, lists.inputSpaces, "interpretSpace", null);
-    refill(ddContain, lists.inputSpaces, "containSpace", null);
-    refill(ddView, lists.viewSpaces, "viewSpace", fd.view);
-    refill(ddRender, lists.renderSpaces, "renderSpace", fd.render);
+    refill(ddSrc, lists.inputSpaces, "interpretSpace", null, initial);
+    refill(ddView, lists.viewSpaces, "viewSpace", fd.view, initial);
+    refill(ddRender, lists.renderSpaces, "renderSpace", fd.render, initial);
     if (typeof ddLook !== "undefined" && ddLook) {                   // display-referred presets have no looks: row stays, disabled
       var lk = []; try { lk = MinColor.configLooks(); } catch (eL2) {}
       refill(ddLook, ["(none)"].concat(lk), "lookChoice", null);
@@ -540,6 +529,8 @@
     currentPreset = presetKey;
     fitRows();
   }
+
+  repopulateMenus(currentPreset, true);                             // first-use defaults apply when nothing (or a stale name) is persisted
 
   // ---- footer ----
   var rowF = win.add("group");

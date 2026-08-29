@@ -50,8 +50,16 @@ MASTER = os.path.join(HERE, "master")
 DIST = os.path.join(HERE, "dist")
 
 SDR_WORKING = "Rec.709 Gamma 2.2"
-MAC_VIEW = "macOS View Only"
-MAC_VIEW_SIM = "macOS View Only (1886 Sim)"
+MAC_VIEW = "macOS View Only"                                          # LEGACY key: kept in every config — AE's viewer stores its
+MAC_VIEW_SIM = "macOS View Only (1886 Sim)"                           # display choice per project BY NAME (renaming resets it)
+MAC_DESKTOP = "macOS Desktop View"                               # same transform as MAC_VIEW (P3 primaries, pure 2.2); the name going forward
+MAC_VIDEO = "macOS Video View"                                   # MAC_DESKTOP after a BT.1886 encode + desktop sRGB decode (QuickTime-style playback of a 709 delivery)
+WIN_DESKTOP = "Windows Desktop View"                             # == sRGB (a Windows desktop surface)
+WIN_VIDEO = "Windows Video View"                                 # == Rec.1886 (a 709 video delivery on a 2.4 display)
+DESKTOP_RENDER = "Desktop Render"                                     # == sRGB   (render target for desktop/web deliveries)
+VIDEO_RENDER = "Video Render"                                         # == Rec.1886 (render target for video deliveries)
+PLATFORM_VIEWS = [MAC_DESKTOP, MAC_VIDEO, WIN_DESKTOP, WIN_VIDEO]     # top of every View list
+RENDER_ONLY = [DESKTOP_RENDER, VIDEO_RENDER]                          # top of every Render list; never views, never inputs
 
 # preset key -> record. Keys must be ALPHANUMERIC: the panel parses the key out of the hashed
 # filename (CONFIG_PATTERN /config-([A-Za-z0-9]+)-[0-9a-f]+\.ocio$/). Order = Set Up dialog order.
@@ -309,10 +317,10 @@ def rewrite_vt(blk, name, m709):
     return blk
 
 
-SDR_DISPLAYS = ["sRGB", "Rec.1886", "Display P3", "Rec.2020", SDR_WORKING, MAC_VIEW]
-SDR_VIEW_ONLY = [MAC_VIEW]
-SDR_VIEW_SPACES = ["sRGB", MAC_VIEW, "Display P3", "Rec.1886", SDR_WORKING]
-SDR_RENDER_SPACES = ["Rec.1886", "sRGB", "Display P3", "Rec.2020", SDR_WORKING]
+SDR_DISPLAYS = ["sRGB", "Rec.1886", "Display P3", "Rec.2020", SDR_WORKING, MAC_VIEW, MAC_DESKTOP, MAC_VIDEO, WIN_DESKTOP, WIN_VIDEO]
+SDR_VIEW_ONLY = [MAC_VIEW] + PLATFORM_VIEWS                            # legacy stays valid + view-only; the panel LISTS only the platform views
+SDR_VIEW_SPACES = PLATFORM_VIEWS + ["sRGB", "Display P3", "Rec.1886", SDR_WORKING]
+SDR_RENDER_SPACES = RENDER_ONLY + ["Rec.1886", "sRGB", "Display P3", "Rec.2020", SDR_WORKING]
 SDR_INPUT_PRIORITY = [SDR_WORKING, "sRGB", "Rec.1886", "Display P3", "Rec.2020", "Linear Rec.709",
                       "Linear Rec.2020", "ACEScg", "ACES2065-1", "Non-Color"]
 SDR_INACTIVE = ["Linear CIE-XYZ D65", "Linear CIE-XYZ E", "Luminance Compensation Rec.2020", "AgX Log",
@@ -350,7 +358,8 @@ def make_sdr(base, flavour, mats):
     dcs += self_contained_display(SDR_WORKING, m709, G22_INV, "[g22_rec709_display, Gamma 2.2 Rec.709 - Display]",
                                   "Rec.709 primaries, pure 2.2 EOTF — the SDR family's WORKING space (what a desktop display does;\n      a naked render carries these values under a BT.709 tag).") + "\n"
     dcs += self_contained_display(MAC_VIEW, mp3, G22_INV, "[UnionMacOS]",
-                                  "P3-D65 primaries, pure 2.2 EOTF — AE's macOS viewport surface (P3-tagged, EDR off). VIEW ONLY.") + "\n"
+                                  "P3-D65 primaries, pure 2.2 EOTF — AE's macOS viewport surface (P3-tagged, EDR off). VIEW ONLY (legacy name).") + "\n"
+    dcs += mac_display_pair(m709, mp3) + "\n" + platform_pair(m709) + "\n"
     dcs += get_block(base, "ColorSpace", "Linear CIE-XYZ D65")
     if not dcs.endswith("\n\n"):
         dcs += "\n"
@@ -385,18 +394,58 @@ def load_master_with_patch():
     return t
 
 
+def mac_display_pair(m709, mp3):
+    """The two forward-looking mac views as SELF-CONTAINED display colourspaces (Desktop == legacy
+    macOS View Only transform; Video == the 1886 sim on the same surface)."""
+    desk = self_contained_display(MAC_DESKTOP, mp3, G22_INV, "[macOS Desktop View Only]",
+                                  "P3-D65 primaries, pure 2.2 EOTF — AE's macOS viewport surface (P3-tagged, EDR off). VIEW ONLY.")
+    video = ("  - !<ColorSpace>\n    name: %s\n    aliases: [macOS Video View Only]\n    family: Display\n    equalitygroup: \"\"\n    bitdepth: 32f\n"
+             "    description: |\n      macOS Desktop View preceded by a BT.1886 (2.4) encode + desktop sRGB decode —\n"
+             "      predicts how a Rec.709 video delivery plays through a desktop pipeline (QuickTime-style). VIEW ONLY.\n"
+             "    isdata: false\n    encoding: sdr-video\n    from_display_reference: !<GroupTransform>\n      children:\n"
+             "        - !<MatrixTransform> {matrix: [%s]}\n"
+             "        - !<ExponentTransform> {value: 2.4, direction: inverse}\n"
+             "        - !<ExponentWithLinearTransform> {gamma: 2.4, offset: 0.055}\n"
+             "        - !<MatrixTransform> {matrix: [%s], direction: inverse}\n"
+             "        - !<MatrixTransform> {matrix: [%s]}\n"
+             "        - !<ExponentTransform> {value: 2.2, direction: inverse}\n") % (MAC_VIDEO, m709, m709, mp3)
+    return desk + "\n" + video
+
+def platform_pair(m709):
+    """Windows views + the two render targets: plain duplicates of sRGB / Rec.1886, self-contained,
+    named for what the user is doing rather than for a standard."""
+    return (self_contained_display(WIN_DESKTOP, m709, SRGB_INV, "[Windows Desktop View Only]", "sRGB — a Windows desktop surface. View target only.") + "\n" +
+            self_contained_display(WIN_VIDEO, m709, G24_INV, "[Windows Video View Only]", "BT.1886 (2.4) — a Rec.709 video delivery on a 2.4 display. View target only.") + "\n" +
+            self_contained_display(DESKTOP_RENDER, m709, SRGB_INV, None, "sRGB values — render target for desktop / web deliveries.") + "\n" +
+            self_contained_display(VIDEO_RENDER, m709, G24_INV, None, "BT.1886 (2.4) values — render target for video deliveries."))
+
+MAC_NEW_VIEWS = """  %s:
+    - !<View> {name: Standard, view_transform: Standard, display_colorspace: %s}
+    - !<View> {name: Raw, colorspace: Non-Color}
+  %s:
+    - !<View> {name: Standard, view_transform: Standard, display_colorspace: %s}
+    - !<View> {name: Raw, colorspace: Non-Color}
+  %s:
+    - !<View> {name: Standard, view_transform: Standard, display_colorspace: %s}
+    - !<View> {name: Raw, colorspace: Non-Color}
+  %s:
+    - !<View> {name: Standard, view_transform: Standard, display_colorspace: %s}
+    - !<View> {name: Raw, colorspace: Non-Color}
+""" % (MAC_DESKTOP, MAC_DESKTOP, MAC_VIDEO, MAC_VIDEO, WIN_DESKTOP, WIN_DESKTOP, WIN_VIDEO, WIN_VIDEO)
+
 def add_union(t):
     # 1886-sim as a ViewTransform (looks are invisible to the native Display Transform effect)
     t = sub1(r"^view_transforms:\n", "view_transforms:\n" + UNION_VIEW_TRANSFORM, t, "view_transforms:")
-    # display colourspace at the top of display_colorspaces
-    t = sub1(r"^display_colorspaces:\n", "display_colorspaces:\n" + MAC_DISPLAY_CS.lstrip("\n") + "\n", t, "display_colorspaces:")
+    # display colourspaces at the top of display_colorspaces: legacy macOS View Only + the Desktop/Video pair
+    m709, mp3 = xyz_matrix_of(t, "Linear Rec.709"), xyz_matrix_of(t, "Linear DCI-P3 D65")
+    t = sub1(r"^display_colorspaces:\n", "display_colorspaces:\n" + MAC_DISPLAY_CS.lstrip("\n") + "\n" + mac_display_pair(m709, mp3) + "\n" + platform_pair(m709) + "\n", t, "display_colorspaces:")
     # camera space at the TOP of the colorspaces section (the master file ends with looks:, not colorspaces:)
     t = sub1(r"^colorspaces:\n", "colorspaces:\n" + CAMERA_REC709.strip("\n") + "\n\n" + VIEW_BAKED_CS.strip("\n") + "\n\n", t, "colorspaces anchor")
     # views block just before active_displays
-    t = sub1(r"^active_displays:", MAC_VIEWS + "active_displays:", t, "active_displays anchor")
+    t = sub1(r"^active_displays:", MAC_VIEWS + MAC_NEW_VIEWS + "active_displays:", t, "active_displays anchor")
     t = add_look_views(t)
     # activate display + views
-    t = sub1(r"^active_displays: \[(.*)\]$", lambda m: "active_displays: [" + m.group(1) + ", " + MAC_VIEW + "]", t, "active_displays list")
+    t = sub1(r"^active_displays: \[(.*)\]$", lambda m: "active_displays: [" + m.group(1) + ", " + MAC_VIEW + ", " + MAC_DESKTOP + ", " + MAC_VIDEO + ", " + WIN_DESKTOP + ", " + WIN_VIDEO + "]", t, "active_displays list")
     t = sub1(r"^active_views: \[(.*)\]$", lambda m: "active_views: [" + m.group(1) + ", " + ", ".join(NEW_VIEW_NAMES) + "]", t, "active_views list")
     return t
 
@@ -448,7 +497,7 @@ def validate(path, working, expect_default, view_checks):
     return cfg
 
 
-LINEAR_VIEW_CHECKS = [(MAC_VIEW, v) for v in ["Standard", "Standard 1886 Sim", "ACES 2.0", "AgX"]]
+LINEAR_VIEW_CHECKS = [(MAC_VIEW, v) for v in ["Standard", "Standard 1886 Sim", "ACES 2.0", "AgX"]] + [(d, "Standard") for d in PLATFORM_VIEWS]
 SDR_VIEW_CHECKS = [(d, v) for d in SDR_DISPLAYS for v in ["Standard", "Raw"]]
 
 # genuine master views per flavour: (display, view, decode) — used for cross-config fidelity
@@ -531,6 +580,14 @@ def validate_sdr(path, flavour, master_path):
     assert max(abs(a - 1.0) for a in got) < 1e-4, "Display P3 white != working white"
     got = cst(cfg, W, MAC_VIEW, (0.5,) * 3)
     assert max(abs(a - 0.5) for a in got) < 1e-4, "working -> macOS View Only grey drifted (should be matrix-only)"
+    a, b = cst(cfg, W, MAC_VIEW, (1.0, 0.0, 0.0)), cst(cfg, W, MAC_DESKTOP, (1.0, 0.0, 0.0))
+    assert max(abs(x - y) for x, y in zip(a, b)) < 1e-6, "Desktop view != legacy macOS View Only"
+    got = cst(cfg, W, MAC_VIDEO, (0.5,) * 3); exp = _g(_srgb_dec(_g(_g(0.5, 2.2), 1 / 2.4)), 1 / 2.2)
+    assert max(abs(x - exp) for x in got) < 1e-4, "Video view != sim math (%.4f vs %.4f)" % (got[0], exp)
+    for dup, ref in [(WIN_DESKTOP, "sRGB"), (DESKTOP_RENDER, "sRGB"), (WIN_VIDEO, "Rec.1886"), (VIDEO_RENDER, "Rec.1886")]:
+        for v in [(0.05,) * 3, (0.5,) * 3, (1.0, 0.0, 0.0)]:
+            a, b = cst(cfg, W, dup, v), cst(cfg, W, ref, v)
+            assert max(abs(x - y) for x, y in zip(a, b)) < 1e-6, "%s != %s" % (dup, ref)
     # (f) the inverse path (display -> scene through the inverse VT) must at least build
     cfg.getProcessor(W, "Linear Rec.709").getDefaultCPUProcessor()
     print("  validate_sdr ok  %s  bridge=%s" % (os.path.basename(path), flavour))
@@ -547,7 +604,7 @@ def per_preset_menus(cfg, p):
         for n in names:
             cs = cfg.getColorSpace(n)
             fam = cs.getFamily() or ""
-            if fam.startswith("Display") and n in view_only:
+            if fam.startswith("Display") and (n in view_only or n in RENDER_ONLY):
                 continue
             inputs.append(n)
         inputs = hoist(inputs, SDR_INPUT_PRIORITY)
@@ -562,17 +619,20 @@ def per_preset_menus(cfg, p):
             elif fam.startswith("View Inverse"):
                 view_spaces.append(n)                                # tone-map inverses: view-only
             elif fam.startswith("Display"):
+                if n in RENDER_ONLY:
+                    continue                                         # render targets: neither view nor input
                 view_spaces.append(n)
-                if "1886 Sim" not in n and n != MAC_VIEW:
+                if "1886 Sim" not in n and n != MAC_VIEW and n not in PLATFORM_VIEWS:
                     input_spaces.append(n)                           # sRGB/Rec.1886/P3/... are also footage encodings
             else:
                 input_spaces.append(n)
-        view_only = [MAC_VIEW, MAC_VIEW_SIM, "sRGB 1886 Sim"]
-        views = hoist(view_spaces, ["sRGB", "Rec.1886", "Display P3", MAC_VIEW, "sRGB 1886 Sim", MAC_VIEW_SIM])
+        view_only = [MAC_VIEW] + PLATFORM_VIEWS + [MAC_VIEW_SIM, "sRGB 1886 Sim"]
+        view_spaces = [v for v in view_spaces if v not in (MAC_VIEW, MAC_VIEW_SIM)]   # legacy names stay in the config, not in the menu
+        views = hoist(view_spaces, PLATFORM_VIEWS + ["sRGB", "Rec.1886", "Display P3", "sRGB 1886 Sim"])
         inputs = hoist(input_spaces, ["sRGB", "Rec.1886", "Gamma 2.4 Encoded Rec.709", "Display P3", "Camera Rec.709",
                                       "Linear Rec.709", "Linear Rec.2020", "ACEScg", "ACES2065-1"])
         seen, renders = set(), []
-        for n in views + inputs:
+        for n in RENDER_ONLY + views + inputs:
             if n in seen or n in view_only:
                 continue
             seen.add(n); renders.append(n)
@@ -641,7 +701,7 @@ def main():
     lin = presets["acescg"]
     json.dump({"generated": "by config/generate.py", "presets": presets, "retired": retired,
                # top-level lists = the linear family's, for panels that predate per-preset menus
-               "inputSpaces": lin["inputSpaces"], "viewSpaces": lin["viewSpaces"], "viewOnly": lin["viewOnly"]},
+               "inputSpaces": lin["inputSpaces"], "viewSpaces": lin["viewSpaces"], "renderSpaces": lin["renderSpaces"], "viewOnly": lin["viewOnly"]},
               open(os.path.join(DIST, "presets.json"), "w"), indent=1)
     print("dist/ complete")
 

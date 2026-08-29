@@ -30,7 +30,9 @@ Panel 0.8.0 · engine 1.3.1 (Windows prebuilt 1.3.0) · requires After Effects 2
   `minColor: view <space>` · `minColor: render <space>` (utility layers) ·
   `minColor: look <name>` (OCIO look, applied before the transform on the same layer) ·
   `minColor: contain <space>` (a precomp's output is media in that space; interpret
-  passes do not descend into it).
+  passes do not descend into it — name-level only, no panel UI).
+- **Interpret timeline** also gives the comp both utility layers from the panel's current View
+  and Render choices, with the view enabled.
 - **SDR preset**: the working space is display-referred (`Rec.709 Gamma 2.2` — Rec.709
   primaries, pure 2.2, what a desktop display does). SDR is SDR: the working values are the
   deliverable, Rec.709 video is working-native (no interpret effect), sRGB stills get the exact
@@ -39,8 +41,15 @@ Panel 0.8.0 · engine 1.3.1 (Windows prebuilt 1.3.0) · requires After Effects 2
   looks; tone-mapped view/render targets are absent because on display-referred pixels they
   would be double transforms. The render layer is explicit (the panel preselects the identity;
   `Rec.1886`, `sRGB`, `Display P3`, `Rec.2020` are deliberate re-encodes for a specific consumer,
-  and look lifted/darkened in the viewport by construction). `macOS View Only` (P3 primaries,
-  pure 2.2 — AE's macOS viewport surface) is a view target only, never a render target.
+  and look lifted/darkened in the viewport by construction). `macOS Desktop View` (P3 primaries, pure 2.2 — AE's macOS viewport surface) and
+  `macOS Video View` (the same after a BT.1886 encode + desktop sRGB decode: how a 709
+  delivery plays through QuickTime-style pipelines) are view targets only, never render targets.
+  `Windows Desktop View` (= sRGB) and `Windows Video View` (= Rec.1886) are the Windows
+  counterparts; `Desktop Render` (= sRGB) and `Video Render` (= Rec.1886) are the render targets.
+  Platform views head the View list, the two Renders head the Render list, and the first-use
+  defaults are the platform's own Video view with `Video Render` (the panel remembers later choices). The older `macOS View Only` display stays in every config (AE
+  stores the viewer's display choice by name) but is no longer offered; effects carrying it are
+  renamed on migrate.
 - **Central config store**: projects pin the config beside the plugin in Adobe's shared
   MediaCore folder. Per-project sidecars are produced only by "Package for any AE".
 - **Passport**: each effect's sequence data carries the config's hashed filename and the
