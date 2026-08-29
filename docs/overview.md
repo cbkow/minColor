@@ -1,6 +1,6 @@
 # Technical overview
 
-What's going on behind the panel. You don't need any of this to use it.
+For the curious
 
 ## Media comes in untouched
 
