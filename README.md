@@ -45,11 +45,11 @@ Regular sRGB, rec.709, rec.1886, ACES, and Blender workflows are supported, and 
 To make things easier and reduce inconsistencies between AE on macOS and Windows, some common-name aliases are provided. Essentially, any **View** or **Render** option that is called **"Desktop”** is an alias for **sRGB** flows typical in web/social/direct/tech branding work. Any **View** or **Render** option called **"Video”** is more typical for broadcast delivery or standard commercial post-production flows and is an alias for rec.709 gamma 2.4 / rec.1886 / bt.1886.
 
 Meaning, if you work for tech/web/direct, this will most likely match your normal workflow:
-- Windows Desktop View or macOS Desktop View- depending on what machine you are currently sitting in front of.
+- **Windows Desktop View** or **macOS Desktop View**- depending on what machine you are currently sitting in front of.
 - Desktop Render
 
 If you are working in post-production in an offline/online flow, you will most likely want:
-- Windows or macOS Desktop view is what viewers will see on a TV or a professional broadcast monitor in an Online room. Windows or macOS Video views are what people will see when they watch videos online or on a desktop post. Pick your poison (and lament the state of video today).
+- **Windows or macOS Desktop View** is what viewers will see on a TV or a professional broadcast monitor in an Online room. **Windows or macOS Video views** are what people will see when they watch videos online or on a desktop post. Pick your poison (and lament the state of video today).
 - Video Render is what you will be outputting to offline editors and online finishing artists.
 
 ---
