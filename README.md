@@ -46,11 +46,11 @@ To make things easier and reduce inconsistencies between AE on macOS and Windows
 
 Meaning, if you work for tech/web/direct, this will most likely match your normal workflow:
 - **Windows Desktop View** or **macOS Desktop View**- depending on what machine you are currently sitting in front of.
-- Desktop Render
+- **Desktop Render**
 
 If you are working in post-production in an offline/online flow, you will most likely want:
 - **Windows or macOS Desktop View** is what viewers will see on a TV or a professional broadcast monitor in an Online room. **Windows or macOS Video views** are what people will see when they watch videos online or on a desktop post. Pick your poison (and lament the state of video today).
-- Video Render is what you will be outputting to offline editors and online finishing artists.
+- **Video Render** is what you will be outputting to offline editors and online finishing artists.
 
 ---
 
