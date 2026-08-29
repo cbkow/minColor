@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- minColor Windows installer (WiX v5, per-machine MSI). Build with packaging/windows/build.ps1.
+     Places the engine (.aex + version.txt) and the config store into Adobe's shared MediaCore
+     folder, the panel into every installed After Effects >= 2025 (app-level ScriptUI Panels,
+     all users), and seeds the shared settings under ProgramData\minColor.
+     Config store rule: append-only. config/dist in git keeps every hashed config ever shipped, so
+     each upgrade re-lays the full set and never removes a hash a project may be pinned to. The
+     settings seed is Permanent + NeverOverwrite: user choices survive upgrades and uninstall. -->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+  <Package Name="minColor" Manufacturer="Christopher Bialkowski" Version="$(var.Version)" Language="1033"
+           Scope="perMachine" Compressed="yes" UpgradeCode="3F332F15-A3F0-4B8E-80F7-56480572A9F2">
+    <MajorUpgrade AllowSameVersionUpgrades="yes" DowngradeErrorMessage="A newer minColor is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+    <!-- refuse to install while After Effects is open (the plug-in file is mapped) -->
+    <util:CloseApplication Target="AfterFX.exe" CloseMessage="no" PromptToContinue="yes" RebootPrompt="no"
+                           Description="After Effects is running. Quit it, then continue." />
+
+    <!-- After Effects install roots (VERIFY these keys on a real machine: reg query "HKLM\SOFTWARE\Adobe\After Effects") -->
+    <Property Id="AE2025DIR"><RegistrySearch Root="HKLM" Key="SOFTWARE\Adobe\After Effects\25.0" Name="InstallPath" Type="directory" /></Property>
+    <Property Id="AE2026DIR"><RegistrySearch Root="HKLM" Key="SOFTWARE\Adobe\After Effects\26.0" Name="InstallPath" Type="directory" /></Property>
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Name="Adobe"><Directory Name="Common"><Directory Name="Plug-ins"><Directory Name="7.0"><Directory Name="MediaCore">
+        <Directory Id="MINCOLORDIR" Name="minColor"><Directory Id="MINCONFIGS" Name="configs" /></Directory>
+      </Directory></Directory></Directory></Directory></Directory>
+    </StandardDirectory>
+    <StandardDirectory Id="CommonAppDataFolder">
+      <Directory Id="PDMINCOLOR" Name="minColor">
+        <Directory Id="PDCONFIGS" Name="configs" />
+        <Directory Id="PDSETTINGS" Name="settings" />
+      </Directory>
+    </StandardDirectory>
+    <Directory Id="AE2025DIR"><Directory Name="Support Files"><Directory Name="Scripts"><Directory Id="AE2025PANELS" Name="ScriptUI Panels"><Directory Id="AE2025DATA" Name="minColor-data" /></Directory></Directory></Directory></Directory>
+    <Directory Id="AE2026DIR"><Directory Name="Support Files"><Directory Name="Scripts"><Directory Id="AE2026PANELS" Name="ScriptUI Panels"><Directory Id="AE2026DATA" Name="minColor-data" /></Directory></Directory></Directory></Directory>
+
+    <!-- engine -->
+    <ComponentGroup Id="Engine" Directory="MINCOLORDIR">
+      <Component><File Source="$(var.Prebuilt)\minColorCST.aex" /></Component>
+      <Component><File Source="$(var.Prebuilt)\version.txt" /></Component>
+    </ComponentGroup>
+    <!-- config store beside the engine (the plug-in's passport resolves against it) + the shared copy -->
+    <ComponentGroup Id="ConfigsCentral" Directory="MINCONFIGS"><Files Include="$(var.Configs)\**" /></ComponentGroup>
+    <ComponentGroup Id="ConfigsShared" Directory="PDCONFIGS"><Files Include="$(var.Configs)\**" /></ComponentGroup>
+    <!-- settings seed: never overwritten, never removed -->
+    <ComponentGroup Id="Settings" Directory="PDSETTINGS">
+      <Component Permanent="yes" NeverOverwrite="yes"><File Source="$(var.Config)\extension-defaults.json" /></Component>
+      <Component Permanent="yes" NeverOverwrite="yes"><File Source="$(var.Config)\render-presets.json" /></Component>
+    </ComponentGroup>
+    <!-- panel per installed AE (each conditioned on its registry search) -->
+    <ComponentGroup Id="Panel2025">
+      <Component Directory="AE2025PANELS" Condition="AE2025DIR"><File Source="$(var.Panel)\minColor.jsx" /></Component>
+      <Files Include="$(var.Panel)\minColor-data\**" Directory="AE2025DATA" Condition="AE2025DIR" />
+    </ComponentGroup>
+    <ComponentGroup Id="Panel2026">
+      <Component Directory="AE2026PANELS" Condition="AE2026DIR"><File Source="$(var.Panel)\minColor.jsx" /></Component>
+      <Files Include="$(var.Panel)\minColor-data\**" Directory="AE2026DATA" Condition="AE2026DIR" />
+    </ComponentGroup>
+
+    <Feature Id="Main" Title="minColor" Level="1">
+      <ComponentGroupRef Id="Engine" /><ComponentGroupRef Id="ConfigsCentral" /><ComponentGroupRef Id="ConfigsShared" />
+      <ComponentGroupRef Id="Settings" /><ComponentGroupRef Id="Panel2025" /><ComponentGroupRef Id="Panel2026" />
+    </Feature>
+  </Package>
+</Wix>

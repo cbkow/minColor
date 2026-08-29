@@ -75,6 +75,22 @@ are signed with Developer ID and notarized (`plugin/scripts/notarize.sh`, run be
 after copying: `xattr -dr com.apple.quarantine "/Library/Application Support/Adobe/Common/Plug-ins/7.0/MediaCore/minColor"`.
 Windows has no equivalent gate for `.aex` plug-ins; the `.aex` loads unsigned.
 
+## Installers
+
+- **macOS**: `packaging/macos/build-pkg.sh` → `dist-panel/minColor-<ver>.pkg`. Signed with the
+  "Developer ID Installer" identity and notarized (profile `AC_PASSWORD`) when present, otherwise an
+  unsigned pkg for local testing. Payload: plug-in + config store into MediaCore, panel into every
+  After Effects ≥ 2025 for the console user, settings seeded under `/Users/Shared/minColor/settings`
+  (never overwritten). Refuses to run while After Effects is open. Log:
+  `/var/log/minColor-install.log`. Removal: `packaging/macos/uninstall.command`.
+- **Windows**: `packaging/windows/build.ps1` (WiX v5) → `dist-panel/minColor-<ver>.msi`, per-machine:
+  engine + configs into MediaCore, panel into each installed After Effects ≥ 2025 (app-level
+  `Support Files\Scripts\ScriptUI Panels`, all users), settings under `ProgramData\minColor`.
+  Unsigned (one SmartScreen prompt per machine). `msiexec /i minColor-<ver>.msi /qn` for silent
+  deployment. A dev box that used `dev-install-panel.bat` (per-user panel) should remove that copy
+  to avoid two entries in the Window menu.
+- Both merge the config store append-only (every hashed config ever shipped stays in `config/dist`).
+
 ## Build from source
 
 ```

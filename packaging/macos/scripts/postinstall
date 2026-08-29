@@ -1,0 +1,32 @@
+#!/bin/bash
+# Runs as root after the payload landed. Fans the panel out to every AE >= 2025 the console user has
+# launched, seeds settings without overwriting, and removes the older per-machine copy if any.
+LOG=/var/log/minColor-install.log
+exec >>"$LOG" 2>&1
+echo "== minColor postinstall $(date) =="
+USER_NAME="$(stat -f %Su /dev/console)"; HOME_DIR="$(dscl . -read /Users/"$USER_NAME" NFSHomeDirectory 2>/dev/null | awk '{print $2}')"
+[ -n "$HOME_DIR" ] || HOME_DIR="/Users/$USER_NAME"
+SHARED=/Users/Shared/minColor
+PANEL_SRC="$SHARED/panel"
+installed=0
+for PREFS in "$HOME_DIR/Library/Preferences/Adobe/After Effects/"*/; do
+  [ -d "$PREFS" ] || continue
+  ver="$(basename "$PREFS")"; major="${ver%%.*}"
+  [ "$major" -ge 25 ] 2>/dev/null || { echo "skip AE $ver (< 25)"; continue; }
+  DEST="$PREFS/Scripts/ScriptUI Panels"
+  mkdir -p "$DEST"
+  cp -f "$PANEL_SRC/minColor.jsx" "$DEST/"
+  ditto "$PANEL_SRC/minColor-data" "$DEST/minColor-data"
+  chown -R "$USER_NAME" "$DEST/minColor.jsx" "$DEST/minColor-data"
+  echo "panel -> $DEST"; installed=$((installed+1))
+done
+[ "$installed" -gt 0 ] || echo "WARNING: no After Effects >= 2025 preference folder found for $USER_NAME (launch AE once, then reinstall)"
+# settings: seed only what is missing (user choices survive every update)
+mkdir -p "$SHARED/settings"
+for f in "$SHARED/settings-seed/"*; do [ -e "$SHARED/settings/$(basename "$f")" ] || cp "$f" "$SHARED/settings/"; done
+chown -R "$USER_NAME" "$SHARED" 2>/dev/null || true
+chmod -R a+rX "$SHARED" "/Library/Application Support/Adobe/Common/Plug-ins/7.0/MediaCore/minColor" 2>/dev/null || true
+# quarantine never applies to pkg payloads, but be explicit for the plug-in bundle
+xattr -dr com.apple.quarantine "/Library/Application Support/Adobe/Common/Plug-ins/7.0/MediaCore/minColor" 2>/dev/null || true
+echo "done"
+exit 0
