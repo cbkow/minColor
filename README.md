@@ -68,6 +68,13 @@ Use a release zip: two copy steps, described in its `README.txt` — the panel p
 ScriptUI Panels, and the platform's `minColor` folder into
 `…/Adobe/Common/Plug-ins/7.0/MediaCore/`.
 
+macOS Gatekeeper: a plugin that arrives by download carries the quarantine flag, and an unsigned
+or unnotarized bundle is then reported as "damaged" (and offered for the Trash). Release builds
+are signed with Developer ID and notarized (`plugin/scripts/notarize.sh`, run before
+`build/build.py`), which loads straight from a download. For any other copy, clear the flag once
+after copying: `xattr -dr com.apple.quarantine "/Library/Application Support/Adobe/Common/Plug-ins/7.0/MediaCore/minColor"`.
+Windows has no equivalent gate for `.aex` plug-ins; the `.aex` loads unsigned.
+
 ## Build from source
 
 ```

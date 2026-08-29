@@ -94,9 +94,24 @@ if(APPLE)
     COMMENT "Rez PiPL")
   add_custom_target(pipl DEPENDS "${PIPL_RSRC}")
   add_dependencies(minColorCST pipl)
+  # Copying the PiPL into the bundle AFTER the linker sealed it left every shipped bundle with an
+  # invalid signature ("code has no resources but signature indicates they must be present"):
+  # harmless when cp'd locally, "damaged" once a downloaded copy carries the quarantine flag.
+  # Re-sign the whole bundle last. Ad-hoc ("-") verifies; a Developer ID identity (set
+  # -DMINC_CODESIGN_IDENTITY="Developer ID Application: …") plus scripts/notarize.sh makes a
+  # downloaded bundle load without Gatekeeper's "damaged" verdict.
+  set(MINC_CODESIGN_IDENTITY "-" CACHE STRING "codesign identity for the plugin bundle (- = ad-hoc)")
+  if(MINC_CODESIGN_IDENTITY STREQUAL "-")
+    set(MINC_CODESIGN_FLAGS --force --deep --sign -)
+  else()
+    set(MINC_CODESIGN_FLAGS --force --deep --options runtime --timestamp --sign "${MINC_CODESIGN_IDENTITY}")
+  endif()
   add_custom_command(TARGET minColorCST POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_BUNDLE_DIR:minColorCST>/Contents/Resources"
-    COMMAND ${CMAKE_COMMAND} -E copy "${PIPL_RSRC}" "$<TARGET_BUNDLE_DIR:minColorCST>/Contents/Resources/minColorCST.rsrc")
+    COMMAND ${CMAKE_COMMAND} -E copy "${PIPL_RSRC}" "$<TARGET_BUNDLE_DIR:minColorCST>/Contents/Resources/minColorCST.rsrc"
+    COMMAND codesign ${MINC_CODESIGN_FLAGS} "$<TARGET_BUNDLE_DIR:minColorCST>"
+    COMMAND codesign --verify --deep --strict "$<TARGET_BUNDLE_DIR:minColorCST>"
+    COMMENT "PiPL into bundle, then codesign (${MINC_CODESIGN_IDENTITY})" VERBATIM)
 elseif(WIN32)
   # a .aex is a plain DLL; EffectMain is the only __declspec(dllexport) (static OCIO exports nothing)
   set_target_properties(minColorCST PROPERTIES PREFIX "" SUFFIX ".aex")
