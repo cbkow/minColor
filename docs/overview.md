@@ -1,57 +1,54 @@
 # Technical overview
 
-What's under the hood. Nothing here changes how you use the panel.
+What's going on behind the panel. You don't need any of this to use it.
 
-## Identity import, single authority
+## Media comes in untouched
 
-Every config's Default file rule, `default` role and working space agree, so After Effects imports
-all footage untransformed and never guesses. Interpretation happens once, on the timeline, as a
-per-layer effect. Effect names are the durable state:
+Every config is set up so After Effects imports footage without converting it: the default file
+rule, the `default` role and the working space all agree. Color spaces are assigned on the
+timeline instead, one effect per layer, named for what they do:
 
-| name | meaning |
+| effect name | what it does |
 |---|---|
-| `minColor: <space> → working` | interpret a footage layer |
-| `minColor: view <space>` | the comp's guide layer (viewport only) |
-| `minColor: render <space>` | the comp's render layer (working → delivery) |
-| `minColor: look <name>` | an OCIO look before the transform on the same layer |
-| `minColor: contain <space>` | treat a precomp's output as media in that space |
+| `minColor: ARRI LogC4 → working` | interprets a footage layer |
+| `minColor: view macOS Video View` | the comp's View guide layer (viewport only) |
+| `minColor: render Video Render` | the comp's Render layer (what gets output) |
+| `minColor: look <name>` | an OCIO look, applied before the transform |
 
-## Engine
+The names are the truth. Rename an effect and the plugin follows.
 
-`minColor CST` is a SmartFX effect that stores only a colourspace name and a direction. At render
-it reads the project's OCIO config and working space from After Effects and processes with its own
-statically linked OCIO 2.5.2. Its **passport** (config filename + working space, stored with the
-effect) lets it resolve the config from the local store when the project's path is dead, so
-renders match across platforms and under aerender. Adobe's native OCIO effect produces identical
-pixels; **Package for any AE** translates to it.
+## The plugin
 
-## Configs
+`minColor CST` stores only a color space name and a direction. When it renders it asks After
+Effects for the project's OCIO config and working space, then runs the transform with its own
+built-in OCIO 2.5.2. It also remembers the config it was last synced with (the "passport"), so if
+a project arrives on a machine where the config path doesn't exist, it still renders the same —
+in the app and in aerender. Adobe's own OCIO Color Space Transform gives identical pixels;
+**Package for any AE** swaps every effect over to it.
 
-One config per preset, generated from a vendored Blender 5.2 master (AgX, ACES 1.3/2.0, cameras)
-and down-levelled to OCIO 2.4 for After Effects. Filenames are content-hashed and the store is
-append-only: a project pinned to a hash always finds it.
+## The configs
 
-The SDR preset is display-referred: working space `Rec.709 Gamma 2.2`, Standard views only, no
-looks, every colourspace defined with direct matrices. Platform views (`macOS Desktop View` = P3
-primaries with a 2.2 curve, `macOS Video View` = the same after a BT.1886 encode and desktop sRGB
-decode, `Windows Desktop View` = sRGB, `Windows Video View` = Rec.1886) and the two render targets
-(`Desktop Render` = sRGB, `Video Render` = Rec.1886) exist in every preset.
+Generated from a Blender 5.2 config plus ACES 2.0 pieces, then trimmed to OCIO 2.4 because that's
+what After Effects ships with. Each preset is its own config file, named by a hash of its
+contents. Old versions are never deleted: a project always finds the config it was set up with,
+and the Doctor tells you when a newer one is available.
 
-The panel's menus follow the project's *pinned* config, never a newer one, and the Doctor reports
-when an update is available.
+The SDR config uses a Rec. 709 gamma 2.2 working space with plain matrix and curve transforms —
+no tone mapping. The platform views (`macOS Desktop View`, `macOS Video View`, and the Windows
+pair) exist so the viewport shows the right thing on each OS; `Desktop Render` and `Video Render`
+are sRGB and Rec. 1886 outputs.
 
 ## Where things live
 
 | | macOS | Windows |
 |---|---|---|
-| Plug-in + config store | `/Library/Application Support/Adobe/Common/Plug-ins/7.0/MediaCore/minColor/` | `C:\Program Files\Adobe\Common\Plug-ins\7.0\MediaCore\minColor\` |
-| Panel | `~/Library/Preferences/Adobe/After Effects/<ver>/Scripts/ScriptUI Panels/` | `<AE>\Support Files\Scripts\ScriptUI Panels\` |
-| Settings | `/Users/Shared/minColor/settings/` | `C:\ProgramData\minColor\settings\` |
-| Provenance | the project's XMP | the project's XMP |
+| Plugin + configs | `/Library/Application Support/Adobe/Common/Plug-ins/7.0/MediaCore/minColor/` | `C:\Program Files\Adobe\Common\Plug-ins\7.0\MediaCore\minColor\` |
+| Panel | `~/Library/Preferences/Adobe/After Effects/<ver>/Scripts/ScriptUI Panels/` | `<After Effects>\Support Files\Scripts\ScriptUI Panels\` |
+| Your settings | `/Users/Shared/minColor/settings/` | `C:\ProgramData\minColor\settings\` |
 
 ## Archive and Package
 
-**Archive** freezes dependencies next to the project (config + LUTs, `provenance.json`, a golden
-reference frame future machines can diff against). **Package for any AE** additionally translates
-every effect to Adobe-native and pins the sidecar, so the project opens on any After Effects 2025+
-without minColor. Package a version increment, not your working copy.
+**Archive** copies the project's config and LUTs next to the project file, with a note of the
+versions used. **Package for any AE** does that and converts every effect to Adobe-native, so the
+project opens on any After Effects 2025+ without minColor installed. Package a version increment,
+not your working copy.
