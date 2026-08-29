@@ -15,7 +15,11 @@
     <util:CloseApplication Target="AfterFX.exe" CloseMessage="no" PromptToContinue="yes" RebootPrompt="no"
                            Description="After Effects is running. Quit it, then continue." />
 
-    <!-- After Effects install roots (VERIFY these keys on a real machine: reg query "HKLM\SOFTWARE\Adobe\After Effects") -->
+    <!-- After Effects install roots. Verified on Windows 11 / AE 2026 (26.3), 2026-08-29:
+         HKLM\SOFTWARE\Adobe\After Effects\26.0  InstallPath = C:\Program Files\Adobe\Adobe After Effects 2026\Support Files\
+         (also PluginInstallPath, CommonPluginInstallPath = ...\Common\Plug-ins\7.0\MediaCore\, FFXInstallPath). No WOW6432Node mirror.
+         InstallPath already ENDS IN "Support Files\", so the panel trees below start at Scripts\.
+         The AE roots carry a fallback Name only so their auto component GUIDs differ; the registry value overrides the path. -->
     <Property Id="AE2025DIR"><RegistrySearch Root="HKLM" Key="SOFTWARE\Adobe\After Effects\25.0" Name="InstallPath" Type="directory" /></Property>
     <Property Id="AE2026DIR"><RegistrySearch Root="HKLM" Key="SOFTWARE\Adobe\After Effects\26.0" Name="InstallPath" Type="directory" /></Property>
 
@@ -30,35 +34,47 @@
         <Directory Id="PDSETTINGS" Name="settings" />
       </Directory>
     </StandardDirectory>
-    <Directory Id="AE2025DIR"><Directory Name="Support Files"><Directory Name="Scripts"><Directory Id="AE2025PANELS" Name="ScriptUI Panels"><Directory Id="AE2025DATA" Name="minColor-data" /></Directory></Directory></Directory></Directory>
-    <Directory Id="AE2026DIR"><Directory Name="Support Files"><Directory Name="Scripts"><Directory Id="AE2026PANELS" Name="ScriptUI Panels"><Directory Id="AE2026DATA" Name="minColor-data" /></Directory></Directory></Directory></Directory>
+    <Directory Id="AE2025DIR" Name="AE2025"><Directory Name="Scripts"><Directory Id="AE2025PANELS" Name="ScriptUI Panels"><Directory Id="AE2025DATA" Name="minColor-data" /></Directory></Directory></Directory>
+    <Directory Id="AE2026DIR" Name="AE2026"><Directory Name="Scripts"><Directory Id="AE2026PANELS" Name="ScriptUI Panels"><Directory Id="AE2026DATA" Name="minColor-data" /></Directory></Directory></Directory>
 
-    <!-- engine -->
+    <!-- engine. The .aex carries no VERSIONINFO resource, so MSI would treat it as a data file and keep any
+         pre-existing copy whose mtime != ctime ("unversioned but modified" — every dev-install / zip copy).
+         DefaultVersion (= prebuilt version.txt) makes MSI compare versions instead and lay the engine down. -->
     <ComponentGroup Id="Engine" Directory="MINCOLORDIR">
-      <Component><File Source="$(var.Prebuilt)\minColorCST.aex" /></Component>
-      <Component><File Source="$(var.Prebuilt)\version.txt" /></Component>
+      <Component><File Source="$(var.Prebuilt)\minColorCST.aex" DefaultVersion="$(var.EngineVersion)" /></Component>
+      <Component><File Source="$(var.Prebuilt)\version.txt" DefaultVersion="$(var.EngineVersion)" />
+        <!-- folders a dev-install / zip created before the MSI owned them are not MSI's to remove; sweep them if empty -->
+        <RemoveFolder Id="RmMinConfigs" Directory="MINCONFIGS" On="uninstall" />
+        <RemoveFolder Id="RmMinColorDir" Directory="MINCOLORDIR" On="uninstall" />
+        <RemoveFolder Id="RmPdConfigs" Directory="PDCONFIGS" On="uninstall" />
+      </Component>
     </ComponentGroup>
-    <!-- config store beside the engine (the plug-in's passport resolves against it) + the shared copy -->
-    <ComponentGroup Id="ConfigsCentral" Directory="MINCONFIGS"><Files Include="$(var.Configs)\**" /></ComponentGroup>
-    <ComponentGroup Id="ConfigsShared" Directory="PDCONFIGS"><Files Include="$(var.Configs)\**" /></ComponentGroup>
+    <!-- config store beside the engine (the plug-in's passport resolves against it) + the shared copy.
+         WiX harvests a given source path only once (WIX8602 silently drops the repeat), so every tree that
+         lands in two places is harvested from its own staged copy — build.ps1 lays them out under dist-panel\msi-stage. -->
+    <ComponentGroup Id="ConfigsCentral" Directory="MINCONFIGS"><Files Include="$(var.ConfigsCentral)\**" /></ComponentGroup>
+    <ComponentGroup Id="ConfigsShared" Directory="PDCONFIGS"><Files Include="$(var.ConfigsShared)\**" /></ComponentGroup>
     <!-- settings seed: never overwritten, never removed -->
     <ComponentGroup Id="Settings" Directory="PDSETTINGS">
       <Component Permanent="yes" NeverOverwrite="yes"><File Source="$(var.Config)\extension-defaults.json" /></Component>
       <Component Permanent="yes" NeverOverwrite="yes"><File Source="$(var.Config)\render-presets.json" /></Component>
     </ComponentGroup>
-    <!-- panel per installed AE (each conditioned on its registry search) -->
+    <!-- panel per installed AE. Gated by feature level, not component conditions: <Files> (the harvested
+         minColor-data tree) cannot carry a Condition, and a level-0 feature keeps the whole group out. -->
     <ComponentGroup Id="Panel2025">
-      <Component Directory="AE2025PANELS" Condition="AE2025DIR"><File Source="$(var.Panel)\minColor.jsx" /></Component>
-      <Files Include="$(var.Panel)\minColor-data\**" Directory="AE2025DATA" Condition="AE2025DIR" />
+      <Component Directory="AE2025PANELS"><File Source="$(var.Panel2025)\minColor.jsx" /></Component>
+      <Files Include="$(var.Panel2025)\minColor-data\**" Directory="AE2025DATA" />
     </ComponentGroup>
     <ComponentGroup Id="Panel2026">
-      <Component Directory="AE2026PANELS" Condition="AE2026DIR"><File Source="$(var.Panel)\minColor.jsx" /></Component>
-      <Files Include="$(var.Panel)\minColor-data\**" Directory="AE2026DATA" Condition="AE2026DIR" />
+      <Component Directory="AE2026PANELS"><File Source="$(var.Panel2026)\minColor.jsx" /></Component>
+      <Files Include="$(var.Panel2026)\minColor-data\**" Directory="AE2026DATA" />
     </ComponentGroup>
 
-    <Feature Id="Main" Title="minColor" Level="1">
+    <Feature Id="Main" Title="minColor" Level="1" AllowAbsent="no">
       <ComponentGroupRef Id="Engine" /><ComponentGroupRef Id="ConfigsCentral" /><ComponentGroupRef Id="ConfigsShared" />
-      <ComponentGroupRef Id="Settings" /><ComponentGroupRef Id="Panel2025" /><ComponentGroupRef Id="Panel2026" />
+      <ComponentGroupRef Id="Settings" />
+      <Feature Id="PanelAE2025" Title="Panel for After Effects 2025" Level="0"><Level Value="1" Condition="AE2025DIR" /><ComponentGroupRef Id="Panel2025" /></Feature>
+      <Feature Id="PanelAE2026" Title="Panel for After Effects 2026" Level="0"><Level Value="1" Condition="AE2026DIR" /><ComponentGroupRef Id="Panel2026" /></Feature>
     </Feature>
   </Package>
 </Wix>
