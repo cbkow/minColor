@@ -15,10 +15,11 @@
     $.global.__minColorWin = win;                     // keep the palette alive after the launching script returns
   }
   win.orientation = "column"; win.alignChildren = ["fill", "top"]; win.spacing = 6; win.margins = 10;
-  var presets = {}, keys = [], lists = { inputSpaces: [], viewSpaces: [] }, payloadError = null;
+  var presets = {}, keys = [], lists = { inputSpaces: [], viewSpaces: [], renderSpaces: [], family: "Linear" }, payloadError = null, currentPreset = null;
   try {
     presets = MinColor.presets(); for (var k in presets) keys.push(k);
-    lists = MinColor.menuLists();
+    currentPreset = MinColor.currentPresetKey();                    // menus are PER PRESET; null = linear fallback lists
+    lists = MinColor.menuLists(currentPreset);
   } catch (ePayload) { payloadError = ePayload.toString(); }   // fail soft: panel opens, Doctor line explains
 
   function log(s) { status.text = String(s).substr(0, 240); }
@@ -68,10 +69,10 @@
 
   // ---- remembered choices: dropdowns restore their last-used value and persist on change ----
   var UIS = {}; try { UIS = MinColor.uiState() || {}; } catch (eU) {}
-  function bindDD(dd, key) {
-    if (UIS[key]) for (var bi = 0; bi < dd.items.length; bi++) if (dd.items[bi].text === UIS[key]) { dd.selection = bi; break; }
+  function bindDD(dd, key) {                                        // items may carry .key (preset keys) — persisted instead of the label
+    if (UIS[key]) for (var bi = 0; bi < dd.items.length; bi++) if ((dd.items[bi].key || dd.items[bi].text) === UIS[key]) { dd.selection = bi; break; }
     if (dd.selection) dd.helpTip = dd.selection.text;
-    dd.onChange = function () { if (dd.selection) { dd.helpTip = dd.selection.text; UIS[key] = dd.selection.text; try { MinColor.saveUiState(UIS); } catch (eS) {} } };
+    dd.onChange = function () { if (dd.selection) { dd.helpTip = dd.selection.text; UIS[key] = dd.selection.key || dd.selection.text; try { MinColor.saveUiState(UIS); } catch (eS) {} } };
   }
 
   // ---- flat-icon toolkit: owner-drawn vector glyphs (no image assets, theme-neutral) ----
@@ -133,8 +134,11 @@
     opts = opts || {};
     var b = parent.add("iconbutton", undefined, undefined, { style: "toolbutton" });
     b.textLabel = label; b.hov = false; b.dn = false;
-    if (opts.width) { b.preferredSize = [opts.width, 24]; b.maximumSize = [opts.width, 24]; }
-    else { b.preferredSize.height = 24; b.alignment = ["fill", "center"]; }
+    if (opts.width) { b.preferredSize = [opts.width, 24]; b.maximumSize = [opts.width, 24]; b.fixedW = opts.width; }
+    else {
+      b.preferredSize.height = 24; b.alignment = ["fill", "center"]; b.floorW = 70;
+      try { b.floorW = Math.ceil(b.graphics.measureString(label, ScriptUI.newFont("dialog", opts.primary ? "BOLD" : "REGULAR", 11)).width) + 20; } catch (eM) {}
+    }
     if (opts.tip) b.helpTip = opts.tip;
     b.onDraw = function () {
       var g = this.graphics, s = this.size;
@@ -171,6 +175,27 @@
     b.addEventListener("mouseup",   function () { this.dn = false; try { this.window.update(); } catch (e) {} });
     return b;
   }
+  /* Row fitting. ScriptUI's layout manager spreads a SHRINK across every child with room above
+     its minimumSize (fixed pills reached 0 px at a 200 px dock, verified 2026-08-28), and setting
+     minimumSize makes it double-count that width even at layout(true). So rows are placed by
+     hand after every layout pass: fixed children keep their width, fill children split the rest
+     (down to a text-derived floor, after which the row clips on the right like AE's own panels).
+     Hidden children take no space (Repair no longer reserves a slot while hidden). */
+  var ROWS = [];
+  function hrow(parent) { var r = parent.add("group"); ROWS.push(r); return r; }
+  function isFill(c) { var a = c.alignment; return (a instanceof Array) ? a[0] === "fill" : a === "fill"; }
+  function fitRow(row) {
+    var kids = row.children, sp = row.spacing, vis = [], fills = 0, fixed = 0, i, c;
+    for (i = 0; i < kids.length; i++) { c = kids[i]; if (!c.visible) continue; vis.push(c); if (isFill(c)) fills++; else fixed += (c.fixedW || c.preferredSize[0]); }
+    if (!vis.length) return;
+    var share = fills ? (row.size[0] - fixed - sp * (vis.length - 1)) / fills : 0, x = 0;
+    for (i = 0; i < vis.length; i++) {
+      c = vis[i];
+      var w = isFill(c) ? Math.max(c.floorW || 40, Math.floor(share)) : (c.fixedW || c.preferredSize[0]);
+      c.size = [w, c.size[1]]; c.location = [x, c.location[1]]; x += w + sp;
+    }
+  }
+  function fitRows() { for (var i = 0; i < ROWS.length; i++) try { fitRow(ROWS[i]); } catch (eF) {} }
   function section(title, glyph) {                                  // slim drawn header (icon + bold label + hairline) over an indented body group
     var hdr = win.add("group"); hdr.spacing = 6; hdr.alignChildren = ["left", "center"]; hdr.alignment = ["fill", "top"]; hdr.margins = [0, 6, 0, 0];
     var ic = hdr.add("iconbutton", undefined, undefined, { style: "toolbutton" }); ic.preferredSize = [18, 18];
@@ -183,7 +208,7 @@
   }
 
   // ---- Doctor status line: owner-drawn live lamp (click = re-check; a 5 s heartbeat keeps it live) ----
-  var rowDoc = win.add("group"); rowDoc.alignChildren = ["left", "center"];
+  var rowDoc = hrow(win); rowDoc.alignChildren = ["left", "center"];
   var dot = rowDoc.add("iconbutton", undefined, undefined, { style: "toolbutton" });
   dot.preferredSize = [18, 18]; dot.dotColor = [0.6, 0.6, 0.6, 1];
   dot.helpTip = "minColor Doctor \u2014 click to re-check now (auto-checks every 5 s)";
@@ -221,10 +246,14 @@
           }
         } catch (eAR) {}
       }
+      var pk = d.preset || null;                                     // preset changed (open / migrate / new / closed) -> menus follow
+      if (pk !== currentPreset) { try { repopulateMenus(pk); } catch (eRp) {} }
       var colors = { green: [0.28, 0.82, 0.4, 1], yellow: [0.95, 0.78, 0.18, 1], red: [0.94, 0.32, 0.28, 1], unmanaged: [0.55, 0.55, 0.55, 1] };
       dot.dotColor = colors[d.status] || colors.unmanaged;
       dot.helpTip = "Doctor: " + d.status + " \u2014 " + d.text + "  (click to re-check)";
-      docText.text = d.text; bRepair.visible = (d.status === "yellow" && d.canRepair);
+      docText.text = d.text;
+      var showRepair = (d.status === "yellow" && d.canRepair);
+      if (bRepair.visible !== showRepair) { bRepair.visible = showRepair; fitRow(rowDoc); }
       if ($.global.__minColorHealTicks > 0) { docText.text = d.text + "  · healed ✓"; $.global.__minColorHealTicks--; }
     } catch (e) { docText.text = "status unavailable: " + e; }
     unstick();
@@ -246,7 +275,9 @@
     try { hst.graphics.font = ScriptUI.newFont("dialog", "BOLD", 11); } catch (eHd) {}
     var hln = hdr.add("panel"); hln.alignment = ["fill", "center"]; hln.preferredSize.height = 2; hln.minimumSize.width = 20;
     var r1 = dlg.add("group"); r1.add("statictext", undefined, "Working-space preset:");
-    var dd = r1.add("dropdownlist", undefined, keys); dd.selection = 0;
+    var dd = r1.add("dropdownlist", undefined, []);
+    for (var pi = 0; pi < keys.length; pi++) { var itP = dd.add("item", presets[keys[pi]].label || keys[pi]); itP.key = keys[pi]; }
+    dd.selection = 0;
     bindDD(dd, "setupPreset");
     dlg.add("statictext", undefined, "New Project: seeds a fresh project (asks where to save; sidecar created).");
     dlg.add("statictext", undefined, "Migrate Current: strips footage assignments (harvested as suggestions),");
@@ -262,7 +293,7 @@
     bMig.onClick = function () { choice = "migrate"; dlg.close(1); };
     if (dlg.show() !== 1 || !choice) return;
     if (choice === "new") {
-      guard("New Project", function () { var r = MinColor.newProject(dd.selection.text, { interactive: true }); return "working=" + r.working; });
+      guard("New Project", function () { var r = MinColor.newProject(dd.selection.key, { interactive: true }); return "working=" + r.working; });
     } else {
       guard("Migrate", function () {
         var rep = MinColor.syncReport(); var bad = [];
@@ -271,32 +302,34 @@
                   (bad.length ? "\nAssignments to strip (harvested first):\n" + bad.join("\n") : "\nNo assignments to strip.") +
                   "\n\nSave, back up, patch and reopen now?";
         if (!confirm(msg.substr(0, 3000))) return "cancelled";
-        var r = MinColor.migrateProject(dd.selection.text);
+        var r = MinColor.migrateProject(dd.selection.key);
         var warn = [];
         if (r.effectsFailed && r.effectsFailed.length) warn.push("CST REBUILD FAILED:\n  " + r.effectsFailed.join("\n  "));
+        if (r.effectsRemapped && r.effectsRemapped.length) warn.push("REMAPPED to this preset's spaces (review):\n  " + r.effectsRemapped.join("\n  "));
+        if (r.effectsRemoved && r.effectsRemoved.length) warn.push("REMOVED \u2014 no equivalent in this preset (e.g. looks in SDR):\n  " + r.effectsRemoved.join("\n  "));
         if (r.strippedPipeline && r.strippedPipeline.length) warn.push("REMOVED non-minColor OCIO pipeline effects (competing interpretation + crash risk; project is backed up):\n  " + r.strippedPipeline.join("\n  "));
         if (r.gradesLeft && r.gradesLeft.length) warn.push("OCIO CDL/File grades left in place (file-based \u2014 verify their look under the new working space):\n  " + r.gradesLeft.join("\n  "));
         if (r.orphanLayers && r.orphanLayers.length) warn.push("EMPTY minColor VIEW/RENDER layers (artifacts of an old bug \u2014 safe to delete):\n  " + r.orphanLayers.join("\n  "));
         if (warn.length) alert("minColor \u2014 migrate warnings\n\n" + warn.join("\n\n").substr(0, 3000));
-        return "working=" + r.working + " | pin: " + (r.pinLocus || "?") + " | stripped=" + r.stripped + " rebuilt=" + (r.effectsRebuilt || 0) + " view/render retargeted=" + (r.viewRenderRetargeted || 0) + " residual=" + r.residual + " | backups: " + (r.backups ? r.backups.count + " (" + r.backups.mb + " MB)" : "?");
+        return "working=" + r.working + " | pin: " + (r.pinLocus || "?") + " | stripped=" + r.stripped + " rebuilt=" + (r.effectsRebuilt || 0) + " remapped=" + (r.effectsRemapped ? r.effectsRemapped.length : 0) + " view/render retargeted=" + (r.viewRenderRetargeted || 0) + " residual=" + r.residual + " | backups: " + (r.backups ? r.backups.count + " (" + r.backups.mb + " MB)" : "?");
       });
     }
   };
 
   // ---- Interpret (live) ----
   var pFtg = section("Interpret Footage", GLYPH.film);
-  var rowS = pFtg.add("group"); rowS.add("statictext", undefined, "Selected as:");
+  var rowS = hrow(pFtg); rowS.add("statictext", undefined, "Selected as:");
   var ddSrc = rowS.add("dropdownlist", undefined, lists.inputSpaces); ddSrc.selection = 0;
   ddSrc.alignment = ["fill", "center"]; ddSrc.preferredSize.width = 150;
   var bSel = flatButton(rowS, "Apply", { width: 60 });
   bindDD(ddSrc, "interpretSpace");
   bSel.onClick = function () { runPass("Interpret selected", { mode: "selection" }, ddSrc.selection.text); };
   var pTL = section("Interpret Timeline", GLYPH.bars);
-  var rowA = pTL.add("group");
+  var rowA = hrow(pTL);
   var bComp = flatButton(rowA, "Interpret timeline", { primary: true });
   bComp.helpTip = "Active comp + nested precomps, auto-suggested per item; contained precomps are treated as media";
   var bMatches = flatButton(rowA, "Matches\u2026", { width: 90 });
-  var rowSt = pTL.add("group");
+  var rowSt = hrow(pTL);
   var bStrip = flatButton(rowSt, "Strip foreign OCIO", { outline: true });
   var bStripAll = flatButton(rowSt, "Strip ALL", { width: 90, outline: true });
   bStripAll.helpTip = "DEMOLITION: remove EVERY OCIO effect from this timeline + precomps — foreign AND minColor, file grades included (listed), view/render layers deleted, containment ignored. One undo reverses it.";
@@ -331,7 +364,7 @@
   };
 
   var pCont = section("Interpret Precomp", GLYPH.precomp);
-  var rowC = pCont.add("group"); rowC.add("statictext", undefined, "As:");
+  var rowC = hrow(pCont); rowC.add("statictext", undefined, "As:");
   var ddContain = rowC.add("dropdownlist", undefined, lists.inputSpaces); ddContain.selection = 0;
   ddContain.alignment = ["fill", "center"]; ddContain.preferredSize.width = 120;
   bindDD(ddContain, "containSpace");
@@ -409,7 +442,7 @@
 
   // ---- View ----
   var pAdj = section("Adjustment Layer", GLYPH.adj);
-  var rowV = pAdj.add("group"); rowV.add("statictext", undefined, "View:");
+  var rowV = hrow(pAdj); rowV.add("statictext", undefined, "View:");
   var ddView = rowV.add("dropdownlist", undefined, lists.viewSpaces); ddView.selection = 0;
   ddView.alignment = ["fill", "center"]; ddView.preferredSize.width = 150;
   bindDD(ddView, "viewSpace");
@@ -424,12 +457,12 @@
       return ddView.selection.text + " (" + r.action + (r.disabledOther ? "; render layer switched off" : "") + ")";
     });
   };
-  var renderSpaces = (function () { var seen = {}, out = [], all = lists.viewSpaces.concat(lists.inputSpaces); for (var ri = 0; ri < all.length; ri++) if (!seen[all[ri]]) { seen[all[ri]] = 1; out.push(all[ri]); } return out; })();
-  var rowR = pAdj.add("group"); rowR.add("statictext", undefined, "Render:");
-  var ddRender = rowR.add("dropdownlist", undefined, renderSpaces);
+  var rowR = hrow(pAdj); rowR.add("statictext", undefined, "Render:");
+  var ddRender = rowR.add("dropdownlist", undefined, lists.renderSpaces);   // per preset; view-only spaces never appear here
   ddRender.alignment = ["fill", "center"]; ddRender.preferredSize.width = 150;
   ddRender.selection = 0;
-  for (var rdi = 0; rdi < ddRender.items.length; rdi++) if (ddRender.items[rdi].text === "Gamma 2.4 Encoded Rec.709") { ddRender.selection = rdi; break; }
+  var renderDefault = MinColor.familyDefaults(lists.family).render;        // Linear: Gamma 2.4 Rec.709 · Display (SDR): Rec.1886 — never auto-added
+  for (var rdi = 0; rdi < ddRender.items.length; rdi++) if (ddRender.items[rdi].text === renderDefault) { ddRender.selection = rdi; break; }
   bindDD(ddRender, "renderSpace");
   var bRender = flatButton(rowR, "Add render", { width: 80, primary: true });
   bRender.helpTip = "Add / update the RENDER layer \u2014 renders in output: working \u2192 delivery space";
@@ -445,11 +478,12 @@
   };
 
   var lookNames = (function () { try { return MinColor.configLooks(); } catch (eL) { return []; } })();
-  if (lookNames.length) {
-    var rowL = pAdj.add("group"); rowL.add("statictext", undefined, "Look:");
+  {                                                                  // Look row ALWAYS exists; disabled when the preset has no looks (SDR family) — repopulateMenus toggles it
+    var rowL = hrow(pAdj); rowL.add("statictext", undefined, "Look:");
     var ddLook = rowL.add("dropdownlist", undefined, ["(none)"].concat(lookNames)); ddLook.selection = 0;
     ddLook.alignment = ["fill", "center"]; ddLook.preferredSize.width = 150;
     bindDD(ddLook, "lookChoice");
+    rowL.enabled = lookNames.length > 0;
     var bLook = flatButton(rowL, "Apply", { width: 80 });
     bLook.helpTip = "Set or remove the look on the existing view/render layers (applies before the display transform; spaces untouched)";
     bLook.onClick = function () {
@@ -464,7 +498,7 @@
   }
   var presetNames = (function () { var ks = [], k, m = MinColor.renderPresets(); for (k in m) ks.push(k); ks.sort(); return ks; })();
   if (presetNames.length) {
-    var rowP = pAdj.add("group"); rowP.add("statictext", undefined, "Preset:");
+    var rowP = hrow(pAdj); rowP.add("statictext", undefined, "Preset:");
     var ddPreset = rowP.add("dropdownlist", undefined, presetNames); ddPreset.selection = 0;
     ddPreset.alignment = ["fill", "center"]; ddPreset.preferredSize.width = 150;
     bindDD(ddPreset, "renderPreset");
@@ -481,6 +515,32 @@
     };
   }
 
+  // ---- per-preset menus: dropdowns follow the project's preset (Doctor detects the change) ----
+  function refill(dd, items, key, preferred) {                      // swap items; keep current -> persisted -> family default -> first
+    var cur = dd.selection ? dd.selection.text : null, onCh = dd.onChange; dd.onChange = null;
+    dd.removeAll(); for (var i = 0; i < items.length; i++) dd.add("item", items[i]);
+    var want = [cur, UIS[key], preferred], sel = -1;
+    for (var w = 0; w < want.length && sel < 0; w++) if (want[w]) for (var j = 0; j < dd.items.length; j++) if (dd.items[j].text === want[w]) { sel = j; break; }
+    if (dd.items.length) dd.selection = (sel < 0 ? 0 : sel);
+    if (dd.selection) dd.helpTip = dd.selection.text;
+    dd.onChange = onCh;                                              // UIS is NOT written here: only user changes persist
+  }
+  function repopulateMenus(presetKey) {
+    lists = MinColor.menuLists(presetKey);                           // the Matches dialog reads `lists` lazily, so it follows too
+    var fd = MinColor.familyDefaults(lists.family);
+    refill(ddSrc, lists.inputSpaces, "interpretSpace", null);
+    refill(ddContain, lists.inputSpaces, "containSpace", null);
+    refill(ddView, lists.viewSpaces, "viewSpace", fd.view);
+    refill(ddRender, lists.renderSpaces, "renderSpace", fd.render);
+    if (typeof ddLook !== "undefined" && ddLook) {                   // display-referred presets have no looks: row stays, disabled
+      var lk = []; try { lk = MinColor.configLooks(); } catch (eL2) {}
+      refill(ddLook, ["(none)"].concat(lk), "lookChoice", null);
+      rowL.enabled = lk.length > 0;
+    }
+    currentPreset = presetKey;
+    fitRows();
+  }
+
   // ---- footer ----
   var rowF = win.add("group");
   var status = rowF.add("statictext", undefined, "ready \u00b7 v" + (MinColor.VERSION || "?"), { truncate: "end" }); status.alignment = ["fill", "center"];
@@ -492,7 +552,8 @@
   try { if ($.global.__minColorTask) app.cancelTask($.global.__minColorTask); } catch (eC) {}
   $.global.__minColorTick = function () { try { if (win.visible) refreshDoctor(); } catch (eK) {} };
   try { $.global.__minColorTask = app.scheduleTask("if ($.global.__minColorTick) $.global.__minColorTick();", 5000, true); } catch (eS) {}
-  win.layout.layout(true); win.onResizing = win.onResize = function () { this.layout.resize(); };
+  win.layout.layout(true); fitRows();
+  win.onResizing = win.onResize = function () { this.layout.resize(); fitRows(); };
   if (win instanceof Window) { win.center(); win.show(); }
  } catch (eTop) {   // never modal-block AE: log load errors instead
   try { var elog = new File(Folder.temp.fsName + "/minColor_panel_error.txt"); elog.open("w");

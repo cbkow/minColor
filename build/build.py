@@ -27,7 +27,7 @@ def main():
     open(os.path.join(OUT, "minColor.jsx"), "w", encoding="utf-8").write(inline(panel))
     open(os.path.join(OUT, "README.txt"), "w", encoding="utf-8").write(
         "minColor — install\n"
-        "panel: " + re.search(r'var VERSION = \"([^\"]+)\"', open(os.path.join(SRC, "minColor.jsxinc"), encoding="utf-8").read()).group(1) + "   engine: 1.3.0\n"
+        "panel: " + re.search(r'var VERSION = \"([^\"]+)\"', open(os.path.join(SRC, "minColor.jsxinc"), encoding="utf-8").read()).group(1) + "   engine: 1.3.1 (mac) / 1.3.0 (windows prebuilt)\n"
         "requires: After Effects 2025 or later\n\n"
         "Two copy steps. Nothing to create — if a minColor folder already exists,\n"
         "let your OS merge/replace.\n\n"

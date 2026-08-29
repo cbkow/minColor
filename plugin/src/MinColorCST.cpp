@@ -68,7 +68,21 @@ static PF_Err ParamsSetup(PF_InData *in_data, PF_OutData *out_data) {
 /* ---- sequence data: one flat MinColorArb per instance — the render-time source of truth.
         Written ONLY via PF_Cmd_COMPLETELY_GENERAL (our AEGP sync hands us the parsed name). ---- */
 #include <atomic>
-static std::atomic<uint32_t> g_instanceCounter{1};
+#include <random>
+#include <ctime>
+uint32_t MincMintInstanceId(void) {
+    static std::atomic<uint32_t> ctr{0};
+    if (ctr.load() == 0) {                                           /* lazy per-session seed */
+        uint32_t seed = 0;
+        try { std::random_device rd; seed = rd(); } catch (...) {}
+        seed ^= (uint32_t)time(nullptr) * 2654435761u;
+        if (seed == 0) seed = 0x9E3779B9u;
+        uint32_t z = 0; ctr.compare_exchange_strong(z, seed);
+    }
+    uint32_t id = ctr.fetch_add(1);
+    if (id == 0) id = ctr.fetch_add(1);
+    return id;
+}
 static PF_Err SeqNew(PF_InData *in_data, PF_OutData *out_data, const MincSeqData *initial) {
     AEGP_SuiteHandler suites(in_data->pica_basicP);
     PF_Handle h = suites.HandleSuite1()->host_new_handle(sizeof(MincSeqData));
@@ -78,7 +92,7 @@ static PF_Err SeqNew(PF_InData *in_data, PF_OutData *out_data, const MincSeqData
     if (initial) *sd = *initial;
     else { memset(sd, 0, sizeof(*sd)); sd->arb.magic = MINC_ARB_MAGIC; sd->arb.version = MINC_ARB_VERSION; }
     sd->seqVersion = MINC_SEQ_VERSION;
-    if (!sd->arb.instanceId) sd->arb.instanceId = g_instanceCounter.fetch_add(1);
+    if (!sd->arb.instanceId) sd->arb.instanceId = MincMintInstanceId();
     suites.HandleSuite1()->host_unlock_handle(h);
     out_data->sequence_data = h;
     return PF_Err_NONE;
@@ -116,8 +130,10 @@ static PF_Err SequenceSetdown(PF_InData *in_data, PF_OutData *out_data) {
     return PF_Err_NONE;
 }
 static PF_Err HandleGeneric(PF_InData *in_data, PF_OutData *out_data, PF_ParamDef *params[], void *extra) {
-    const MincSyncPayload *pay = reinterpret_cast<const MincSyncPayload*>(extra);
+    MincSyncPayload *pay = reinterpret_cast<MincSyncPayload*>(extra);
     if (!pay || pay->magic != MINC_ARB_MAGIC) return PF_Err_NONE;   /* not ours */
+    const uint32_t adopt = (pay->payVersion >= 3) ? pay->newId : 0; /* duplicate repair: sender asks us to take a fresh id */
+    if (pay->payVersion >= 3) pay->outId = 0;
     if (params && params[MINC_ARB] && params[MINC_ARB]->u.arb_d.value) {
         /* the blessed transport: we are a PF context with live params — write our own arb
            param and flag CHANGED_VALUE so it round-trips through AE's normal machinery */
@@ -125,7 +141,7 @@ static PF_Err HandleGeneric(PF_InData *in_data, PF_OutData *out_data, PF_ParamDe
         MinColorArb *pa = reinterpret_cast<MinColorArb*>(
             suites.HandleSuite1()->host_lock_handle(params[MINC_ARB]->u.arb_d.value));
         if (pa) {
-            uint32_t keepId = pa->instanceId;
+            uint32_t keepId = adopt ? adopt : pa->instanceId;
             *pa = pay->arb; pa->instanceId = keepId;
             MincDebugLog("generic: param write space='%s' dir=%d id=%u", pa->space, (int)pa->direction, keepId);
         }
@@ -133,18 +149,27 @@ static PF_Err HandleGeneric(PF_InData *in_data, PF_OutData *out_data, PF_ParamDe
         params[MINC_ARB]->uu.change_flags = PF_ChangeFlag_CHANGED_VALUE;
     }
     if (!in_data->sequence_data) {
-        MincSeqData init; memset(&init, 0, sizeof(init)); init.arb = pay->arb;
+        MincSeqData init; memset(&init, 0, sizeof(init)); init.arb = pay->arb; init.arb.instanceId = adopt;   /* 0 -> SeqNew mints */
         if (pay->payVersion >= 2 && pay->configBase[0]) {
             memcpy(init.configBase, pay->configBase, sizeof(init.configBase));
             memcpy(init.passportWorking, pay->passportWorking, sizeof(init.passportWorking));
         }
-        PF_Err e = SeqNew(in_data, out_data, &init); MincDebugLog("generic: seq created space='%s'", pay->arb.space); return e;
+        PF_Err e = SeqNew(in_data, out_data, &init); MincDebugLog("generic: seq created space='%s'", pay->arb.space);
+        if (pay->payVersion >= 3 && out_data->sequence_data) {
+            AEGP_SuiteHandler s2(in_data->pica_basicP);
+            const MincSeqData *ns = reinterpret_cast<const MincSeqData*>(s2.HandleSuite1()->host_lock_handle(out_data->sequence_data));
+            if (ns) pay->outId = ns->arb.instanceId;
+            s2.HandleSuite1()->host_unlock_handle(out_data->sequence_data);
+        }
+        return e;
     }
     AEGP_SuiteHandler suites(in_data->pica_basicP);
     MincSeqData *sd = reinterpret_cast<MincSeqData*>(suites.HandleSuite1()->host_lock_handle(in_data->sequence_data));
     if (sd) {
-        uint32_t keep = sd->arb.instanceId;
+        uint32_t keep = adopt ? adopt : sd->arb.instanceId;
+        if (!keep) keep = MincMintInstanceId();
         sd->arb = pay->arb; sd->arb.instanceId = keep;
+        if (pay->payVersion >= 3) pay->outId = keep;
         if (pay->payVersion >= 2 && pay->configBase[0]) {            /* refresh when healthy — NEVER cleared
                                                                         when the payload arrives passport-less */
             memcpy(sd->configBase, pay->configBase, sizeof(sd->configBase));

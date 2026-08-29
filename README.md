@@ -3,7 +3,7 @@
 An OCIO colour-management pipeline for After Effects: a dockable ScriptUI panel plus a
 compiled plugin engine (macOS and Windows).
 
-Panel 0.7.0 · engine 1.3.0 · requires After Effects 2025+.
+Panel 0.8.0 · engine 1.3.1 (Windows prebuilt 1.3.0) · requires After Effects 2025+.
 
 ## Components
 
@@ -14,9 +14,10 @@ Panel 0.7.0 · engine 1.3.0 · requires After Effects 2025+.
 - **Plugin engine** (`minColor CST`, matchName `MINC CST`) — a SmartFX effect that stores
   only a colourspace name and direction. At render it resolves the project's current OCIO
   config and working space and processes with its own statically linked OCIO 2.5.2.
-- **Config family** — one OCIO config per working-space preset (ACEScg, ACES2065-1,
-  Linear Rec.709, Linear Rec.2020, SDR/sRGB), generated from a vendored master.
-  Filenames are content-hashed; the hash is the config's identity.
+- **Config family** — one OCIO config per working-space preset, generated from a vendored
+  master. Four linear presets (ACEScg, ACES2065-1, Linear Rec.709, Linear Rec.2020) and one
+  SDR preset (`Rec.709 Gamma 2.2` working space). Filenames are content-hashed; the hash is
+  the config's identity.
 
 ## Model
 
@@ -30,6 +31,16 @@ Panel 0.7.0 · engine 1.3.0 · requires After Effects 2025+.
   `minColor: look <name>` (OCIO look, applied before the transform on the same layer) ·
   `minColor: contain <space>` (a precomp's output is media in that space; interpret
   passes do not descend into it).
+- **SDR preset**: the working space is display-referred (`Rec.709 Gamma 2.2` — Rec.709
+  primaries, pure 2.2, what a desktop display does). SDR is SDR: the working values are the
+  deliverable, Rec.709 video is working-native (no interpret effect), sRGB stills get the exact
+  sRGB→2.2 re-encode, linear/log sources get plain inverse-OETF conversions (no tone mapping —
+  that is what the linear presets are for). Only Standard/Raw views exist and there are no
+  looks; tone-mapped view/render targets are absent because on display-referred pixels they
+  would be double transforms. The render layer is explicit (the panel preselects the identity;
+  `Rec.1886`, `sRGB`, `Display P3`, `Rec.2020` are deliberate re-encodes for a specific consumer,
+  and look lifted/darkened in the viewport by construction). `macOS View Only` (P3 primaries,
+  pure 2.2 — AE's macOS viewport surface) is a view target only, never a render target.
 - **Central config store**: projects pin the config beside the plugin in Adobe's shared
   MediaCore folder. Per-project sidecars are produced only by "Package for any AE".
 - **Passport**: each effect's sequence data carries the config's hashed filename and the

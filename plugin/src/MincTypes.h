@@ -54,11 +54,18 @@ typedef struct {                       /* handed to instances via AEGP_EffectCal
                                           same binary; the check is belt-and-braces). */
     uint32_t    magic;                 /* MINC_ARB_MAGIC */
     MinColorArb arb;
-    uint16_t    payVersion;            /* 2 */
+    uint16_t    payVersion;            /* 3: + outId/newId */
     uint16_t    reserved2;
     char        configBase[MINC_CONFIGBASE_LEN];   /* empty when authority is sick at sync time */
     char        passportWorking[MINC_SPACE_LEN];
+    uint32_t    outId;                 /* v3, WRITTEN BY THE RECEIVER: the instance's id after the call */
+    uint32_t    newId;                 /* v3, sender: non-zero = adopt this id (duplicate repair) */
 } MincSyncPayload;
+
+/* Instance ids: unique across sessions (random per-session seed, then monotonic). A process-global
+   counter starting at 1 minted duplicates across sessions; the registry is keyed by id, so two
+   effects sharing one executed each other's transform (found 2026-08-29 on an SDR project). */
+uint32_t MincMintInstanceId(void);
 
 /* Authority.cpp: instance registry — AE clones render-side sequence data from stale snapshots,
    so mutable state flows through this map keyed by the instanceId baked into the data.

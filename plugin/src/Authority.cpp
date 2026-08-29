@@ -3,6 +3,7 @@
 #include "MinColorCST.h"
 #include <mutex>
 #include <map>
+#include <set>
 #include <cstring>
 #include <cstdio>
 #ifndef AE_OS_WIN
@@ -167,7 +168,8 @@ static void SyncFromNames(SPBasicSuite *bp) {
         for (const char *p = snap.configPath; *p; ++p) if (*p == '/' || *p == '\\') b = p + 1;
         if (b[0] && !strstr(b, "..") && strlen(b) < sizeof(passBase)) strncpy(passBase, b, sizeof(passBase) - 1);
     }
-    int seen = 0, wrote = 0, badname = 0;
+    int seen = 0, wrote = 0, badname = 0, reminted = 0;
+    std::set<uint32_t> idsThisWalk;                 /* duplicate ids (cross-session mints) get re-minted here */
     AEGP_ProjectH projH = nullptr;
     if (pjs->AEGP_GetProjectByIndex(0, &projH) != A_Err_NONE || !projH) return;
     AEGP_ItemH itemH = nullptr;
@@ -249,13 +251,27 @@ static void SyncFromNames(SPBasicSuite *bp) {
                                         /* transport: CallGeneric -> seq data + registry (names are the durable store; auto-sync re-derives on project open) */
                                         MincSyncPayload pay; memset(&pay, 0, sizeof(pay));
                                         pay.magic = MINC_ARB_MAGIC; pay.arb = want;
-                                        pay.payVersion = 2;
+                                        pay.payVersion = 3;
                                         if (passBase[0]) {           /* refresh when healthy; empty = receiver keeps its passport */
                                             strncpy(pay.configBase, passBase, sizeof(pay.configBase) - 1);
                                             strncpy(pay.passportWorking, snap.workingSpace, sizeof(pay.passportWorking) - 1);
                                         }
                                         A_Time tg = {0, 100};
-                                        if (efs->AEGP_EffectCallGeneric(g_aegpID, effH, &tg, PF_Cmd_COMPLETELY_GENERAL, &pay) == A_Err_NONE) ++wrote;
+                                        if (efs->AEGP_EffectCallGeneric(g_aegpID, effH, &tg, PF_Cmd_COMPLETELY_GENERAL, &pay) == A_Err_NONE) {
+                                            ++wrote;
+                                            /* registry is keyed by instanceId: an id already claimed in THIS walk belongs to
+                                               another instance (pre-1.3.1 mints restarted at 1 every session) -> re-mint */
+                                            if (pay.outId == 0 || idsThisWalk.count(pay.outId)) {
+                                                uint32_t fresh = MincMintInstanceId();
+                                                while (idsThisWalk.count(fresh)) fresh = MincMintInstanceId();
+                                                uint32_t old = pay.outId;
+                                                pay.newId = fresh; pay.outId = 0;
+                                                if (efs->AEGP_EffectCallGeneric(g_aegpID, effH, &tg, PF_Cmd_COMPLETELY_GENERAL, &pay) == A_Err_NONE && pay.outId == fresh) {
+                                                    ++reminted; AuthLog("sync: re-minted duplicate instance id %u -> %u ('%s')", old, fresh, name8);
+                                                } else AuthLog("sync: re-mint FAILED for id %u ('%s')", old, name8);
+                                            }
+                                            if (pay.outId) idsThisWalk.insert(pay.outId);
+                                        }
                                         efs->AEGP_DisposeEffect(effH);
                                     }
                                 } else if (name8[0]) { ++badname; AuthLog("sync: unparsed name '%s'", name8); }
@@ -272,7 +288,7 @@ static void SyncFromNames(SPBasicSuite *bp) {
         its->AEGP_GetNextProjItem(projH, itemH, &nextH);
         itemH = nextH;
     }
-    AuthLog("sync: instances=%d wrote=%d unparsed=%d", seen, wrote, badname);
+    AuthLog("sync: instances=%d wrote=%d unparsed=%d reminted=%d", seen, wrote, badname, reminted);
 }
 
 static A_Err CommandHook(AEGP_GlobalRefcon, AEGP_CommandRefcon, AEGP_Command command,

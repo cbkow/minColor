@@ -27,7 +27,7 @@
 #define MINC_CATEGORY      "minColor"
 #define MINC_MAJOR_VERSION 1
 #define MINC_MINOR_VERSION 3
-#define MINC_BUG_VERSION   0
+#define MINC_BUG_VERSION   1
 #define MINC_STAGE_VERSION PF_Stage_DEVELOP
 #define MINC_BUILD_VERSION 1
 

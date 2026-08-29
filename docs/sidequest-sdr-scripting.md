@@ -1,5 +1,9 @@
 # Sidequest: Scripting-Driven, Pure-SDR OCIO Flow (no compiled plugin)
 
+> **Superseded (panel 0.8.0, 2026-08-29).** The SDR idea shipped as the `SDR` preset (`sdr22`):
+> a display-referred `Rec.709 Gamma 2.2` working space, pure Standard bridge, curated menus.
+> See README → Model → *SDR preset*. This note is kept as the probe record that led there.
+
 *Chris's note, folded in 2026-08-23. Original text first; the addendum at the end maps each point to
 what the probes verified (see `probes/RESULTS.md`).*
 

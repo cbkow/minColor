@@ -14,7 +14,7 @@
 #
 # See ocio-license.txt for details.
 
-ocio_profile_version: 2.5
+ocio_profile_version: 2.4
 
 search_path: "icc:luts:filmic"
 strictparsing: true
@@ -23,7 +23,7 @@ luma: [0.2126, 0.7152, 0.0722]
 description: RRT version ut33
 
 file_rules:
-  - !<Rule> {name: Default, colorspace: ACES2065-1}
+  - !<Rule> {name: Default, colorspace: Rec.709 Gamma 2.2}
 
 roles:
   reference: ACES2065-1
@@ -54,98 +54,120 @@ roles:
   # Specified by OCIO, not used in Blender
   color_timing: AgX Log
   compositing_log: AgX Log
-  default: Linear Rec.709
+  default: Rec.709 Gamma 2.2
   matte_paint: Linear Rec.709
   texture_paint: Linear Rec.709
 
 displays:
   sRGB:
     - !<View> {name: Standard, view_transform: Standard, display_colorspace: sRGB}
-    - !<View> {name: Standard 1886 Sim, view_transform: Standard 1886 Sim, display_colorspace: sRGB}
-    - !<View> {name: ACES 1.3, view_transform: ACES 1.3 Rec.1886, display_colorspace: sRGB}
-    - !<View> {name: ACES 2.0, view_transform: ACES 2.0 Rec.1886, display_colorspace: sRGB}
-    - !<View> {name: Khronos PBR Neutral, view_transform: Khronos PBR Neutral sRGB, display_colorspace: sRGB}
-    - !<View> {name: AgX, view_transform: AgX Base Rec.1886, display_colorspace: sRGB}
-    - !<View> {name: Filmic, view_transform: Filmic sRGB, display_colorspace: sRGB}
-    - !<View> {name: Filmic Log, colorspace: Filmic Log}
-    - !<View> {name: False Color, view_transform: AgX False Color Rec.709, display_colorspace: sRGB}
-    - !<View> {name: Raw, colorspace: Non-Color}
-  Display P3:
-    - !<View> {name: Standard, view_transform: Standard, display_colorspace: Display P3}
-    - !<View> {name: Standard 1886 Sim, view_transform: Standard 1886 Sim, display_colorspace: Display P3}
-    - !<View> {name: ACES 1.3, view_transform: ACES 1.3 Display P3, display_colorspace: Display P3}
-    - !<View> {name: ACES 2.0, view_transform: ACES 2.0 Display P3, display_colorspace: Display P3}
-    - !<View> {name: AgX, view_transform: AgX Base Display P3, display_colorspace: Display P3}
-    - !<View> {name: False Color, view_transform: AgX False Color Rec.709, display_colorspace: Display P3}
     - !<View> {name: Raw, colorspace: Non-Color}
   Rec.1886:
     - !<View> {name: Standard, view_transform: Standard, display_colorspace: Rec.1886}
-    - !<View> {name: Standard 1886 Sim, view_transform: Standard 1886 Sim, display_colorspace: Rec.1886}
-    - !<View> {name: ACES 1.3, view_transform: ACES 1.3 Rec.1886, display_colorspace: Rec.1886}
-    - !<View> {name: ACES 2.0, view_transform: ACES 2.0 Rec.1886, display_colorspace: Rec.1886}
-    - !<View> {name: AgX, view_transform: AgX Base Rec.1886, display_colorspace: Rec.1886}
-    - !<View> {name: False Color, view_transform: AgX False Color Rec.709, display_colorspace: Rec.1886}
+    - !<View> {name: Raw, colorspace: Non-Color}
+  Display P3:
+    - !<View> {name: Standard, view_transform: Standard, display_colorspace: Display P3}
     - !<View> {name: Raw, colorspace: Non-Color}
   Rec.2020:
     - !<View> {name: Standard, view_transform: Standard, display_colorspace: Rec.2020}
-    - !<View> {name: Standard 1886 Sim, view_transform: Standard 1886 Sim, display_colorspace: Rec.2020}
-    - !<View> {name: ACES 1.3, view_transform: ACES 1.3 Display P3, display_colorspace: Rec.2020}
-    - !<View> {name: ACES 2.0, view_transform: ACES 2.0 Display P3, display_colorspace: Rec.2020}
-    - !<View> {name: AgX, view_transform: AgX Base Rec.2020, display_colorspace: Rec.2020}
-    - !<View> {name: False Color, view_transform: AgX False Color Rec.709, display_colorspace: Rec.2020}
     - !<View> {name: Raw, colorspace: Non-Color}
-  Rec.2100-PQ:
-    - !<View> {name: Standard, view_transform: Standard, display_colorspace: Rec.2100-PQ}
-    - !<View> {name: ACES 1.3 - HDR 1000 nits, view_transform: ACES 1.1 Rec.2100-PQ - HDR 1000 nits, display_colorspace: Rec.2100-PQ}
-    - !<View> {name: ACES 1.3 - HDR 2000 nits, view_transform: ACES 1.1 Rec.2100-PQ - HDR 2000 nits, display_colorspace: Rec.2100-PQ}
-    - !<View> {name: ACES 1.3 - HDR 4000 nits, view_transform: ACES 1.1 Rec.2100-PQ - HDR 4000 nits, display_colorspace: Rec.2100-PQ}
-    - !<View> {name: ACES 1.3 - SDR, view_transform: ACES 1.3 Rec.1886, display_colorspace: Rec.2100-PQ}
-    - !<View> {name: ACES 2.0 - HDR 500 nits, view_transform: ACES 2.0 Rec.2100-PQ - HDR 500 nits, display_colorspace: Rec.2100-PQ}
-    - !<View> {name: ACES 2.0 - HDR 1000 nits, view_transform: ACES 2.0 Rec.2100-PQ - HDR 1000 nits, display_colorspace: Rec.2100-PQ}
-    - !<View> {name: ACES 2.0 - HDR 2000 nits, view_transform: ACES 2.0 Rec.2100-PQ - HDR 2000 nits, display_colorspace: Rec.2100-PQ}
-    - !<View> {name: ACES 2.0 - HDR 4000 nits, view_transform: ACES 2.0 Rec.2100-PQ - HDR 4000 nits, display_colorspace: Rec.2100-PQ}
-    - !<View> {name: ACES 2.0 - SDR, view_transform: ACES 2.0 Rec.1886, display_colorspace: Rec.2100-PQ}
-    - !<View> {name: AgX - HDR 1000 nits, view_transform: AgX Rec.2100-HLG - HDR 1000 nits (P3 D65), display_colorspace: Rec.2100-PQ}
-    - !<View> {name: AgX - SDR, view_transform: AgX Base Display P3, display_colorspace: Rec.2100-PQ}
-    - !<View> {name: False Color, view_transform: AgX False Color Rec.709, display_colorspace: Rec.2100-PQ}
-    - !<View> {name: Raw, colorspace: Non-Color}
-  Rec.2100-HLG:
-    - !<View> {name: Standard, view_transform: Standard, display_colorspace: Rec.2100-HLG}
-    - !<View> {name: ACES 1.3 - HDR 1000 nits, view_transform: ACES 1.1 Rec.2100-PQ - HDR 1000 nits, display_colorspace: Rec.2100-HLG}
-    - !<View> {name: ACES 1.3 - SDR, view_transform: ACES 1.3 Rec.1886, display_colorspace: Rec.2100-HLG}
-    - !<View> {name: ACES 2.0 - HDR 1000 nits, view_transform: ACES 2.0 Rec.2100-PQ - HDR 1000 nits, display_colorspace: Rec.2100-HLG}
-    - !<View> {name: ACES 2.0 - SDR, view_transform: ACES 2.0 Rec.1886, display_colorspace: Rec.2100-HLG}
-    - !<View> {name: AgX - HDR 1000 nits, view_transform: AgX Rec.2100-HLG - HDR 1000 nits (P3 D65), display_colorspace: Rec.2100-HLG}
-    - !<View> {name: AgX - SDR, view_transform: AgX Base Display P3, display_colorspace: Rec.2100-HLG}
-    - !<View> {name: False Color, view_transform: AgX False Color Rec.709, display_colorspace: Rec.2100-HLG}
-    - !<View> {name: Raw, colorspace: Non-Color}
-  Linear sRGB EDR:
-    - !<View> {name: Standard (No Tonemap), view_transform: Standard, display_colorspace: Linear sRGB EDR}
-    - !<View> {name: ACES 2.0 - HDR 500 nits, view_transform: ACES 2.0 Rec.2100-PQ - HDR 500 nits, display_colorspace: Linear sRGB EDR}
-    - !<View> {name: ACES 2.0 - HDR 1000 nits, view_transform: ACES 2.0 Rec.2100-PQ - HDR 1000 nits, display_colorspace: Linear sRGB EDR}
-    - !<View> {name: ACES 2.0 - HDR 2000 nits, view_transform: ACES 2.0 Rec.2100-PQ - HDR 2000 nits, display_colorspace: Linear sRGB EDR}
-    - !<View> {name: ACES 2.0 - HDR 4000 nits, view_transform: ACES 2.0 Rec.2100-PQ - HDR 4000 nits, display_colorspace: Linear sRGB EDR}
-    - !<View> {name: Raw, colorspace: Non-Color}
-  Linear P3 EDR:
-    - !<View> {name: Standard (No Tonemap), view_transform: Standard, display_colorspace: Linear P3 EDR}
-    - !<View> {name: ACES 2.0 - HDR 500 nits, view_transform: ACES 2.0 Rec.2100-PQ - HDR 500 nits, display_colorspace: Linear P3 EDR}
-    - !<View> {name: ACES 2.0 - HDR 1000 nits, view_transform: ACES 2.0 Rec.2100-PQ - HDR 1000 nits, display_colorspace: Linear P3 EDR}
-    - !<View> {name: ACES 2.0 - HDR 2000 nits, view_transform: ACES 2.0 Rec.2100-PQ - HDR 2000 nits, display_colorspace: Linear P3 EDR}
-    - !<View> {name: ACES 2.0 - HDR 4000 nits, view_transform: ACES 2.0 Rec.2100-PQ - HDR 4000 nits, display_colorspace: Linear P3 EDR}
+  Rec.709 Gamma 2.2:
+    - !<View> {name: Standard, view_transform: Standard, display_colorspace: Rec.709 Gamma 2.2}
     - !<View> {name: Raw, colorspace: Non-Color}
   macOS View Only:
     - !<View> {name: Standard, view_transform: Standard, display_colorspace: macOS View Only}
-    - !<View> {name: Standard 1886 Sim, view_transform: Standard 1886 Sim, display_colorspace: macOS View Only}
-    - !<View> {name: ACES 1.3, view_transform: ACES 1.3 Display P3, display_colorspace: macOS View Only}
-    - !<View> {name: ACES 2.0, view_transform: ACES 2.0 Display P3, display_colorspace: macOS View Only}
-    - !<View> {name: AgX, view_transform: AgX Base Display P3, display_colorspace: macOS View Only}
-    - !<View> {name: False Color, view_transform: AgX False Color Rec.709, display_colorspace: macOS View Only}
     - !<View> {name: Raw, colorspace: Non-Color}
-active_displays: [sRGB, Display P3, Rec.1886, Rec.2020, Rec.2100-PQ, Rec.2100-HLG, Linear sRGB EDR, Linear P3 EDR, macOS View Only]
-active_views: [Standard, Standard (No Tonemap), ACES 1.3, ACES 1.3 - HDR 1000 nits, ACES 1.3 - HDR 2000 nits, ACES 1.3 - HDR 4000 nits, ACES 1.3 - SDR, ACES 2.0, ACES 2.0 - HDR 500 nits, ACES 2.0 - HDR 1000 nits, ACES 2.0 - HDR 2000 nits, ACES 2.0 - HDR 4000 nits, ACES 2.0 - SDR, Khronos PBR Neutral, AgX, AgX - HDR 1000 nits, AgX - SDR, Filmic, Filmic Log, False Color, Raw, Standard 1886 Sim]
-inactive_colorspaces: [Luminance Compensation Rec.2020]
+active_displays: [sRGB, Rec.1886, Display P3, Rec.2020, Rec.709 Gamma 2.2, macOS View Only]
+active_views: [Standard, Raw]
+inactive_colorspaces: [Linear CIE-XYZ D65, Linear CIE-XYZ E, Luminance Compensation Rec.2020, AgX Log, Filmic Log, Linear FilmLight E-Gamut, Camera Rec.709, Gamma 1.8 Encoded Rec.709, Gamma 2.2 Encoded Rec.709, Gamma 2.4 Encoded Rec.709, sRGB Encoded P3-D65, Gamma 2.2 Encoded AdobeRGB, sRGB Encoded AP1, Gamma 2.2 Encoded AP1]
 
 display_colorspaces:
+  - !<ColorSpace>
+    name: sRGB
+    aliases: [srgb_rec709_display, srgb_rec709_scene, sRGB I-D65, srgb_display, sRGB - Display, Utility - sRGB - Texture, sRGB - Texture, srgb_tx, srgb_texture, Input - Generic - sRGB - Texture, "sRGB Display: 2.2 Gamma - Rec.709"]
+    family: Display
+    equalitygroup: ""
+    bitdepth: 32f
+    description: |
+      sRGB IEC 61966-2-1 piecewise encoding, Rec.709 primaries
+      Self-contained (XYZ-D65 matrix + curve): no nested reference crossing, so the SDR
+      family's default_view_transform bridge applies exactly once.
+    isdata: false
+    encoding: sdr-video
+    from_display_reference: !<GroupTransform>
+      children:
+        - !<MatrixTransform> {matrix: [3.2409699, -1.5373832, -0.4986108, 0, -0.9692436, 1.8759675, 0.0415551, 0, 0.0556301, -0.2039770, 1.0569715, 0, 0, 0, 0, 1]}
+        - !<ExponentWithLinearTransform> {gamma: 2.4, offset: 0.055, direction: inverse}
+
+  - !<ColorSpace>
+    name: Rec.1886
+    aliases: [g24_rec709_display, BT.1886, BT.1886 2.4, BT.1886 EOTF, BT.1886 I-D65, Rec.1886 / Rec.709 Video - Display, rec1886_rec709_display, rec1886_rec709_video_display, Rec.1886 Rec.709 - Display, "Rec1886: 2.4 Gamma - Rec.709"]
+    family: Display
+    equalitygroup: ""
+    bitdepth: 32f
+    description: |
+      BT.1886 (pure 2.4 EOTF), Rec.709 primaries — broadcast video
+      Self-contained (XYZ-D65 matrix + curve): no nested reference crossing, so the SDR
+      family's default_view_transform bridge applies exactly once.
+    isdata: false
+    encoding: sdr-video
+    from_display_reference: !<GroupTransform>
+      children:
+        - !<MatrixTransform> {matrix: [3.2409699, -1.5373832, -0.4986108, 0, -0.9692436, 1.8759675, 0.0415551, 0, 0.0556301, -0.2039770, 1.0569715, 0, 0, 0, 0, 1]}
+        - !<ExponentTransform> {value: 2.4, direction: inverse}
+
+  - !<ColorSpace>
+    name: Display P3
+    aliases: [srgb_p3d65_display, Display P3 2.2, Display P3 I-D65, P3-D65 - Display, p3_d65_display, p3d65_display, AppleP3 sRGB OETF]
+    family: Display
+    equalitygroup: ""
+    bitdepth: 32f
+    description: |
+      Apple Display P3: P3-D65 primaries, sRGB piecewise curve
+      Self-contained (XYZ-D65 matrix + curve): no nested reference crossing, so the SDR
+      family's default_view_transform bridge applies exactly once.
+    isdata: false
+    encoding: sdr-video
+    from_display_reference: !<GroupTransform>
+      children:
+        - !<MatrixTransform> {matrix: [2.4934969, -0.9313836, -0.4027108, 0, -0.8294890, 1.7626641, 0.0236247, 0, 0.0358458, -0.0761724, 0.9568845, 0, 0, 0, 0, 1]}
+        - !<ExponentWithLinearTransform> {gamma: 2.4, offset: 0.055, direction: inverse}
+
+  - !<ColorSpace>
+    name: Rec.2020
+    aliases: [g24_rec2020_display, blender:g24_rec2020_display, BT.2020, BT.2020 2.4, BT.2020 I-D65, Rec.1886 / Rec.2020 Video - Display, rec1886_rec2020_display, rec1886_rec2020_video_display, Rec.1886 Rec.2020 - Display, "Rec1886: 2.4 Gamma - Rec.2020"]
+    family: Display
+    equalitygroup: ""
+    bitdepth: 32f
+    description: |
+      BT.2020 primaries, pure 2.4 EOTF
+      Self-contained (XYZ-D65 matrix + curve): no nested reference crossing, so the SDR
+      family's default_view_transform bridge applies exactly once.
+    isdata: false
+    encoding: sdr-video
+    from_display_reference: !<GroupTransform>
+      children:
+        - !<MatrixTransform> {matrix: [1.7166512, -0.3556708, -0.2533663, 0, -0.6666844, 1.6164812, 0.0157685, 0, 0.0176399, -0.0427706, 0.9421031, 0, 0, 0, 0, 1]}
+        - !<ExponentTransform> {value: 2.4, direction: inverse}
+
+  - !<ColorSpace>
+    name: Rec.709 Gamma 2.2
+    aliases: [g22_rec709_display, Gamma 2.2 Rec.709 - Display]
+    family: Display
+    equalitygroup: ""
+    bitdepth: 32f
+    description: |
+      Rec.709 primaries, pure 2.2 EOTF — the SDR family's WORKING space (what a desktop display does;
+      a naked render carries these values under a BT.709 tag).
+      Self-contained (XYZ-D65 matrix + curve): no nested reference crossing, so the SDR
+      family's default_view_transform bridge applies exactly once.
+    isdata: false
+    encoding: sdr-video
+    from_display_reference: !<GroupTransform>
+      children:
+        - !<MatrixTransform> {matrix: [3.2409699, -1.5373832, -0.4986108, 0, -0.9692436, 1.8759675, 0.0415551, 0, 0.0556301, -0.2039770, 1.0569715, 0, 0, 0, 0, 1]}
+        - !<ExponentTransform> {value: 2.2, direction: inverse}
+
   - !<ColorSpace>
     name: macOS View Only
     aliases: [UnionMacOS]
@@ -153,13 +175,14 @@ display_colorspaces:
     equalitygroup: ""
     bitdepth: 32f
     description: |
-      Display P3 primaries with pure 2.2 EOTF — matches Apple's effective display pipeline when the
-      viewport surface is P3-tagged with EDR off (AE macOS viewport). VIEW ONLY: never a render target.
+      P3-D65 primaries, pure 2.2 EOTF — AE's macOS viewport surface (P3-tagged, EDR off). VIEW ONLY.
+      Self-contained (XYZ-D65 matrix + curve): no nested reference crossing, so the SDR
+      family's default_view_transform bridge applies exactly once.
     isdata: false
     encoding: sdr-video
     from_display_reference: !<GroupTransform>
       children:
-        - !<ColorSpaceTransform> {src: cie_xyz_d65_interchange, dst: Linear DCI-P3 D65}
+        - !<MatrixTransform> {matrix: [2.4934969, -0.9313836, -0.4027108, 0, -0.8294890, 1.7626641, 0.0236247, 0, 0.0358458, -0.0761724, 0.9568845, 0, 0, 0, 0, 1]}
         - !<ExponentTransform> {value: 2.2, direction: inverse}
 
   - !<ColorSpace>
@@ -172,262 +195,14 @@ display_colorspaces:
       1931 CIE XYZ with adapted illuminant D65 white point
     isdata: false
     encoding: display-linear
-    interop_id: lin_ciexyzd65_scene
 
-  - !<ColorSpace>
-    name: sRGB
-    aliases: [srgb_rec709_display, srgb_rec709_scene, sRGB I-D65, srgb_display, sRGB - Display, Utility - sRGB - Texture, sRGB - Texture, srgb_tx, srgb_texture, Input - Generic - sRGB - Texture, "sRGB Display: 2.2 Gamma - Rec.709"]
-    family: Display
-    equalitygroup:
-    bitdepth: 32f
-    description: |
-      sRGB IEC 61966-2-1 compound (piece-wise) encoding
-    isdata: false
-    interop_id: srgb_rec709_display
-    from_display_reference: !<GroupTransform>
-      children:
-        - !<ColorSpaceTransform> {src: cie_xyz_d65_interchange, dst: Linear Rec.709}
-        - !<ExponentWithLinearTransform> {gamma: 2.4, offset: 0.055, direction: inverse}
-
-  - !<ColorSpace>
-    name: Display P3
-    aliases: [srgb_p3d65_display, Display P3 2.2, Display P3 I-D65, P3-D65 - Display, p3_d65_display, p3d65_display, AppleP3 sRGB OETF]
-    family: Display
-    equalitygroup:
-    bitdepth: 32f
-    description: |
-      Apple's Display P3 with sRGB compound (piece-wise) encoding transfer function, common on Mac devices
-    isdata: false
-    interop_id: srgb_p3d65_display
-    interchange:
-      icc_profile_name: srgb_p3d65_display.icc
-    from_display_reference: !<GroupTransform>
-      children:
-        - !<ColorSpaceTransform> {src: cie_xyz_d65_interchange, dst: Linear DCI-P3 D65}
-        - !<ExponentWithLinearTransform> {gamma: 2.4, offset: 0.055, direction: inverse}
-
-  - !<ColorSpace>
-    name: Rec.1886
-    aliases: [g24_rec709_display, BT.1886, BT.1886 2.4, BT.1886 EOTF, BT.1886 I-D65, Rec.1886 / Rec.709 Video - Display, rec1886_rec709_display, rec1886_rec709_video_display, Rec.1886 Rec.709 - Display, "Rec1886: 2.4 Gamma - Rec.709"]
-    family: Display
-    equalitygroup:
-    bitdepth: 32f
-    description: |
-      BT.1886 2.4 Exponent EOTF Display, commonly used for TVs
-    isdata: false
-    interop_id: g24_rec709_display
-    interchange:
-      icc_profile_name: g24_rec709_display.icc
-    from_display_reference: !<GroupTransform>
-      children:
-        - !<ColorSpaceTransform> {src: cie_xyz_d65_interchange, dst: Linear Rec.709}
-        - !<ExponentTransform> {value: 2.4, direction: inverse}
-
-  - !<ColorSpace>
-    name: Rec.2020
-    aliases: [g24_rec2020_display, blender:g24_rec2020_display, BT.2020, BT.2020 2.4, BT.2020 I-D65, Rec.1886 / Rec.2020 Video - Display, rec1886_rec2020_display, rec1886_rec2020_video_display, Rec.1886 Rec.2020 - Display, "Rec1886: 2.4 Gamma - Rec.2020"]
-    family: Display
-    equalitygroup:
-    bitdepth: 32f
-    description: |
-      BT.2020 2.4 Exponent EOTF Display
-    isdata: false
-    interop_id: blender:g24_rec2020_display
-    interchange:
-      icc_profile_name: g24_rec2020_display.icc
-    from_display_reference: !<GroupTransform>
-      children:
-        - !<ColorSpaceTransform> {src: cie_xyz_d65_interchange, dst: Linear Rec.2020}
-        - !<ExponentTransform> {value: 2.4, direction: inverse}
-
-  - !<ColorSpace>
-    name: Rec.2100-PQ
-    aliases: [pq_rec2020_display, rec2100_pq_display, Rec.2100-PQ - Display]
-    family: Display
-    equalitygroup: ""
-    bitdepth: 32f
-    description: Rec.2100-PQ 10000 nits peak display with reference white at 100 nits
-    isdata: false
-    encoding: hdr-video
-    allocation: uniform
-    interop_id: pq_rec2020_display
-    from_display_reference: !<GroupTransform>
-      children:
-        - !<BuiltinTransform> {style: DISPLAY - CIE-XYZ-D65_to_REC.2100-PQ}
-
-  - !<ColorSpace>
-    name: Rec.2100-HLG
-    aliases: [hlg_rec2020_display, rec2100_hlg_display, Rec.2100-HLG - Display]
-    family: Display
-    equalitygroup: ""
-    bitdepth: 32f
-    description: Rec.2100-HLG 1000 nits peak display with reference white at 100 nits
-    isdata: false
-    encoding: hdr-video
-    allocation: uniform
-    interop_id: hlg_rec2020_display
-    from_display_reference: !<GroupTransform>
-      children:
-        - !<BuiltinTransform> {style: DISPLAY - CIE-XYZ-D65_to_REC.2100-HLG-1000nit}
-
-  - !<ColorSpace>
-    name: Linear sRGB EDR
-    aliases: [lin_srgb_edr_display, lin_rec709_edr_display]
-    family: Display
-    equalitygroup: ""
-    bitdepth: 32f
-    description: |
-      Linear Rec.709/sRGB primaries for macOS EDR display.
-      No EOTF — linear-light output where 1.0 = 100 nit SDR white.
-      HDR views produce values > 1.0 (e.g. HDR 1000 nit peaks at ~10.0).
-    isdata: false
-    encoding: display-linear
-    allocation: uniform
-    interop_id: lin_rec709_edr_display
-    from_display_reference: !<GroupTransform>
-      children:
-        - !<ColorSpaceTransform> {src: cie_xyz_d65_interchange, dst: Linear Rec.709}
-
-  - !<ColorSpace>
-    name: Linear P3 EDR
-    aliases: [lin_p3d65_edr_display]
-    family: Display
-    equalitygroup: ""
-    bitdepth: 32f
-    description: |
-      Linear P3-D65 primaries for macOS EDR display.
-      No EOTF — linear-light output where 1.0 = 100 nit SDR white.
-      HDR views produce values > 1.0 (e.g. HDR 1000 nit peaks at ~10.0).
-    isdata: false
-    encoding: display-linear
-    allocation: uniform
-    interop_id: lin_p3d65_edr_display
-    from_display_reference: !<GroupTransform>
-      children:
-        - !<ColorSpaceTransform> {src: cie_xyz_d65_interchange, dst: Linear DCI-P3 D65}
-
-  - !<ColorSpace>
-    name: Filmic sRGB
-    family: View Inverse
-    description: |
-      Filmic view transform for sRGB.
-      May be used to convert backplates or matte paintings to the working space.
-    interop_id: srgb_rec709_display
-    from_display_reference: !<GroupTransform>
-      children:
-        - !<ColorSpaceTransform> {src: cie_xyz_d65_interchange, dst: Filmic Log}
-        - !<FileTransform> {src: filmic_to_0-70_1-03.spi1d, interpolation: linear}
-
-  - !<ColorSpace>
-    name: AgX Base sRGB
-    family: View Inverse
-    description: |
-      AgX view transform for sRGB.
-      May be used to convert backplates or matte paintings to the working space.
-    interop_id: srgb_rec709_display
-    from_display_reference: !<GroupTransform>
-      children:
-        - !<ColorSpaceTransform> {src: cie_xyz_d65_interchange, dst: Linear FilmLight E-Gamut}
-        - !<AllocationTransform> {allocation: lg2, vars: [-12.47393, 12.5260688117]}
-        - !<FileTransform> {src: AgX_Base_sRGB.cube, interpolation: tetrahedral}
-        - !<ColorSpaceTransform> {src: Rec.1886, dst: sRGB}
-
-  - !<ColorSpace>
-    name: ACES 1.3 sRGB
-    family: View Inverse
-    equalitygroup:
-    bitdepth: 32f
-    description: |
-      ACES 1.3 view transform for sRGB.
-      May be used to convert backplates or matte paintings to the working space.
-    encoding: sdr-video
-    isdata: false
-    interop_id: srgb_rec709_display
-    from_display_reference: !<GroupTransform>
-      children:
-        - !<ColorSpaceTransform> {src: cie_xyz_d65_interchange, dst: ACES2065-1}
-        - !<BuiltinTransform> {style: ACES-OUTPUT - ACES2065-1_to_CIE-XYZ-D65 - SDR-VIDEO_1.0}
-        - !<BuiltinTransform> {style: DISPLAY - CIE-XYZ-D65_to_sRGB}
-
-  - !<ColorSpace>
-    name: ACES 2.0 sRGB
-    family: View Inverse
-    equalitygroup:
-    bitdepth: 32f
-    description: |
-      ACES 2.0 view transform for sRGB.
-      May be used to convert backplates or matte paintings to the working space.
-    encoding: sdr-video
-    isdata: false
-    interop_id: srgb_rec709_display
-    from_display_reference: !<GroupTransform>
-      children:
-        - !<ColorSpaceTransform> {src: cie_xyz_d65_interchange, dst: ACES2065-1}
-        - !<BuiltinTransform> {style: ACES-OUTPUT - ACES2065-1_to_CIE-XYZ-D65 - SDR-100nit-REC709_2.0}
-        - !<BuiltinTransform> {style: DISPLAY - CIE-XYZ-D65_to_sRGB}
-
-  - !<ColorSpace>
-    name: Khronos PBR Neutral sRGB
-    family: View Inverse
-    equalitygroup:
-    bitdepth: 32f
-    description: |
-      Khronos PBR Neutral view transform for sRGB.
-      May be used to convert backplates or matte paintings to the working space.
-    encoding: sdr-video
-    isdata: false
-    interop_id: srgb_rec709_display
-    from_display_reference: !<GroupTransform>
-      children:
-        - !<ColorSpaceTransform> {src: cie_xyz_d65_interchange, dst: Linear Rec.709}
-        - !<AllocationTransform> {allocation: lg2, vars: [-9, 10]}
-        - !<FileTransform> {src: pbrNeutral.cube, interpolation: tetrahedral}
-        - !<ColorSpaceTransform> {src: Linear Rec.709, dst: sRGB}
-
-default_view_transform: Standard
+default_view_transform: AgX Base Rec.1886
 
 view_transforms:
-  - !<ViewTransform>
-    name: Standard 1886 Sim
-    description: |
-      Standard display transform preceded by a BT.1886 (2.4) encode + sRGB decode in linear Rec.709 —
-      simulates broadcast-authored content played through an sRGB-decoding pipeline. Expressed as a
-      ViewTransform (not a look) because AE's native OCIO Display Transform effect silently passes
-      through on views that reference looks (verified 2026-08-26).
-    from_scene_reference: !<GroupTransform>
-      children:
-        - !<ColorSpaceTransform> {src: ACES2065-1, dst: Linear Rec.709}
-        - !<ExponentTransform> {value: 2.4, direction: inverse}
-        - !<ExponentWithLinearTransform> {gamma: 2.4, offset: 0.055}
-        - !<ColorSpaceTransform> {src: Linear Rec.709, dst: ACES2065-1}
-        - !<BuiltinTransform> {style: UTILITY - ACES-AP0_to_CIE-XYZ-D65_BFD}
   - !<ViewTransform>
     name: Standard
     description: Apply only the display's standard transform without additional mappings
     from_scene_reference: !<BuiltinTransform> {style: UTILITY - ACES-AP0_to_CIE-XYZ-D65_BFD}
-
-  - !<ViewTransform>
-    name: Filmic sRGB
-    family: Filmic
-    description: |
-      sRGB display space with Filmic view transform
-    from_scene_reference: !<GroupTransform>
-      children:
-        - !<ColorSpaceTransform> {src: ACES2065-1, dst: Filmic Log}
-        - !<FileTransform> {src: filmic_to_0-70_1-03.spi1d, interpolation: linear}
-        - !<ColorSpaceTransform> {src: sRGB, dst: cie_xyz_d65_interchange}
-
-  - !<ViewTransform>
-    name: AgX Base Rec.2020
-    family: AgX
-    description: |
-      AgX Base Image Encoding for display with Gamma 2.4 and Rec.2020 gamut
-    from_scene_reference: !<GroupTransform>
-      children:
-        - !<ColorSpaceTransform> {src: ACES2065-1, dst: Linear FilmLight E-Gamut}
-        - !<AllocationTransform> {allocation: lg2, vars: [-12.47393, 12.5260688117]}
-        - !<FileTransform> {src: AgX_Base_Rec2020.cube, interpolation: tetrahedral}
-        - !<ColorSpaceTransform> {src: Rec.2020, dst: cie_xyz_d65_interchange}
 
   - !<ViewTransform>
     name: AgX Base Rec.1886
@@ -439,114 +214,8 @@ view_transforms:
         - !<ColorSpaceTransform> {src: ACES2065-1, dst: Linear FilmLight E-Gamut}
         - !<AllocationTransform> {allocation: lg2, vars: [-12.47393, 12.5260688117]}
         - !<FileTransform> {src: AgX_Base_sRGB.cube, interpolation: tetrahedral}
-        - !<ColorSpaceTransform> {src: Rec.1886, dst: cie_xyz_d65_interchange}
-
-  - !<ViewTransform>
-    name: AgX Base Display P3
-    family: AgX
-    description: |
-      AgX Base Image Encoding for Display P3 Display
-    from_scene_reference: !<GroupTransform>
-      children:
-        - !<ColorSpaceTransform> {src: ACES2065-1, dst: Linear FilmLight E-Gamut}
-        - !<AllocationTransform> {allocation: lg2, vars: [-12.47393, 12.5260688117]}
-        - !<FileTransform> {src: AgX_Base_P3.cube, interpolation: tetrahedral}
         - !<ExponentTransform> {value: 2.4}
-        - !<ColorSpaceTransform> {src: Linear DCI-P3 D65, dst: cie_xyz_d65_interchange}
-
-  - !<ViewTransform>
-    name: AgX Rec.2100-HLG - HDR 1000 nits (P3 D65)
-    family: AgX
-    description: |
-      AgX 1000 nits peak Image Encoding for BT.2100-HLG P3 limited Display. Reference white is 100nits
-    from_scene_reference: !<GroupTransform>
-      children:
-        - !<ColorSpaceTransform> {src: ACES2065-1, dst: Linear FilmLight E-Gamut}
-        - !<AllocationTransform> {allocation: lg2, vars: [-12.47393, 12.5260688117]}
-        - !<FileTransform> {src: AgX_Rec2100-HLG_p3_lim.cube, interpolation: tetrahedral}
-        - !<ColorSpaceTransform> {src: Rec.2100-HLG, dst: cie_xyz_d65_interchange}
-
-  - !<ViewTransform>
-    name: AgX False Color Rec.709
-    family: AgX
-    description: |
-      A heat-map-like image formed from AgX Base for sRGB and Rec.1886 displays
-    from_scene_reference: !<GroupTransform>
-      children:
-        - !<ColorSpaceTransform> {src: ACES2065-1, dst: Linear FilmLight E-Gamut}
-        - !<AllocationTransform> {allocation: lg2, vars: [-12.47393, 12.5260688117]}
-        - !<FileTransform> {src: AgX_Base_Rec2020.cube, interpolation: tetrahedral}
-        - !<ColorSpaceTransform> {src: Rec.2020, dst: Linear Rec.2020}
-        - !<MatrixTransform> {matrix: [0.2589235355689848, 0.6104985346066525, 0.13057792982436284, 0, 0.2589235355689848, 0.6104985346066525, 0.13057792982436284, 0, 0.2589235355689848, 0.6104985346066525, 0.13057792982436284, 0, 0, 0, 0, 1]}
-        - !<ExponentTransform> {value: 2.5, direction: inverse}
-        - !<FileTransform> {src: AgX_False_Color.spi1d, interpolation: linear}
-        - !<ColorSpaceTransform> {src: Rec.1886, dst: cie_xyz_d65_interchange}
-
-  - !<ViewTransform>
-    name: Khronos PBR Neutral sRGB
-    family: Khronos PBR Neutral
-    description: |
-      Khronos PBR Neutral Image Encoding for sRGB Display
-    from_scene_reference: !<GroupTransform>
-      children:
-        - !<ColorSpaceTransform> {src: ACES2065-1, dst: Linear Rec.709}
-        - !<AllocationTransform> {allocation: lg2, vars: [-9, 10]}
-        - !<FileTransform> {src: pbrNeutral.cube, interpolation: tetrahedral}
-        - !<ColorSpaceTransform> {src: Linear Rec.709, dst: cie_xyz_d65_interchange}
-
-  - !<ViewTransform>
-    name: ACES 1.3 Display P3
-    family: ACES
-    description: |
-       ACES 1.1 Output Transform for SDR D65 video, with P3 gamut
-    from_scene_reference: !<GroupTransform>
-      children:
-        - !<BuiltinTransform> {style: ACES-OUTPUT - ACES2065-1_to_CIE-XYZ-D65 - SDR-VIDEO-P3lim_1.1}
-
-  - !<ViewTransform>
-    name: ACES 1.3 Rec.1886
-    family: ACES
-    description: |
-       ACES 1.0 Output Transform for SDR D65 video, with Rec.709 gamut
-    from_scene_reference: !<GroupTransform>
-      children:
-        - !<BuiltinTransform> {style: ACES-OUTPUT - ACES2065-1_to_CIE-XYZ-D65 - SDR-VIDEO_1.0}
-
-  - !<ViewTransform>
-    name: ACES 1.1 Rec.2100-PQ - HDR 1000 nits
-    family: ACES
-    description: |
-      ACES 1.1 Output Transform for 1000 nit HDR D65 video, with Rec.2020 gamut
-    from_scene_reference: !<GroupTransform>
-      children:
-        - !<BuiltinTransform> {style: ACES-OUTPUT - ACES2065-1_to_CIE-XYZ-D65 - HDR-VIDEO-1000nit-15nit-REC2020lim_1.1}
-
-  - !<ViewTransform>
-    name: ACES 1.1 Rec.2100-PQ - HDR 2000 nits
-    family: ACES
-    description: |
-      ACES 1.1 Output Transform for 2000 nit HDR D65 video, with Rec.2020 gamut
-    from_scene_reference: !<GroupTransform>
-      children:
-        - !<BuiltinTransform> {style: ACES-OUTPUT - ACES2065-1_to_CIE-XYZ-D65 - HDR-VIDEO-2000nit-15nit-REC2020lim_1.1}
-
-  - !<ViewTransform>
-    name: ACES 1.1 Rec.2100-PQ - HDR 4000 nits
-    family: ACES
-    description: |
-      ACES 1.1 Output Transform for 4000 nit HDR D65 video, with Rec.2020 gamut
-    from_scene_reference: !<GroupTransform>
-      children:
-        - !<BuiltinTransform> {style: ACES-OUTPUT - ACES2065-1_to_CIE-XYZ-D65 - HDR-VIDEO-4000nit-15nit-REC2020lim_1.1}
-
-  - !<ViewTransform>
-    name: ACES 2.0 Display P3
-    family: ACES
-    description: |
-       ACES 2 Output Transform for Apple Display P3
-    from_scene_reference: !<GroupTransform>
-      children:
-        - !<BuiltinTransform> {style: ACES-OUTPUT - ACES2065-1_to_CIE-XYZ-D65 - SDR-100nit-P3-D65_2.0}
+        - !<MatrixTransform> {matrix: [3.2409699, -1.5373832, -0.4986108, 0, -0.9692436, 1.8759675, 0.0415551, 0, 0.0556301, -0.2039770, 1.0569715, 0, 0, 0, 0, 1], direction: inverse}
 
   - !<ViewTransform>
     name: ACES 2.0 Rec.1886
@@ -558,40 +227,25 @@ view_transforms:
         - !<BuiltinTransform> {style: ACES-OUTPUT - ACES2065-1_to_CIE-XYZ-D65 - SDR-100nit-REC709_2.0}
 
   - !<ViewTransform>
-    name: ACES 2.0 Rec.2100-PQ - HDR 500 nits
+    name: ACES 1.3 Rec.1886
     family: ACES
     description: |
-       ACES 2 Output Transform for 500 nit HDR, with Rec.2020 gamut
+       ACES 1.0 Output Transform for SDR D65 video, with Rec.709 gamut
     from_scene_reference: !<GroupTransform>
       children:
-        - !<BuiltinTransform> {style: ACES-OUTPUT - ACES2065-1_to_CIE-XYZ-D65 - HDR-500nit-REC2020_2.0}
+        - !<BuiltinTransform> {style: ACES-OUTPUT - ACES2065-1_to_CIE-XYZ-D65 - SDR-VIDEO_1.0}
 
   - !<ViewTransform>
-    name: ACES 2.0 Rec.2100-PQ - HDR 1000 nits
-    family: ACES
+    name: Filmic sRGB
+    family: Filmic
     description: |
-       ACES 2 Output Transform for 1000 nit HDR, with Rec.2020 gamut
+      sRGB display space with Filmic view transform
     from_scene_reference: !<GroupTransform>
       children:
-        - !<BuiltinTransform> {style: ACES-OUTPUT - ACES2065-1_to_CIE-XYZ-D65 - HDR-1000nit-REC2020_2.0}
-
-  - !<ViewTransform>
-    name: ACES 2.0 Rec.2100-PQ - HDR 2000 nits
-    family: ACES
-    description: |
-       ACES 2 Output Transform for 2000 nit HDR, with Rec.2020 gamut
-    from_scene_reference: !<GroupTransform>
-      children:
-        - !<BuiltinTransform> {style: ACES-OUTPUT - ACES2065-1_to_CIE-XYZ-D65 - HDR-2000nit-REC2020_2.0}
-
-  - !<ViewTransform>
-    name: ACES 2.0 Rec.2100-PQ - HDR 4000 nits
-    family: ACES
-    description: |
-       ACES 2 Output Transform for 4000 nit HDR, with Rec.2020 gamut
-    from_scene_reference: !<GroupTransform>
-      children:
-        - !<BuiltinTransform> {style: ACES-OUTPUT - ACES2065-1_to_CIE-XYZ-D65 - HDR-4000nit-REC2020_2.0}
+        - !<ColorSpaceTransform> {src: ACES2065-1, dst: Filmic Log}
+        - !<FileTransform> {src: filmic_to_0-70_1-03.spi1d, interpolation: linear}
+        - !<ExponentWithLinearTransform> {gamma: 2.4, offset: 0.055}
+        - !<MatrixTransform> {matrix: [3.2409699, -1.5373832, -0.4986108, 0, -0.9692436, 1.8759675, 0.0415551, 0, 0.0556301, -0.2039770, 1.0569715, 0, 0, 0, 0, 1], direction: inverse}
 
 colorspaces:
   - !<ColorSpace>
@@ -610,42 +264,6 @@ colorspaces:
       children:
         - !<MatrixTransform> {matrix: [2.52168618674388, -1.13413098823972, -0.387555198504164, 0, -0.276479914229922, 1.37271908766826, -0.096239173438334, 0, -0.0153780649660342, -0.152975335867399, 1.16835340083343, 0, 0, 0, 0, 1]}
         - !<ExponentWithLinearTransform> {gamma: 2.22222222222222, offset: 0.099, direction: inverse}
-
-  - !<ColorSpace>
-    name: macOS View Only (1886 Sim)
-    aliases: [UnionMacOS 1886 Sim]
-    family: Display
-    equalitygroup: ""
-    bitdepth: 32f
-    description: |
-      Standard 1886 Sim view baked for the macOS View Only display (P3 primaries, pure 2.2), self-contained
-      primitives only — AE's effect popup builder fails on scene colourspaces that reference display
-      colourspaces (see probes/RESULTS.md section 14).
-    isdata: false
-    encoding: sdr-video
-    from_scene_reference: !<GroupTransform>
-      children:
-        - !<ColorSpaceTransform> {src: ACES2065-1, dst: Linear Rec.709}
-        - !<ExponentTransform> {value: 2.4, direction: inverse}
-        - !<ExponentWithLinearTransform> {gamma: 2.4, offset: 0.055}
-        - !<ColorSpaceTransform> {src: Linear Rec.709, dst: Linear DCI-P3 D65}
-        - !<ExponentTransform> {value: 2.2, direction: inverse}
-
-  - !<ColorSpace>
-    name: sRGB 1886 Sim
-    family: Display
-    equalitygroup: ""
-    bitdepth: 32f
-    description: |
-      Standard 1886 Sim view baked for the sRGB display, self-contained primitives only.
-    isdata: false
-    encoding: sdr-video
-    from_scene_reference: !<GroupTransform>
-      children:
-        - !<ColorSpaceTransform> {src: ACES2065-1, dst: Linear Rec.709}
-        - !<ExponentTransform> {value: 2.4, direction: inverse}
-        - !<ExponentWithLinearTransform> {gamma: 2.4, offset: 0.055}
-        - !<ExponentWithLinearTransform> {gamma: 2.4, offset: 0.055, direction: inverse}
 
   - !<ColorSpace>
     name: Linear CIE-XYZ E
@@ -670,11 +288,7 @@ colorspaces:
     description: |
       Linear BT.709 with illuminant D65 white point
     isdata: false
-    interop_id: lin_rec709_scene
-    from_scene_reference: !<GroupTransform>
-      children:
-        - !<ColorSpaceTransform> {src: ACES2065-1, dst: Linear CIE-XYZ D65}
-        - !<MatrixTransform> {matrix: [3.2409699, -1.5373832, -0.4986108, 0, -0.9692436, 1.8759675, 0.0415551, 0, 0.0556301, -0.2039770, 1.0569715, 0, 0, 0, 0, 1]}
+    from_scene_reference: !<MatrixTransform> {matrix: [2.521686077, -1.134130955, -0.3875552416, 0, -0.2764798701, 1.372719049, -0.09623912722, 0, -0.01537805982, -0.1529753655, 1.168353438, 0, 0, 0, 0, 1]}
 
   - !<ColorSpace>
     name: Linear DCI-P3 D65
@@ -685,11 +299,7 @@ colorspaces:
     description: |
       Linear DCI-P3 with illuminant D65 white point
     isdata: false
-    interop_id: lin_p3d65_scene
-    from_scene_reference: !<GroupTransform>
-      children:
-        - !<ColorSpaceTransform> {src: ACES2065-1, dst: Linear CIE-XYZ D65}
-        - !<MatrixTransform> {matrix: [2.4934969, -0.9313836, -0.4027108, 0, -0.8294890, 1.7626641, 0.0236247, 0, 0.0358458, -0.0761724, 0.9568845, 0, 0, 0, 0, 1]}
+    from_scene_reference: !<MatrixTransform> {matrix: [2.024905205, -0.6890697479, -0.3358355463, 0, -0.1835970432, 1.289506197, -0.1059091613, 0, 0.009058529511, -0.05927969143, 1.050221086, 0, 0, 0, 0, 1]}
 
   - !<ColorSpace>
     name: Linear Rec.2020
@@ -700,11 +310,7 @@ colorspaces:
     description: |
       Linear BT.2020 with illuminant D65 white point
     isdata: false
-    interop_id: lin_rec2020_scene
-    from_scene_reference: !<GroupTransform>
-      children:
-        - !<ColorSpaceTransform> {src: ACES2065-1, dst: Linear CIE-XYZ D65}
-        - !<MatrixTransform> {matrix: [1.7166512, -0.3556708, -0.2533663, 0, -0.6666844, 1.6164812, 0.0157685, 0, 0.0176399, -0.0427706, 0.9421031, 0, 0, 0, 0, 1]}
+    from_scene_reference: !<MatrixTransform> {matrix: [1.490409493, -0.2661709189, -0.2242386192, 0, -0.08016755432, 1.182167053, -0.1019996703, 0, 0.003227675566, -0.03477646783, 1.031548858, 0, 0, 0, 0, 1]}
 
   - !<ColorSpace>
     name: Linear Adobe RGB
@@ -716,7 +322,6 @@ colorspaces:
       Linear Adobe RGB (1998) with illuminant D65 white point.
       For use with scene-referred textures.
     isdata: false
-    interop_id: lin_adobergb_scene
     from_scene_reference: !<MatrixTransform> {matrix: [1.72456031681181, -0.419993594161504, -0.304566722650304, 0, -0.276479914229922, 1.37271908766826, -0.0962391734383339, 0, -0.0261255258256649, -0.0901747806551909, 1.11630030648086, 0, 0, 0, 0, 1]}
 
   - !<ColorSpace>
@@ -728,7 +333,6 @@ colorspaces:
     description: |
       Linear AP0 with ACES white point
     isdata: false
-    interop_id: lin_ap0_scene
 
   - !<ColorSpace>
     name: ACEScg
@@ -739,7 +343,6 @@ colorspaces:
     description: |
       Linear AP1 with ACES white point
     isdata: false
-    interop_id: lin_ap1_scene
     to_scene_reference: !<BuiltinTransform> {style: ACEScg_to_ACES2065-1}
 
   - !<ColorSpace>
@@ -751,15 +354,11 @@ colorspaces:
     description: |
       Linear E-Gamut with illuminant D65 white point
     isdata: false
-    from_scene_reference: !<GroupTransform>
-      children:
-        - !<ColorSpaceTransform> {src: ACES2065-1, dst: Linear CIE-XYZ I-D65}
-        - !<MatrixTransform> {matrix: [1.5250528, -0.3159135, -0.1226583, 0, -0.5091526, 1.3333274, 0.1382844, 0, 0.0957153, 0.0508974, 0.7879558, 0, 0, 0, 0, 1]}
+    from_scene_reference: !<MatrixTransform> {matrix: [1.324202895, -0.236799255, -0.0874036774, 0, -0.02774209902, 0.9744444489, 0.05329766497, 0, 0.1079039574, 0.03378080577, 0.8583151698, 0, 0, 0, 0, 1]}
   
   - !<ColorSpace>
     name: Apple Log
     aliases: [apple_log, ocio:applelog_rec2020_scene]
-    interop_id: ocio:applelog_rec2020_scene
     family: Input/Apple
     equalitygroup:
     bitdepth: 32f
@@ -773,7 +372,6 @@ colorspaces:
   - !<ColorSpace>
     name: Apple Log 2
     aliases: [apple_log_2, ocio:applelog_applewg_scene]
-    interop_id: ocio:applelog_applewg_scene
     family: Input/Apple
     equalitygroup:
     bitdepth: 32f
@@ -790,7 +388,6 @@ colorspaces:
   - !<ColorSpace>
     name: Linear Apple Wide Gamut
     aliases: [lin_apple_wide_gamut, lin_applewg, ocio:linear_applewg_scene]
-    interop_id: ocio:linear_applewg_scene
     family: Input/Apple
     equalitygroup:
     bitdepth: 32f
@@ -804,7 +401,6 @@ colorspaces:
   - !<ColorSpace>
     name: ARRI LogC3 (EI800)
     aliases: [arri_logc3_ei800, logc3ei800_alexawide, ocio:arrilogc3_awg3_scene]
-    interop_id: ocio:arrilogc3_awg3_scene
     family: Input/ARRI
     equalitygroup:
     bitdepth: 32f
@@ -821,7 +417,6 @@ colorspaces:
   - !<ColorSpace>
     name: Linear ARRI Wide Gamut 3
     aliases: [lin_arri_wide_gamut_3, lin_alexawide, ocio:lin_awg3_scene]
-    interop_id: ocio:lin_awg3_scene
     family: Input/ARRI
     equalitygroup:
     bitdepth: 32f
@@ -835,7 +430,6 @@ colorspaces:
   - !<ColorSpace>
     name: ARRI LogC4
     aliases: [arri_logc4, ocio:arrilogc4_awg4_scene]
-    interop_id: ocio:arrilogc4_awg4_scene
     family: Input/ARRI
     equalitygroup:
     bitdepth: 32f
@@ -852,7 +446,6 @@ colorspaces:
   - !<ColorSpace>
     name: Linear ARRI Wide Gamut 4
     aliases: [lin_arri_wide_gamut_4, lin_awg4, ocio:lin_awg4_scene]
-    interop_id: ocio:lin_awg4_scene
     family: Input/ARRI
     equalitygroup:
     bitdepth: 32f
@@ -868,7 +461,6 @@ colorspaces:
   - !<ColorSpace>
     name: BMDFilm WideGamut Gen5
     aliases: [bmdfilm_widegamut_gen5, ocio:bmdfilm5_wg5_scene]
-    interop_id: ocio:bmdfilm5_wg5_scene
     family: Input/BlackmagicDesign
     equalitygroup:
     bitdepth: 32f
@@ -885,7 +477,6 @@ colorspaces:
   - !<ColorSpace>
     name: Linear BMD WideGamut Gen5
     aliases: [lin_bmd_widegamut_gen5, ocio:lin_bmdwg5_scene]
-    interop_id: ocio:lin_bmdwg5_scene
     family: Input/BlackmagicDesign
     equalitygroup:
     bitdepth: 32f
@@ -901,7 +492,6 @@ colorspaces:
   - !<ColorSpace>
     name: DaVinci Intermediate WideGamut
     aliases: [davinci_intermediate_widegamut, ocio:davinci_dwg_scene]
-    interop_id: ocio:davinci_dwg_scene
     family: Input/BlackmagicDesign
     equalitygroup:
     bitdepth: 32f
@@ -918,7 +508,6 @@ colorspaces:
   - !<ColorSpace>
     name: Linear DaVinci WideGamut
     aliases: [lin_davinci_widegamut, ocio:lin_dwg_scene]
-    interop_id: ocio:lin_dwg_scene
     family: Input/BlackmagicDesign
     equalitygroup:
     bitdepth: 32f
@@ -934,7 +523,6 @@ colorspaces:
   - !<ColorSpace>
     name: CanonLog2 CinemaGamut D55
     aliases: [canonlog2_cinemagamut_d55, canonlog2_cgamutday, ocio:canonlog2_cgamutd55_scene]
-    interop_id: ocio:canonlog2_cgamutd55_scene
     family: Input/Canon
     equalitygroup:
     bitdepth: 32f
@@ -948,7 +536,6 @@ colorspaces:
   - !<ColorSpace>
     name: CanonLog3 CinemaGamut D55
     aliases: [canonlog3_cinemagamut_d55, canonlog3_cgamutday, ocio:canonlog3_cgamutd55_scene]
-    interop_id: ocio:canonlog3_cgamutd55_scene
     family: Input/Canon
     equalitygroup:
     bitdepth: 32f
@@ -962,7 +549,6 @@ colorspaces:
   - !<ColorSpace>
     name: Linear CinemaGamut D55
     aliases: [lin_cinemagamut_d55, lin_canoncgamutday, ocio:lin_cgamutd55_scene]
-    interop_id: ocio:lin_cgamutd55_scene
     family: Input/Canon
     equalitygroup:
     bitdepth: 32f
@@ -976,7 +562,6 @@ colorspaces:
   - !<ColorSpace>
     name: D-Log D-Gamut
     aliases: [dlog_dgamut, ocio:djilog_dgamut_scene]
-    interop_id: ocio:djilog_dgamut_scene
     family: Input/DJI
     equalitygroup:
     bitdepth: 32f
@@ -993,7 +578,6 @@ colorspaces:
   - !<ColorSpace>
     name: Linear D-Gamut
     aliases: [lin_dgamut, ocio:lin_dgamut_scene]
-    interop_id: ocio:lin_dgamut_scene
     family: Input/DJI
     equalitygroup:
     bitdepth: 32f
@@ -1009,7 +593,6 @@ colorspaces:
   - !<ColorSpace>
     name: V-Log V-Gamut
     aliases: [vlog_vgamut, ocio:vlog_vgamut_scene]
-    interop_id: ocio:vlog_vgamut_scene
     family: Input/Panasonic
     equalitygroup:
     bitdepth: 32f
@@ -1026,7 +609,6 @@ colorspaces:
   - !<ColorSpace>
     name: Linear V-Gamut
     aliases: [lin_vgamut, ocio:lin_vgamut_scene]
-    interop_id: ocio:lin_vgamut_scene
     family: Input/Panasonic
     equalitygroup:
     bitdepth: 32f
@@ -1040,7 +622,6 @@ colorspaces:
   - !<ColorSpace>
     name: Log3G10 REDWideGamutRGB
     aliases: [log3g10_redwidegamutrgb, rl3g10_rwg, ocio:redlog3g10_rwg_scene]
-    interop_id: ocio:redlog3g10_rwg_scene
     family: Input/RED
     equalitygroup:
     bitdepth: 32f
@@ -1057,7 +638,6 @@ colorspaces:
   - !<ColorSpace>
     name: Linear REDWideGamutRGB
     aliases: [lin_redwidegamutrgb, lin_rwg, ocio:lin_rwg_scene]
-    interop_id: ocio:lin_rwg_scene
     family: Input/RED
     equalitygroup:
     bitdepth: 32f
@@ -1071,7 +651,6 @@ colorspaces:
   - !<ColorSpace>
     name: S-Log3 S-Gamut3
     aliases: [slog3_sgamut3, ocio:slog3_sgamut3_scene]
-    interop_id: ocio:slog3_sgamut3_scene
     family: Input/Sony
     equalitygroup:
     bitdepth: 32f
@@ -1088,7 +667,6 @@ colorspaces:
   - !<ColorSpace>
     name: S-Log3 S-Gamut3.Cine
     aliases: [slog3_sgamut3cine, slog3_sgamutcine, ocio:slog3_sgamut3cine_scene]
-    interop_id: ocio:slog3_sgamut3cine_scene
     family: Input/Sony
     equalitygroup:
     bitdepth: 32f
@@ -1105,7 +683,6 @@ colorspaces:
   - !<ColorSpace>
     name: S-Log3 Venice S-Gamut3
     aliases: [slog3_venice_sgamut3, ocio:slog3_sgamut3venice_scene]
-    interop_id: ocio:slog3_sgamut3venice_scene
     family: Input/Sony
     equalitygroup:
     bitdepth: 32f
@@ -1122,7 +699,6 @@ colorspaces:
   - !<ColorSpace>
     name: S-Log3 Venice S-Gamut3.Cine
     aliases: [slog3_venice_sgamut3cine, slog3_venice_sgamutcine, ocio:slog3_sgamut3cinevenice_scene]
-    interop_id: ocio:slog3_sgamut3cinevenice_scene
     family: Input/Sony
     equalitygroup:
     bitdepth: 32f
@@ -1139,7 +715,6 @@ colorspaces:
   - !<ColorSpace>
     name: Linear S-Gamut3
     aliases: [lin_sgamut3, ocio:lin_sgamut3_scene]
-    interop_id: ocio:lin_sgamut3_scene
     family: Input/Sony
     equalitygroup:
     bitdepth: 32f
@@ -1153,7 +728,6 @@ colorspaces:
   - !<ColorSpace>
     name: Linear S-Gamut3.Cine
     aliases: [lin_sgamut3cine, ocio:lin_sgamut3cine_scene]
-    interop_id: ocio:lin_sgamut3cine_scene
     family: Input/Sony
     equalitygroup:
     bitdepth: 32f
@@ -1167,7 +741,6 @@ colorspaces:
   - !<ColorSpace>
     name: Linear Venice S-Gamut3
     aliases: [lin_venice_sgamut3, ocio:lin_sgamut3venice_scene]
-    interop_id: ocio:lin_sgamut3venice_scene
     family: Input/Sony
     equalitygroup:
     bitdepth: 32f
@@ -1181,7 +754,6 @@ colorspaces:
   - !<ColorSpace>
     name: Linear Venice S-Gamut3.Cine
     aliases: [lin_venice_sgamut3cine, ocio:lin_sgamut3cinevenice_scene]
-    interop_id: ocio:lin_sgamut3cinevenice_scene
     family: Input/Sony
     equalitygroup:
     bitdepth: 32f
@@ -1195,7 +767,6 @@ colorspaces:
   - !<ColorSpace>
     name: ADX10
     aliases: [ocio:adx10_apd_scene]
-    interop_id: ocio:adx10_apd_scene
     family: Input/Film
     equalitygroup:
     bitdepth: 32f
@@ -1209,7 +780,6 @@ colorspaces:
   - !<ColorSpace>
     name: ADX16
     aliases: [ocio:adx16_apd_scene]
-    interop_id: ocio:adx16_apd_scene
     family: Input/Film
     equalitygroup:
     bitdepth: 32f
@@ -1228,7 +798,6 @@ colorspaces:
     equalitygroup:
     bitdepth: 32f
     isdata: true
-    interop_id: data
 
   - !<ColorSpace>
     name: Filmic Log
@@ -1259,7 +828,6 @@ colorspaces:
       1.8 gamma-encoded Rec.709 with illuminant D65 white point.
       For use with scene-referred textures.
     isdata: false
-    interop_id: g18_rec709_scene
     from_scene_reference: !<GroupTransform>
       children:
         - !<MatrixTransform> {matrix: [2.52168618674388, -1.13413098823972, -0.387555198504164, 0, -0.276479914229922, 1.37271908766826, -0.096239173438334, 0, -0.0153780649660342, -0.152975335867399, 1.16835340083343, 0, 0, 0, 0, 1]}
@@ -1275,7 +843,6 @@ colorspaces:
       2.2 gamma-encoded Rec.709 with illuminant D65 white point.
       For use with scene-referred textures.
     isdata: false
-    interop_id: g22_rec709_scene
     from_scene_reference: !<GroupTransform>
       children:
         - !<MatrixTransform> {matrix: [2.52168618674388, -1.13413098823972, -0.387555198504164, 0, -0.276479914229922, 1.37271908766826, -0.096239173438334, 0, -0.0153780649660342, -0.152975335867399, 1.16835340083343, 0, 0, 0, 0, 1]}
@@ -1291,7 +858,6 @@ colorspaces:
       2.4 gamma-encoded Rec.709 with illuminant D65 white point.
       For use with scene-referred textures.
     isdata: false
-    interop_id: ocio:g24_rec709_scene
     from_scene_reference: !<GroupTransform>
       children:
         - !<MatrixTransform> {matrix: [2.52168618674388, -1.13413098823972, -0.387555198504164, 0, -0.276479914229922, 1.37271908766826, -0.096239173438334, 0, -0.0153780649660342, -0.152975335867399, 1.16835340083343, 0, 0, 0, 0, 1]}
@@ -1307,7 +873,6 @@ colorspaces:
       sRGB-encoded P3-D65 with illuminant D65 white point.
       For use with scene-referred textures.
     isdata: false
-    interop_id: srgb_p3d65_scene
     from_scene_reference: !<GroupTransform>
       children:
         - !<MatrixTransform> {matrix: [2.02490528596679, -0.689069761034766, -0.335835524932019, 0, -0.183597032256178, 1.28950620775902, -0.105909175502841, 0, 0.00905856112234766, -0.0592796840575522, 1.0502211229352, 0, 0, 0, 0, 1]}
@@ -1323,7 +888,6 @@ colorspaces:
       2.2 gamma-encoded Adobe RGB (1998) with illuminant D65 white point.
       For use with scene-referred textures.
     isdata: false
-    interop_id: g22_adobergb_scene
     from_scene_reference: !<GroupTransform>
       children:
         - !<MatrixTransform> {matrix: [1.72456031681181, -0.419993594161504, -0.304566722650304, 0, -0.276479914229922, 1.37271908766826, -0.0962391734383339, 0, -0.0261255258256649, -0.0901747806551909, 1.11630030648086, 0, 0, 0, 0, 1]}
@@ -1339,7 +903,6 @@ colorspaces:
       sRGB-encoded AP1 with ACES white point.
       For use with scene-referred textures.
     isdata: false
-    interop_id: srgb_ap1_scene
     from_scene_reference: !<GroupTransform>
       children:
         - !<MatrixTransform> {matrix: [1.45143931614567, -0.23651074689374, -0.214928569251925, 0, -0.0765537733960206, 1.17622969983357, -0.0996759264375522, 0, 0.00831614842569772, -0.00603244979102102, 0.997716301365323, 0, 0, 0, 0, 1]}
@@ -1355,7 +918,6 @@ colorspaces:
       2.2 gamma-encoded AP1 with ACES white point.
       For use with scene-referred textures.
     isdata: false
-    interop_id: g22_ap1_scene
     from_scene_reference: !<GroupTransform>
       children:
         - !<MatrixTransform> {matrix: [1.45143931614567, -0.23651074689374, -0.214928569251925, 0, -0.0765537733960206, 1.17622969983357, -0.0996759264375522, 0, 0.00831614842569772, -0.00603244979102102, 0.997716301365323, 0, 0, 0, 0, 1]}
@@ -1408,7 +970,6 @@ colorspaces:
       ACES color correction space, using AP1 primaries.
     isdata: false
     encoding: log
-    interop_id: ocio:acescc_ap1_scene
     to_scene_reference: !<BuiltinTransform> {style: ACEScc_to_ACES2065-1}
 
   - !<ColorSpace>
@@ -1421,278 +982,5 @@ colorspaces:
       ACES color correction space with toe, using AP1 primaries.
     isdata: false
     encoding: log
-    interop_id: ocio:acescct_ap1_scene
     to_scene_reference: !<BuiltinTransform> {style: ACEScct_to_ACES2065-1}
 
-looks:
-  - !<Look>
-    name: Very High Contrast
-    process_space: Filmic Log
-    transform: !<GroupTransform>
-      children:
-        - !<FileTransform> {src: filmic_to_1.20_1-00.spi1d, interpolation: linear}
-        - !<FileTransform> {src: filmic_to_0-70_1-03.spi1d, interpolation: linear, direction: inverse}
-
-  - !<Look>
-    name: High Contrast
-    process_space: Filmic Log
-    transform: !<GroupTransform>
-      children:
-        - !<FileTransform> {src: filmic_to_0.99_1-0075.spi1d, interpolation: linear}
-        - !<FileTransform> {src: filmic_to_0-70_1-03.spi1d, interpolation: linear, direction: inverse}
-
-  - !<Look>
-    name: Medium High Contrast
-    process_space: Filmic Log
-    transform: !<GroupTransform>
-      children:
-        - !<FileTransform> {src: filmic_to_0-85_1-011.spi1d, interpolation: linear}
-        - !<FileTransform> {src: filmic_to_0-70_1-03.spi1d, interpolation: linear, direction: inverse}
-
-  - !<Look>
-    name: Medium Contrast
-    process_space: Filmic Log
-    transform: !<GroupTransform>
-      children:
-
-  - !<Look>
-    name: Medium Low Contrast
-    process_space: Filmic Log
-    transform: !<GroupTransform>
-      children:
-        - !<FileTransform> {src: filmic_to_0-60_1-04.spi1d, interpolation: linear}
-        - !<FileTransform> {src: filmic_to_0-70_1-03.spi1d, interpolation: linear, direction: inverse}
-
-  - !<Look>
-    name: Low Contrast
-    process_space: Filmic Log
-    transform: !<GroupTransform>
-      children:
-        - !<FileTransform> {src: filmic_to_0-48_1-09.spi1d, interpolation: linear}
-        - !<FileTransform> {src: filmic_to_0-70_1-03.spi1d, interpolation: linear, direction: inverse}
-
-  - !<Look>
-    name: Very Low Contrast
-    process_space: Filmic Log
-    transform: !<GroupTransform>
-      children:
-        - !<FileTransform> {src: filmic_to_0-35_1-30.spi1d, interpolation: linear}
-        - !<FileTransform> {src: filmic_to_0-70_1-03.spi1d, interpolation: linear, direction: inverse}
-
-  - !<Look>
-    name: AgX - Punchy
-    process_space: AgX Log
-    description: A darkening punchy look
-    transform: !<GroupTransform>
-      children:
-        - !<GradingToneTransform>
-         shadows: {rgb: [0.2, 0.2, 0.2], master: 0.35, start: 0.4, pivot: 0.1}
-        - !<CDLTransform> {power: [1.0912, 1.0912, 1.0912]}
-
-  - !<Look>
-    name: AgX - Greyscale
-    process_space: AgX Log
-    description: A Black and White Look
-    transform: !<GroupTransform>
-      children:
-        - !<AllocationTransform> {allocation: lg2, vars: [-12.47393, 12.5260688117], direction: inverse}
-        - !<MatrixTransform> {matrix: [0.2589235355689848, 0.6104985346066525, 0.13057792982436284, 0, 0.2589235355689848, 0.6104985346066525, 0.13057792982436284, 0, 0.2589235355689848, 0.6104985346066525, 0.13057792982436284, 0, 0, 0, 0, 1]}
-        - !<AllocationTransform> {allocation: lg2, vars: [-12.47393, 12.5260688117]}
-
-  - !<Look>
-    name: AgX - Very High Contrast
-    process_space: AgX Log
-    description: A Very High Contrast Look
-    transform: !<GroupTransform>
-      children:
-        - !<GradingPrimaryTransform>
-          style: log
-          contrast: {rgb: [1.57, 1.57, 1.57], master: 1}
-          saturation: 0.9
-          pivot: {contrast: -0.2}
-
-  - !<Look>
-    name: AgX - High Contrast
-    process_space: AgX Log
-    description: A High Contrast Look
-    transform: !<GroupTransform>
-      children:
-        - !<GradingPrimaryTransform>
-          style: log
-          contrast: {rgb: [1.4, 1.4, 1.4], master: 1}
-          saturation: 0.95
-          pivot: {contrast: -0.2}
-
-  - !<Look>
-    name: AgX - Medium High Contrast
-    process_space: AgX Log
-    description: A Medium High Contrast Look
-    transform: !<GroupTransform>
-      children:
-        - !<GradingPrimaryTransform>
-          style: log
-          contrast: {rgb: [1.2, 1.2, 1.2], master: 1}
-          saturation: 1
-          pivot: {contrast: -0.2}
-
-  - !<Look>
-    name: AgX - Base Contrast
-    process_space: AgX Log
-    description: A Base Contrast Look
-    transform: !<GroupTransform>
-      children:
-        - !<GradingPrimaryTransform>
-          style: log
-          contrast: {rgb: [1, 1, 1], master: 1}
-          pivot: {contrast: -0.2}
-
-  - !<Look>
-    name: AgX - Medium Low Contrast
-    process_space: AgX Log
-    description: A Medium Low Contrast Look
-    transform: !<GroupTransform>
-      children:
-        - !<GradingPrimaryTransform>
-          style: log
-          contrast: {rgb: [0.9, 0.9, 0.9], master: 1}
-          saturation: 1.05
-          pivot: {contrast: -0.2}
-
-  - !<Look>
-    name: AgX - Low Contrast
-    process_space: AgX Log
-    description: A Low Contrast Look
-    transform: !<GroupTransform>
-      children:
-        - !<GradingPrimaryTransform>
-          style: log
-          contrast: {rgb: [0.8, 0.8, 0.8], master: 1}
-          saturation: 1.1
-          pivot: {contrast: -0.2}
-
-  - !<Look>
-    name: AgX - Very Low Contrast
-    process_space: AgX Log
-    description: A Very Low Contrast Look
-    transform: !<GroupTransform>
-      children:
-        - !<GradingPrimaryTransform>
-          style: log
-          contrast: {rgb: [0.7, 0.7, 0.7], master: 1}
-          saturation: 1.15
-          pivot: {contrast: -0.2}
-
-  - !<Look>
-    name: False Color - Punchy
-    process_space: AgX Log
-    description: A darkening punchy look
-    transform: !<GroupTransform>
-      children:
-        - !<GradingToneTransform>
-         shadows: {rgb: [0.2, 0.2, 0.2], master: 0.35, start: 0.4, pivot: 0.1}
-        - !<CDLTransform> {power: [1.0912, 1.0912, 1.0912]}
-
-  - !<Look>
-    name: False Color - Greyscale
-    process_space: AgX Log
-    description: A Black and White Look
-    transform: !<GroupTransform>
-      children:
-        - !<AllocationTransform> {allocation: lg2, vars: [-12.47393, 12.5260688117], direction: inverse}
-        - !<MatrixTransform> {matrix: [0.2589235355689848, 0.6104985346066525, 0.13057792982436284, 0, 0.2589235355689848, 0.6104985346066525, 0.13057792982436284, 0, 0.2589235355689848, 0.6104985346066525, 0.13057792982436284, 0, 0, 0, 0, 1]}
-        - !<AllocationTransform> {allocation: lg2, vars: [-12.47393, 12.5260688117]}
-
-  - !<Look>
-    name: False Color - Very High Contrast
-    process_space: AgX Log
-    description: A Very High Contrast Look
-    transform: !<GroupTransform>
-      children:
-        - !<GradingPrimaryTransform>
-          style: log
-          contrast: {rgb: [1.57, 1.57, 1.57], master: 1}
-          saturation: 0.9
-          pivot: {contrast: -0.2}
-
-  - !<Look>
-    name: False Color - High Contrast
-    process_space: AgX Log
-    description: A High Contrast Look
-    transform: !<GroupTransform>
-      children:
-        - !<GradingPrimaryTransform>
-          style: log
-          contrast: {rgb: [1.4, 1.4, 1.4], master: 1}
-          saturation: 0.95
-          pivot: {contrast: -0.2}
-
-  - !<Look>
-    name: False Color - Medium High Contrast
-    process_space: AgX Log
-    description: A Medium High Contrast Look
-    transform: !<GroupTransform>
-      children:
-        - !<GradingPrimaryTransform>
-          style: log
-          contrast: {rgb: [1.2, 1.2, 1.2], master: 1}
-          saturation: 1
-          pivot: {contrast: -0.2}
-
-  - !<Look>
-    name: False Color - Base Contrast
-    process_space: AgX Log
-    description: A Base Contrast Look
-    transform: !<GroupTransform>
-      children:
-        - !<GradingPrimaryTransform>
-          style: log
-          contrast: {rgb: [1, 1, 1], master: 1}
-          pivot: {contrast: -0.2}
-
-  - !<Look>
-    name: False Color - Medium Low Contrast
-    process_space: AgX Log
-    description: A Medium Low Contrast Look
-    transform: !<GroupTransform>
-      children:
-        - !<GradingPrimaryTransform>
-          style: log
-          contrast: {rgb: [0.9, 0.9, 0.9], master: 1}
-          saturation: 1.05
-          pivot: {contrast: -0.2}
-
-  - !<Look>
-    name: False Color - Low Contrast
-    process_space: AgX Log
-    description: A Low Contrast Look
-    transform: !<GroupTransform>
-      children:
-        - !<GradingPrimaryTransform>
-          style: log
-          contrast: {rgb: [0.8, 0.8, 0.8], master: 1}
-          saturation: 1.1
-          pivot: {contrast: -0.2}
-
-  - !<Look>
-    name: False Color - Very Low Contrast
-    process_space: AgX Log
-    description: A Very Low Contrast Look
-    transform: !<GroupTransform>
-      children:
-        - !<GradingPrimaryTransform>
-          style: log
-          contrast: {rgb: [0.7, 0.7, 0.7], master: 1}
-          saturation: 1.15
-          pivot: {contrast: -0.2}
-
-  - !<Look>
-    name: ACES 1.3 - Reference Gamut Compression
-    process_space: ACES2065-1
-    description: Compress scene-referred values from common cameras into the ACEScg gamut
-    transform: !<BuiltinTransform> {style: ACES-LMT - ACES 1.3 Reference Gamut Compression}
-
-  - !<Look>
-    name: ACES 2.0 - Reference Gamut Compression
-    process_space: ACES2065-1
-    description: Compress scene-referred values from common cameras into the ACEScg gamut
-    transform: !<BuiltinTransform> {style: ACES-LMT - ACES 1.3 Reference Gamut Compression}

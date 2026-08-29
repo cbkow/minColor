@@ -3,7 +3,7 @@
 // Facts and constraints this encodes are documented in ../PREPLAN.md and ../probes/RESULTS.md.
 
 var MinColor = (function () {
-  var VERSION = "0.7.0";
+  var VERSION = "0.8.0";
   var ROOT = new File($.fileName).parent.parent.fsName;            // repo root (src/..)
   var DIST = ROOT + "/config/dist";
   var STICKY_SEC = "After Effects Sticky Prefs", STICKY_KEY = "AE Last Project Settings";
@@ -13,8 +13,33 @@ var MinColor = (function () {
     var s = f.read(); f.close();
     return eval("(" + s + ")");                                     // ES3: no JSON.parse; our own trusted files only
   }
-  function presets() { return readJSON(payloadRoot() + "/presets.json").presets; }
-  function menuLists() { var j = readJSON(payloadRoot() + "/presets.json"); return { inputSpaces: j.inputSpaces || [], viewSpaces: j.viewSpaces || [] }; }
+  function payload() { return readJSON(payloadRoot() + "/presets.json"); }
+  function presets() { return payload().presets; }
+  function presetMeta(key) {                                         // live OR retired record (retired carries retired:true), else null
+    if (!key) return null;
+    var j = payload();
+    if (j.presets[key]) return j.presets[key];
+    if (j.retired && j.retired[key]) { var r = j.retired[key]; r.retired = true; return r; }
+    return null;
+  }
+  function currentPresetKey() { try { var i = sidecarInfo(); return i ? i.preset : null; } catch (e) { return null; } }
+  function familyFor(key) {                                          // "Linear" | "Display"; unknown key -> infer from AE's working label
+    var m = presetMeta(key); if (m && m.family) return m.family;
+    var ws = ""; try { ws = app.project.workingSpace || ""; } catch (e) {}
+    return (ws.indexOf("Display/") === 0) ? "Display" : "Linear";
+  }
+  function menuLists(presetKey) {                                    // PER-PRESET menus; top-level lists = linear-family fallback (untitled / unmanaged)
+    var j = payload(), pr = presetKey ? j.presets[presetKey] : null;
+    var inp = (pr && pr.inputSpaces) || j.inputSpaces || [];
+    var view = (pr && pr.viewSpaces) || j.viewSpaces || [];
+    var voList = (pr && pr.viewOnly) || j.viewOnly || [], vo = {}, v;
+    for (v = 0; v < voList.length; v++) vo[voList[v]] = true;
+    var render = (pr && pr.renderSpaces) || null;
+    if (!render) { var seen = {}, all = view.concat(inp); render = []; for (var i = 0; i < all.length; i++) if (!seen[all[i]]) { seen[all[i]] = 1; render.push(all[i]); } }
+    var out = []; for (var r = 0; r < render.length; r++) if (!vo[render[r]]) out.push(render[r]);
+    var rt = (!pr && presetKey && j.retired && j.retired[presetKey]) ? j.retired[presetKey] : null;   // retired: fallback lists, but its own family
+    return { inputSpaces: inp, viewSpaces: view, renderSpaces: out, viewOnly: voList, family: pr ? pr.family : (rt ? rt.family : "Linear"), preset: pr ? presetKey : null };
+  }
 
   // ---------- payload discovery / sidecar / doctor ----------
   var SHARED_ROOT = ($.os.indexOf("Windows") >= 0) ? "C:/ProgramData/minColor" : "/Users/Shared/minColor";
@@ -112,15 +137,15 @@ var MinColor = (function () {
       app.project.xmpPacket = xmp;
     } catch (e) {}
   }
-  function pinConfig(presetKey) {                                    // preferred pin target for a preset
-    var pr = presets()[presetKey]; if (!pr) throw new Error("unknown preset " + presetKey);
+  function pinConfig(presetKey) {                                    // preferred pin target for a preset (retired presets resolve too)
+    var pr = presetMeta(presetKey); if (!pr) throw new Error("unknown preset " + presetKey);
     var central = new File(centralConfigs() + "/" + pr.config);
     if (central.exists) return central.fsName;
     return ensureSidecar(presetKey);                                 // central store not installed -> classic sidecar
   }
   function ensureSidecar(presetKey) {                                // copy config (+luts) next to the project; returns pinned path
     var sd = sidecarDir(); if (!sd) throw new Error("save the project first");
-    var pr = presets()[presetKey]; if (!pr) throw new Error("unknown preset " + presetKey);
+    var pr = presetMeta(presetKey); if (!pr) throw new Error("unknown preset " + presetKey);
     var root = payloadRoot();
     var dst = new Folder(sd); if (!dst.exists) dst.create();
     for (var d = 0, dirs = ["luts", "filmic", "icc"]; d < dirs.length; d++)
@@ -180,8 +205,8 @@ var MinColor = (function () {
   }
   function doctor() {                                                // diagnose; returns {status:"green"|"yellow"|"red"|"unmanaged", text, canRepair}
     var p2 = app.project, info = sidecarInfo();
-    if (!info) return { status: "unmanaged", text: p2.file ? "not a minColor project (no pin, provenance, or sidecar)" : "unsaved project", canRepair: false };
-    var pr = presets()[info.preset] || null;
+    if (!info) return { status: "unmanaged", text: p2.file ? "not a minColor project (no pin, provenance, or sidecar)" : "unsaved project", canRepair: false, preset: null, family: "Linear" };
+    var pr = presetMeta(info.preset) || null, fam = familyFor(info.preset);
     var cfgOk = new File(p2.ocioConfigurationFile).exists && p2.ocioConfigurationFile === info.configPath;
     var cmsOk = (p2.colorManagementSystem === 1);
     var wsOk = pr ? (p2.workingSpace === pr.workingSpaceLabel) : (p2.workingSpace !== "None");
@@ -201,14 +226,14 @@ var MinColor = (function () {
             var cn = rec.colorspace.replace(/^[^\/]*\//, "");
             if (cn !== wn && cn !== "default") bad++;
           }
-          if (bad > 0) return { status: "red", text: bad + " footage item(s) carry footage-level assignments — run Set Up / Migrate to strip", canRepair: false };
+          if (bad > 0) return { status: "red", text: bad + " footage item(s) carry footage-level assignments — run Set Up / Migrate to strip", canRepair: false, preset: info.preset, family: fam };
         }
       } catch (eAud) {}
       var locus = ((p2.ocioConfigurationFile || "").indexOf(CENTRAL_ROOT) === 0) ? "central" : "sidecar";
-      return { status: "green", text: info.preset + " · " + p2.workingSpace + " · " + locus, canRepair: false };
+      return { status: "green", text: info.preset + (pr && pr.retired ? " (retired)" : "") + " · " + p2.workingSpace + " · " + locus, canRepair: false, preset: info.preset, family: fam };
     }
-    if (!wsOk) return { status: "red", text: "working space is " + p2.workingSpace + " (want " + (pr ? pr.workingSpaceLabel : "?") + ") — run Set Up / Migrate", canRepair: false };
-    return { status: "yellow", text: (!cmsOk ? "engine fell back to Adobe mode; " : "") + (!cfgOk ? "config path needs re-pointing" : ""), canRepair: (info.configPath !== null) || (findConfigByName(info.config) !== null) };
+    if (!wsOk) return { status: "red", text: "working space is " + p2.workingSpace + " (want " + (pr ? pr.workingSpaceLabel : "?") + ") — run Set Up / Migrate", canRepair: false, preset: info.preset, family: fam };
+    return { status: "yellow", text: (!cmsOk ? "engine fell back to Adobe mode; " : "") + (!cfgOk ? "config path needs re-pointing" : ""), canRepair: (info.configPath !== null) || (findConfigByName(info.config) !== null), preset: info.preset, family: fam };
   }
   function repair() {                                                // one-click / auto: re-point at any local copy of the SAME hashed config
     var p2 = app.project, info = sidecarInfo();
@@ -297,7 +322,8 @@ var MinColor = (function () {
     // added; after a preset switch that stale state can hard-crash AE inside
     // OCIOWrapper::ValidateOCIOColorSpace. Names encode intent:
     // "minColor: view X" / "minColor: render X" / "minColor: X \u2192 working".
-    var p = app.project, out = { rebuilt: [], failed: [], foreign: [], viewRender: 0, orphans: [], strippedPipeline: [], gradesLeft: [] };   // foreign = CSTs we did not add (can't reconstruct intent; same stale-config crash risk)
+    var p = app.project, out = { rebuilt: [], failed: [], foreign: [], viewRender: 0, orphans: [], strippedPipeline: [], gradesLeft: [], remapped: [], removed: [] };   // foreign = CSTs we did not add (can't reconstruct intent; same stale-config crash risk)
+    var ctx = suggestCtx(), touchedMinc = false;                     // names are remapped to THIS preset's spaces before re-adding
     $.global.__minColorViewerId = null;
     for (var i = 1; i <= p.numItems; i++) {
       var it = p.item(i); if (!(it instanceof CompItem)) continue;
@@ -319,7 +345,24 @@ var MinColor = (function () {
           if (mn0 === "ADBE OCIO Look Transform" && nm.indexOf(FX_PREFIX) === 0) {
             /* OUR look, native dialect (translate output): meaning lives in the name; the look
                popup is unreadable from scripting, so leave in place and report for review. */
+            if (!ctx.hasLooks) {                                     // display-referred presets have no looks: remove, report
+              try { var wlk = ly.locked; if (wlk) ly.locked = false; try { fxp.property(k).remove(); } finally { if (wlk) ly.locked = true; } out.removed.push(it.name + "/" + ly.name + " [" + nm + "] \u2014 looks do not exist in this preset"); k--; }
+              catch (eLk) { out.failed.push(it.name + "/" + ly.name + " [" + nm + "] \u2014 " + eLk.toString()); }
+              continue;
+            }
             out.gradesLeft.push(it.name + "/" + ly.name + " [" + nm + "]");
+            continue;
+          }
+          if (mn0 === MINC_MATCH && nm.indexOf(FX_PREFIX) === 0) {    /* plugin dialect: meaning IS the name — remap it to this preset's spaces */
+            var pm = parseFxName(nm), lblM = it.name + "/" + ly.name;
+            if (!pm) continue;
+            if (pm.kind === "look") {
+              if (!ctx.hasLooks) { try { var wlm = ly.locked; if (wlm) ly.locked = false; try { fxp.property(k).remove(); } finally { if (wlm) ly.locked = true; } out.removed.push(lblM + " [" + nm + "] \u2014 looks do not exist in this preset"); k--; } catch (eLm) { out.failed.push(lblM + " \u2014 " + eLm.toString()); } }
+              continue;
+            }
+            var rm = remapSpace(pm.kind, pm.space, ctx);
+            if (rm.space === null) { try { var wln = ly.locked; if (wln) ly.locked = false; try { fxp.property(k).remove(); } finally { if (wln) ly.locked = true; } (rm.identity ? out.remapped : out.failed).push(lblM + " \u2014 " + rm.note + (rm.identity ? "" : " (removed; re-interpret)")); k--; } catch (eRn) { out.failed.push(lblM + " \u2014 " + eRn.toString()); } continue; }
+            if (rm.changed) { try { var wlr = ly.locked; if (wlr) ly.locked = false; try { fxp.property(k).name = fxName(pm.kind, rm.space); stampSerial(fxp.property(k)); } finally { if (wlr) ly.locked = true; } out.remapped.push(lblM + ": " + rm.note); touchedMinc = true; } catch (eRm) { out.failed.push(lblM + " \u2014 " + eRm.toString()); } }
             continue;
           }
           if (mn0 === "ADBE OCIO Display Transform" || mn0 === "ADBE OCIO Look Transform" ||
@@ -347,24 +390,29 @@ var MinColor = (function () {
               var mView = rest.match(/^(view|render) (.+)$/);
               if (mView) {
                 /* retarget IN PLACE on the same host layer (remove-then-upsert = the stacking bug) */
+                var rv = remapSpace(mView[1], mView[2], ctx);        // view/render always resolve (family default as last resort)
+                if (rv.changed) out.remapped.push(label + ": " + rv.note);
                 var idxV = k;
                 fxp.property(k).remove();
                 if ($.global.__minColorViewerId !== it.id) { it.openInViewer(); $.global.__minColorViewerId = it.id; }
                 var vfx = fxp.addProperty("ADBE OCIO Color Space Transform");
-                vfx.name = nm;
+                vfx.name = fxName(mView[1], rv.space);
                 setPopupRetrying(vfx, 1, "default", it);
-                setPopupRetrying(vfx, 2, mView[2], it);
+                setPopupRetrying(vfx, 2, rv.space, it);
                 if (vfx.propertyIndex !== idxV) vfx.moveTo(idxV);
                 out.viewRender = (out.viewRender || 0) + 1;
               } else {
                 var mc = rest.match(/^contain (.+)$/);
-                if (mc) {                                            // boundary in native dialect: retarget in place, name preserved
+                if (mc) {                                            // boundary in native dialect: retarget in place
+                  var rc = remapSpace("contain", mc[1], ctx);
+                  if (rc.space === null) { fxp.property(k).remove(); out.failed.push(label + " \u2014 " + rc.note + " (removed; re-interpret)"); k--; continue; }
+                  if (rc.changed) out.remapped.push(label + ": " + rc.note);
                   var idxC = k;
                   fxp.property(k).remove();
                   if ($.global.__minColorViewerId !== it.id) { it.openInViewer(); $.global.__minColorViewerId = it.id; }
                   var cfx = fxp.addProperty("ADBE OCIO Color Space Transform");
-                  cfx.name = nm;
-                  setPopupRetrying(cfx, 1, mc[1], it);
+                  cfx.name = fxName("contain", rc.space);
+                  setPopupRetrying(cfx, 1, rc.space, it);
                   setPopupRetrying(cfx, 2, "default", it);
                   if (cfx.propertyIndex !== idxC) cfx.moveTo(idxC);
                   out.rebuilt.push(label + " (" + rest + ")");
@@ -373,8 +421,11 @@ var MinColor = (function () {
                 var ai = rest.indexOf(" \u2192 working");
                 if (ai <= 0) continue;
                 var space = rest.substring(0, ai), idx = k;
+                var ri = remapSpace("input", space, ctx);
+                if (ri.space === null) { fxp.property(k).remove(); (ri.identity ? out.remapped : out.failed).push(label + " \u2014 " + ri.note + (ri.identity ? "" : " (removed; re-interpret)")); k--; continue; }
+                if (ri.changed) out.remapped.push(label + ": " + ri.note);
                 fxp.property(k).remove();
-                var fx = addInputTransform(ly, space);
+                var fx = addInputTransform(ly, ri.space);
                 if (fx.propertyIndex !== idx) fx.moveTo(idx);
               }
             } finally { if (wasLocked) ly.locked = true; }
@@ -383,6 +434,7 @@ var MinColor = (function () {
         }
       }
     }
+    if (touchedMinc) { try { syncPluginNames(); } catch (eSy) {} }
     return out;
   }
 
@@ -391,7 +443,7 @@ var MinColor = (function () {
     var inf = sidecarInfo();
     if (inf && app.project.file) app.project.ocioConfigurationFile = ensureSidecar(inf.preset);
     var ar = archiveProject();
-    return { translated: tr.converted.length, failed: tr.failed, archive: ar };
+    return { translated: tr.converted.length, failed: tr.failed, remapped: tr.remapped || [], removed: tr.removed || [], archive: ar };
   }
 
   // ---------- archive: materialize everything a future machine needs ----------
@@ -451,7 +503,8 @@ var MinColor = (function () {
   }
   function translateEffects(target) {                                // "plugin" | "native"
     if (target === "plugin" && !pluginAvailable()) throw new Error("minColor CST plugin not installed");
-    var p = app.project, out = { converted: [], skipped: [], failed: [] };
+    var p = app.project, out = { converted: [], skipped: [], failed: [], remapped: [], removed: [] };
+    var ctx = suggestCtx();                                          // names are remapped to this preset's spaces while translating
     var serial = Math.floor((new Date()).getTime() % 900000);
     $.global.__minColorViewerId = null;
     for (var i = 1; i <= p.numItems; i++) {
@@ -468,6 +521,7 @@ var MinColor = (function () {
             var wasLocked = ly.locked; if (wasLocked) ly.locked = false;
             try {
               if (target === "plugin" && prop.matchName === "ADBE OCIO Look Transform") {
+                if (!ctx.hasLooks) { fxp.property(k).remove(); out.removed.push(label + " \u2014 looks do not exist in this preset"); k--; continue; }
                 var idxL = k;                                        /* name carries the meaning: "minColor: look X" */
                 fxp.property(k).remove();
                 if ($.global.__minColorViewerId !== it.id) { it.openInViewer(); $.global.__minColorViewerId = it.id; }
@@ -481,7 +535,10 @@ var MinColor = (function () {
                 fxp.property(k).remove();
                 if ($.global.__minColorViewerId !== it.id) { it.openInViewer(); $.global.__minColorViewerId = it.id; }
                 var nf = fxp.addProperty(MINC_MATCH);
-                nf.name = nm;
+                var pp = parseFxName(nm), rp = pp ? remapSpace(pp.kind, pp.space, ctx) : null;
+                if (rp && rp.changed && rp.space) out.remapped.push(label + ": " + rp.note);
+                else if (rp && rp.space === null) out.remapped.push(label + ": " + rp.note + " (name kept \u2014 re-interpret)");
+                nf.name = (rp && rp.space) ? fxName(pp.kind, rp.space) : nm;
                 nf.property("Sync Serial").setValue(++serial);
                 if (nf.propertyIndex !== idx) nf.moveTo(idx);        // moveTo INVALIDATES nf — done with it
                 out.converted.push(label);
@@ -491,6 +548,7 @@ var MinColor = (function () {
                 if (mlk) {                                           /* probed 2026-08-28: param 2 = Look popup (settable by
                                                                         name); Input/Output color space popups left at their
                                                                         defaults = working-space semantics (pixel-verified) */
+                  if (!ctx.hasLooks) { fxp.property(k).remove(); out.removed.push(label + " \u2014 looks do not exist in this preset"); k--; continue; }
                   var idxK = k;
                   fxp.property(k).remove();
                   if ($.global.__minColorViewerId !== it.id) { it.openInViewer(); $.global.__minColorViewerId = it.id; }
@@ -501,17 +559,18 @@ var MinColor = (function () {
                   out.converted.push(label);
                   continue;
                 }
-                var mc2 = rest.match(/^contain (.+)$/);
-                var mv = rest.match(/^(view|render) (.+)$/);
-                if (mc2) { src2 = mc2[1]; dst2 = "default"; }
-                else if (mv) { src2 = "default"; dst2 = mv[2]; }
-                else { var ai = rest.indexOf(" \u2192 working"); if (ai > 0) { src2 = rest.substring(0, ai); dst2 = "default"; } }
-                if (!src2) { out.skipped.push(label + " (unparsed name)"); continue; }
+                var pn = parseFxName(nm);
+                if (!pn) { out.skipped.push(label + " (unparsed name)"); continue; }
+                var rn = remapSpace(pn.kind, pn.space, ctx);
+                if (rn.space === null && rn.identity) { fxp.property(k).remove(); out.removed.push(label + " \u2014 " + rn.note); k--; continue; }
+                if (rn.space === null) { out.skipped.push(label + " (" + rn.note + " \u2014 left as plugin effect)"); continue; }   // never destroy without a replacement
+                if (rn.changed) out.remapped.push(label + ": " + rn.note);
+                if (pn.kind === "contain" || pn.kind === "input") { src2 = rn.space; dst2 = "default"; } else { src2 = "default"; dst2 = rn.space; }
                 var idx2 = k;
                 fxp.property(k).remove();
                 if ($.global.__minColorViewerId !== it.id) { it.openInViewer(); $.global.__minColorViewerId = it.id; }
                 var nfx = fxp.addProperty("ADBE OCIO Color Space Transform");
-                nfx.name = nm;
+                nfx.name = fxName(pn.kind, rn.space);
                 setPopupRetrying(nfx, 1, src2, it);
                 setPopupRetrying(nfx, 2, dst2, it);
                 if (nfx.propertyIndex !== idx2) nfx.moveTo(idx2);    // moveTo INVALIDATES nfx
@@ -639,11 +698,19 @@ var MinColor = (function () {
     var audit = syncReport(), bad = 0;
     for (var a2 = 0; a2 < audit.rows.length; a2++) if (!audit.rows[a2].okFlag) bad++;
     var pinNow = app.project.ocioConfigurationFile || "";
-    return { preset: presetKey, working: app.project.workingSpace, pinLocus: (pinNow.indexOf(CENTRAL_ROOT) === 0 ? "central" : "sidecar (central store not installed)"), stripped: strip.length, residual: bad, backup: bpath, harvested: strip.length, effectsRebuilt: rebuilt.rebuilt.length, effectsFailed: rebuilt.failed, effectsForeign: rebuilt.foreign, strippedPipeline: rebuilt.strippedPipeline, gradesLeft: rebuilt.gradesLeft, viewRenderRetargeted: rebuilt.viewRender || 0, orphanLayers: rebuilt.orphans || [], backups: backupStats() };
+    return { preset: presetKey, working: app.project.workingSpace, pinLocus: (pinNow.indexOf(CENTRAL_ROOT) === 0 ? "central" : "sidecar (central store not installed)"), stripped: strip.length, residual: bad, backup: bpath, harvested: strip.length, effectsRebuilt: rebuilt.rebuilt.length, effectsFailed: rebuilt.failed, effectsRemapped: rebuilt.remapped || [], effectsRemoved: rebuilt.removed || [], effectsForeign: rebuilt.foreign, strippedPipeline: rebuilt.strippedPipeline, gradesLeft: rebuilt.gradesLeft, viewRenderRetargeted: rebuilt.viewRender || 0, orphanLayers: rebuilt.orphans || [], backups: backupStats() };
   }
 
   // ---------- suggestions & interpret passes (single-authority model: effects only) ----------
   var FX_PREFIX = "minColor: ";
+  function parseFxName(nm) {                                         // "minColor: ..." -> {kind: view|render|contain|look|input, space} | null
+    if (!nm || nm.indexOf(FX_PREFIX) !== 0) return null;
+    var rest = nm.substring(FX_PREFIX.length), m = rest.match(/^(view|render|contain|look) (.+)$/);
+    if (m) return { kind: m[1], space: m[2] };
+    var ai = rest.indexOf(" \u2192 working"); if (ai > 0) return { kind: "input", space: rest.substring(0, ai) };
+    return null;
+  }
+  function fxName(kind, space) { return kind === "input" ? FX_PREFIX + space + " \u2192 working" : FX_PREFIX + kind + " " + space; }
   function dirWritable(d) {                                          // a panel under Program Files (Windows) exists but rejects writes
     try { var probe = new File(d + "/.minColor-write-probe"); if (!probe.open("w")) return false; probe.close(); probe.remove(); return true; } catch (eW) { return false; }
   }
@@ -695,7 +762,7 @@ var MinColor = (function () {
     f.close();
     return keys.length;
   }
-  function suggestFromDetected(label, isStill) {                     // AE-recorded metadata (mcsp) -> suggested space
+  function suggestFromDetected(label, isStill, family) {             // AE-recorded metadata (mcsp) -> suggested space (family-aware for video)
     if (!label) return null;
     if (label.indexOf("BT.2100 PQ") === 0) return "Rec.2100-PQ";
     if (label.indexOf("BT.2100 HLG") === 0) return "Rec.2100-HLG";
@@ -703,7 +770,7 @@ var MinColor = (function () {
     if (label.indexOf("Display P3") === 0) return "Display P3";
     // "BT.709 …" labels: video means broadcast (BT.1886 semantics); a STILL so labelled is in
     // practice an sRGB-authored graphic (JPEG/PNG family) — discriminate by item type.
-    if (label.indexOf("BT.709") === 0 || label.indexOf("1,1,1") === 0) return isStill ? "sRGB" : "Gamma 2.4 Encoded Rec.709";
+    if (label.indexOf("BT.709") === 0 || label.indexOf("1,1,1") === 0) return isStill ? "sRGB" : familyDefaults(family).video709;
     return null;
   }
   function harvestPath() { var p = app.project; return p.file ? p.file.parent.fsName + "/_minColor/harvest.json" : null; }
@@ -717,21 +784,48 @@ var MinColor = (function () {
     } catch (eX) {}
     try { var hp = harvestPath(); if (!hp) return {}; var f = new File(hp); if (!f.exists) return {}; return readJSON(hp).items || {}; } catch (e) { return {}; }   // legacy sidecar file
   }
-  var LEGACY_SPACE_MAP = {                                           // old-config / ICC-era names -> this config family
-    "sRGB IEC61966-2.1": "sRGB",
-    "Standard": "Gamma 2.4 Encoded Rec.709",                         // old Rec.1886/Standard footage assignment
-    "Rec.1886": "Gamma 2.4 Encoded Rec.709"
+  /* old-config / ICC-era / renamed names -> this FAMILY's canonical name. Linear presets keep the
+     scene-family video space; the SDR family (display-referred working) interprets video as the
+     Rec.1886 DISPLAY space — the scene-family "Gamma 2.4 Encoded Rec.709" would go through the
+     rendering bridge there. */
+  var LEGACY_SPACE_MAP_BY_FAMILY = {
+    Linear:  { "sRGB IEC61966-2.1": "sRGB", "Standard": "Gamma 2.4 Encoded Rec.709", "Rec.1886": "Gamma 2.4 Encoded Rec.709",
+               "UnionMacOS": "macOS View Only", "UnionMacOS 1886 Sim": "macOS View Only (1886 Sim)" },
+    /* SDR is SDR (2026-08-29): the display-referred working space IS Rec.709 video; the old
+       scene-family / BT.1886 names for 709 footage mean "working-native" here -> "working"
+       sentinel = identity (no effect; an existing one is removed on migrate). */
+    Display: { "sRGB IEC61966-2.1": "sRGB", "Standard": "working", "Gamma 2.4 Encoded Rec.709": "working", "Camera Rec.709": "working", "Rec.1886": "working",
+               "UnionMacOS": "macOS View Only", "UnionMacOS 1886 Sim": "macOS View Only (1886 Sim)" }
   };
-  function normalizeSpace(name, valid) {
+  var FAMILY_DEFAULTS = { Linear:  { view: "sRGB", render: "Gamma 2.4 Encoded Rec.709", video709: "Gamma 2.4 Encoded Rec.709" },
+                          Display: { view: "sRGB", render: "Rec.709 Gamma 2.2",         video709: "working" } };   // Display render default = identity
+  function familyDefaults(f) { return FAMILY_DEFAULTS[f] || FAMILY_DEFAULTS.Linear; }
+  function legacyMap(f) { return LEGACY_SPACE_MAP_BY_FAMILY[f] || LEGACY_SPACE_MAP_BY_FAMILY.Linear; }
+  function normalizeSpace(name, valid, family) {                     // -> canonical name | "working" (identity) | null
     if (!name) return null;
+    if (name === "working") return "working";
     if (valid[name]) return name;
-    var m = LEGACY_SPACE_MAP[name];
+    var m = legacyMap(family || "Linear")[name];
+    if (m === "working") return "working";
     return (m && valid[m]) ? m : null;
   }
-  function suggestCtx() {                                            // built ONCE per pass: valid input-space set + ext table
-    var valid = {}, ml = menuLists();
-    for (var i = 0; i < ml.inputSpaces.length; i++) valid[ml.inputSpaces[i]] = true;
-    return { valid: valid, extMap: extDefaults() };
+  function suggestCtx() {                                            // built ONCE per pass: this preset's validity sets + family + ext table
+    var key = currentPresetKey(), ml = menuLists(key), family = familyFor(key);
+    var valid = {}, validAll = {}, i;
+    for (i = 0; i < ml.inputSpaces.length; i++) valid[ml.inputSpaces[i]] = validAll[ml.inputSpaces[i]] = true;
+    for (i = 0; i < ml.viewSpaces.length; i++) validAll[ml.viewSpaces[i]] = true;
+    for (i = 0; i < ml.renderSpaces.length; i++) validAll[ml.renderSpaces[i]] = true;
+    var hasLooks = false; try { hasLooks = configLooks().length > 0; } catch (eLk) {}
+    return { valid: valid, validAll: validAll, extMap: extDefaults(), family: family, preset: key, lists: ml, defaults: familyDefaults(family), hasLooks: hasLooks };
+  }
+  function remapSpace(kind, space, ctx) {                            // validity -> family legacy map -> view/render family default; else null
+    if (kind === "look") return { space: space, changed: false };
+    if (ctx.validAll[space]) return { space: space, changed: false };
+    var m = legacyMap(ctx.family)[space];
+    if (m === "working" && kind === "input") return { space: null, identity: true, changed: true, note: "'" + space + "' is working-native in this preset (effect removed)" };
+    if (m && ctx.validAll[m]) return { space: m, changed: true, note: "'" + space + "' \u2192 '" + m + "'" };
+    if (kind === "view" || kind === "render") { var d = ctx.defaults[kind]; return { space: d, changed: true, note: "'" + space + "' not in this preset \u2192 " + kind + " default '" + d + "'" }; }
+    return { space: null, changed: true, note: "'" + space + "' has no equivalent in this preset" };
   }
   function suggestionFor(item, detectedMap, harvest, ctx) {          // ranked: EXTENSION RULE (user policy) > harvest (provenance) > detected metadata
     ctx = ctx || suggestCtx();
@@ -739,16 +833,18 @@ var MinColor = (function () {
       var m = item.mainSource.file.name.match(/\.([A-Za-z0-9]+)$/); // whatever an old project happened to have assigned
       var ed = m ? ctx.extMap[m[1].toLowerCase()] : null;
       if (ed === "working") return { space: null, why: "extension rule: identity" };
-      if (ed) { var en = normalizeSpace(ed, ctx.valid); if (en) return { space: en, why: "extension rule" }; return { space: null, why: "extension rule '" + ed + "' not in config — skipped" }; }
+      if (ed) { var en = normalizeSpace(ed, ctx.valid, ctx.family); if (en === "working") return { space: null, why: "extension rule: identity" }; if (en) return { space: en, why: "extension rule" }; return { space: null, why: "extension rule '" + ed + "' not in config — skipped" }; }
     }
     var h = harvest[String(item.id)];
     if (h && h.name) {
       var raw = h.name.replace(/^[^\/]*\//, "");
-      var norm = normalizeSpace(raw, ctx.valid);
+      var norm = normalizeSpace(raw, ctx.valid, ctx.family);
+      if (norm === "working") return { space: null, why: "previously assigned '" + raw + "' is working-native here: identity" };
       if (norm) return { space: norm, why: norm === raw ? "previously assigned" : "previously assigned: '" + raw + "' mapped" };
       return { space: null, why: "previously assigned '" + raw + "' has no equivalent in this config — skipped" };
     }
-    var det = normalizeSpace(suggestFromDetected(detectedMap[String(item.id)], item.mainSource && item.mainSource.isStill), ctx.valid);
+    var det = normalizeSpace(suggestFromDetected(detectedMap[String(item.id)], item.mainSource && item.mainSource.isStill, ctx.family), ctx.valid, ctx.family);
+    if (det === "working") return { space: null, why: "detected metadata: identity (video is working-native here)" };
     if (det) return { space: det, why: "detected metadata" };
     return { space: null, why: "no suggestion — skipped" };
   }
@@ -802,14 +898,23 @@ var MinColor = (function () {
       try {
         var fxp0 = layer.property("ADBE Effect Parade"), haveIdx = -1;
         for (var fi = 1; fi <= fxp0.numProperties; fi++) if (fxp0.property(fi).name.indexOf(FX_PREFIX) === 0 && (fxp0.property(fi).matchName === "ADBE OCIO Color Space Transform" || fxp0.property(fi).matchName === MINC_MATCH)) { haveIdx = fi; break; }
-        if (haveIdx > 0) {                                            // self-heal: a CST named for a space this config doesn't have is a stranded failed add — remove and redo
-          var exName = fxp0.property(haveIdx).name.substring(FX_PREFIX.length);
-          var ai = exName.indexOf(" \u2192 working"); if (ai > 0) exName = exName.substring(0, ai);
-          if (!ctx.valid[exName]) {
+        if (haveIdx > 0) {                                            // self-heal: a CST named for a space this preset lacks -> rename (plugin) / rebuild (native) / remove
+          var pr0 = parseFxName(fxp0.property(haveIdx).name);
+          var r0 = (pr0 && pr0.kind === "input") ? remapSpace("input", pr0.space, ctx) : { space: null, changed: true, note: "(unparsed CST name)" };
+          if (r0.changed) {
             var wl0 = layer.locked; if (wl0) layer.locked = false;
-            try { fxp0.property(haveIdx).remove(); } finally { if (wl0) layer.locked = true; }
-            report.flagged.push(label + " \u2014 removed stale CST '" + exName + "' (not in this config)");
-            haveIdx = -1;
+            try {
+              if (r0.space && fxp0.property(haveIdx).matchName === MINC_MATCH) {
+                fxp0.property(haveIdx).name = fxName("input", r0.space); stampSerial(fxp0.property(haveIdx));
+                try { syncPluginNames(); } catch (eSy0) {}
+                report.flagged.push(label + " \u2014 renamed " + r0.note); return;
+              }
+              fxp0.property(haveIdx).remove();
+              if (r0.space) { addInputTransform(layer, r0.space); report.flagged.push(label + " \u2014 rebuilt " + r0.note); return; }
+              if (r0.identity) { report.identity.push(label + " (" + r0.note + ")"); return; }
+              report.flagged.push(label + " \u2014 removed stale CST " + r0.note);
+              haveIdx = -1;
+            } finally { if (wl0) layer.locked = true; }
           }
         }
         var tgt = cstTargetIndex(fxp0);
@@ -822,7 +927,7 @@ var MinColor = (function () {
         if (haveIdx > 0) { report.skipped.push(label + " (already interpreted)"); return; }
         var pick = space ? { space: space, why: "explicit" } : suggestionFor(src, detected, harvest, ctx);
         if (!pick.space) {
-          if (pick.why === "extension default: identity") report.identity.push(label);   // correct as-is: working-space native, no CST wanted
+          if (/identity/.test(pick.why)) report.identity.push(label + " (" + pick.why + ")");   // correct as-is: working-space native, no CST wanted
           else report.skipped.push(label + " (" + pick.why + ")");
           return;
         }
@@ -1166,10 +1271,10 @@ var MinColor = (function () {
     var rv = upsertUtilityLayer(comp, "view",   pr.view,   pr.look || null);   // view last -> view enabled, render off
     return { preset: name, view: rv, render: rr };
   }
-  function addViewGuideLayer(comp, viewColorspace) { return upsertUtilityLayer(comp, "view", viewColorspace || "sRGB"); }
-  function addRenderLayer(comp, renderSpace) { return upsertUtilityLayer(comp, "render", renderSpace || "Gamma 2.4 Encoded Rec.709"); }
+  function addViewGuideLayer(comp, viewColorspace) { return upsertUtilityLayer(comp, "view", viewColorspace || familyDefaults(familyFor(currentPresetKey())).view); }
+  function addRenderLayer(comp, renderSpace) { return upsertUtilityLayer(comp, "render", renderSpace || familyDefaults(familyFor(currentPresetKey())).render); }
 
-  return { VERSION: VERSION, presets: presets, menuLists: menuLists, preflight: preflight, payloadRoot: payloadRoot, ensureSidecar: ensureSidecar, sidecarInfo: sidecarInfo, doctor: doctor, repair: repair, pinConfig: pinConfig, findConfigByName: findConfigByName, stampProvenance: stampProvenance, readProvenance: readProvenance, archiveProject: archiveProject, packageForAnyAE: packageForAnyAE, syncPluginNames: syncPluginNames, stampEngine: stampEngine, readEngine: readEngine, stampHarvest: stampHarvest, migrateProject: migrateProject, interpretPass: interpretPass, extDefaults: extDefaults, saveExtDefaults: saveExtDefaults, suggestionFor: suggestionFor, collectDetected: collectDetected, readHarvest: readHarvest, harvestPath: harvestPath, seedStickyPref: seedStickyPref, newProject: newProject,
+  return { VERSION: VERSION, presets: presets, presetMeta: presetMeta, currentPresetKey: currentPresetKey, familyFor: familyFor, familyDefaults: familyDefaults, parseFxName: parseFxName, menuLists: menuLists, preflight: preflight, payloadRoot: payloadRoot, ensureSidecar: ensureSidecar, sidecarInfo: sidecarInfo, doctor: doctor, repair: repair, pinConfig: pinConfig, findConfigByName: findConfigByName, stampProvenance: stampProvenance, readProvenance: readProvenance, archiveProject: archiveProject, packageForAnyAE: packageForAnyAE, syncPluginNames: syncPluginNames, stampEngine: stampEngine, readEngine: readEngine, stampHarvest: stampHarvest, migrateProject: migrateProject, interpretPass: interpretPass, extDefaults: extDefaults, saveExtDefaults: saveExtDefaults, suggestionFor: suggestionFor, collectDetected: collectDetected, readHarvest: readHarvest, harvestPath: harvestPath, seedStickyPref: seedStickyPref, newProject: newProject,
            assertProject: assertProject, applyPresetToCurrent: applyPresetToCurrent,
            syncReport: syncReport, syncApply: syncApply, rebuildMinColorEffects: rebuildMinColorEffects, translateEffects: translateEffects, pluginAvailable: pluginAvailable, uiState: uiState, saveUiState: saveUiState,
            setPopupByName: setPopupByName, addInputTransform: addInputTransform, addViewGuideLayer: addViewGuideLayer, addRenderLayer: addRenderLayer, findUtilityLayer: findUtilityLayer,
