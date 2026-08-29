@@ -3,7 +3,7 @@
 An OCIO colour-management pipeline for After Effects: a dockable ScriptUI panel plus a
 compiled plugin engine (macOS and Windows).
 
-Panel 0.8.0 · engine 1.3.1 (Windows prebuilt 1.3.0) · requires After Effects 2025+.
+Panel 0.9.0 · engine 1.3.1 (Windows prebuilt 1.3.0 until rebuilt) · requires After Effects 2025+.
 
 ## Components
 

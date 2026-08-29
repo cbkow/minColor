@@ -151,6 +151,43 @@ CAMERA_REC709 = """
 """ % CAMERA_REC709_MATRIX
 
 
+# Appended from the standards we borrow from (2026-08-29 parity audit): the one OCIO camera builtin
+# with no space in Blender/ACES-2.0 configs, and two ACES-studio display spaces (AE 2.4.0-safe:
+# ST2084-P3-D65 is used by AE's own bundled ACES 1.3 configs; the 2.2 display is primitives).
+REDLOGFILM = """
+  - !<ColorSpace>
+    name: REDLogFilm REDWideGamutRGB
+    aliases: [redlogfilm_rwg, REDLogFilm RWG, Input - RED - REDLogFilm - REDWideGamutRGB]
+    family: Input/RED
+    equalitygroup: ""
+    bitdepth: 32f
+    description: |
+      RED LogFilm curve with RED Wide Gamut RGB primaries (legacy RED log; OCIO builtin).
+    isdata: false
+    encoding: log
+    to_scene_reference: !<BuiltinTransform> {style: RED_REDLOGFILM-RWG_to_ACES2065-1}
+"""
+P3_PQ = "P3-D65 PQ"
+def p3_pq_display():
+    return ('  - !<ColorSpace>\n    name: %s\n    aliases: [st2084_p3d65_display, ST2084-P3-D65 - Display, P3-D65 ST2084]\n'
+            '    family: Display\n    equalitygroup: ""\n    bitdepth: 32f\n    description: |\n'
+            '      P3-D65 primaries with the ST 2084 (PQ) EOTF — HDR mastering display (ACES studio "ST2084-P3-D65 - Display").\n'
+            '    isdata: false\n    encoding: hdr-video\n'
+            '    from_display_reference: !<BuiltinTransform> {style: DISPLAY - CIE-XYZ-D65_to_ST2084-P3-D65}\n') % P3_PQ
+EXTRA_DISPLAY_VIEWS = """  %s:
+    - !<View> {name: Standard, view_transform: Standard, display_colorspace: %s}
+    - !<View> {name: Standard 1886 Sim, view_transform: Standard 1886 Sim, display_colorspace: %s}
+    - !<View> {name: ACES 1.3, view_transform: ACES 1.3 Rec.1886, display_colorspace: %s}
+    - !<View> {name: ACES 2.0, view_transform: ACES 2.0 Rec.1886, display_colorspace: %s}
+    - !<View> {name: AgX, view_transform: AgX Base Rec.1886, display_colorspace: %s}
+    - !<View> {name: False Color, view_transform: AgX False Color Rec.709, display_colorspace: %s}
+    - !<View> {name: Raw, colorspace: Non-Color}
+  %s:
+    - !<View> {name: Standard, view_transform: Standard, display_colorspace: %s}
+    - !<View> {name: ACES 2.0 - HDR 1000 nits, view_transform: ACES 2.0 Rec.2100-PQ - HDR 1000 nits, display_colorspace: %s}
+    - !<View> {name: Raw, colorspace: Non-Color}
+""" % ((SDR_WORKING,) * 7 + (P3_PQ,) * 3)
+
 # The native OCIO Display Transform's View popup shows only the FIRST display's view list and never
 # refreshes (verified 2026-08-25), so the look-views must exist on the SDR displays too.
 LOOK_VIEW_DISPLAYS = ["sRGB", "Display P3", "Rec.1886", "Rec.2020"]
@@ -438,14 +475,16 @@ def add_union(t):
     t = sub1(r"^view_transforms:\n", "view_transforms:\n" + UNION_VIEW_TRANSFORM, t, "view_transforms:")
     # display colourspaces at the top of display_colorspaces: legacy macOS View Only + the Desktop/Video pair
     m709, mp3 = xyz_matrix_of(t, "Linear Rec.709"), xyz_matrix_of(t, "Linear DCI-P3 D65")
-    t = sub1(r"^display_colorspaces:\n", "display_colorspaces:\n" + MAC_DISPLAY_CS.lstrip("\n") + "\n" + mac_display_pair(m709, mp3) + "\n" + platform_pair(m709) + "\n", t, "display_colorspaces:")
-    # camera space at the TOP of the colorspaces section (the master file ends with looks:, not colorspaces:)
-    t = sub1(r"^colorspaces:\n", "colorspaces:\n" + CAMERA_REC709.strip("\n") + "\n\n" + VIEW_BAKED_CS.strip("\n") + "\n\n", t, "colorspaces anchor")
+    g22 = self_contained_display(SDR_WORKING, m709, G22_INV, "[g22_rec709_display, Gamma 2.2 Rec.709 - Display]",
+                                 "Rec.709 primaries, pure 2.2 EOTF (ACES studio \"Gamma 2.2 Rec.709 - Display\"; the SDR family's working space).")
+    t = sub1(r"^display_colorspaces:\n", "display_colorspaces:\n" + MAC_DISPLAY_CS.lstrip("\n") + "\n" + mac_display_pair(m709, mp3) + "\n" + platform_pair(m709) + "\n" + g22 + "\n" + p3_pq_display() + "\n", t, "display_colorspaces:")
+    # camera spaces at the TOP of the colorspaces section (the master file ends with looks:, not colorspaces:)
+    t = sub1(r"^colorspaces:\n", "colorspaces:\n" + CAMERA_REC709.strip("\n") + "\n\n" + REDLOGFILM.strip("\n") + "\n\n" + VIEW_BAKED_CS.strip("\n") + "\n\n", t, "colorspaces anchor")
     # views block just before active_displays
-    t = sub1(r"^active_displays:", MAC_VIEWS + MAC_NEW_VIEWS + "active_displays:", t, "active_displays anchor")
+    t = sub1(r"^active_displays:", MAC_VIEWS + MAC_NEW_VIEWS + EXTRA_DISPLAY_VIEWS + "active_displays:", t, "active_displays anchor")
     t = add_look_views(t)
     # activate display + views
-    t = sub1(r"^active_displays: \[(.*)\]$", lambda m: "active_displays: [" + m.group(1) + ", " + MAC_VIEW + ", " + MAC_DESKTOP + ", " + MAC_VIDEO + ", " + WIN_DESKTOP + ", " + WIN_VIDEO + "]", t, "active_displays list")
+    t = sub1(r"^active_displays: \[(.*)\]$", lambda m: "active_displays: [" + m.group(1) + ", " + MAC_VIEW + ", " + MAC_DESKTOP + ", " + MAC_VIDEO + ", " + WIN_DESKTOP + ", " + WIN_VIDEO + ", " + SDR_WORKING + ", " + P3_PQ + "]", t, "active_displays list")
     t = sub1(r"^active_views: \[(.*)\]$", lambda m: "active_views: [" + m.group(1) + ", " + ", ".join(NEW_VIEW_NAMES) + "]", t, "active_views list")
     return t
 
@@ -497,7 +536,7 @@ def validate(path, working, expect_default, view_checks):
     return cfg
 
 
-LINEAR_VIEW_CHECKS = [(MAC_VIEW, v) for v in ["Standard", "Standard 1886 Sim", "ACES 2.0", "AgX"]] + [(d, "Standard") for d in PLATFORM_VIEWS]
+LINEAR_VIEW_CHECKS = [(MAC_VIEW, v) for v in ["Standard", "Standard 1886 Sim", "ACES 2.0", "AgX"]] + [(d, "Standard") for d in PLATFORM_VIEWS] + [(SDR_WORKING, "AgX"), (P3_PQ, "ACES 2.0 - HDR 1000 nits")]
 SDR_VIEW_CHECKS = [(d, v) for d in SDR_DISPLAYS for v in ["Standard", "Raw"]]
 
 # genuine master views per flavour: (display, view, decode) — used for cross-config fidelity
