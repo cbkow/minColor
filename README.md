@@ -42,7 +42,7 @@ A zip is also attached to each release for manual installation; its `README.txt`
 
 Regular sRGB, rec.709, rec.1886, ACES, and Blender workflows are supported, and all the view, looks, and media names you expect are present. You can use these configs without the plugins if you want.
 
-To make things easier and reduce inconsistencies between AE on macOS and Windows, some common-name aliases are provided. Essentially, any View or Render option that is called "Desktop" is an alias for sRGB flows typical in web/social/direct/tech branding work. Any View or Render option called "Video" is more typical for broadcast delivery or standard commercial post-production flows.
+To make things easier and reduce inconsistencies between AE on macOS and Windows, some common-name aliases are provided. Essentially, any View or Render option that is called "Desktop" is an alias for sRGB flows typical in web/social/direct/tech branding work. Any View or Render option called "Video" is more typical for broadcast delivery or standard commercial post-production flows and is an alias for rec.709 gamma 2.4 / rec.1886 / bt.1886 (standards are fun aren’t they!).
 
 Meaning, if you work for tech/web/direct, this will most likely match your normal workflow:
 - Windows Desktop View or macOS Desktop View- depending on what machine you are currently sitting in front of.
