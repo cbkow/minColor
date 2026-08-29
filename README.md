@@ -44,7 +44,7 @@ A zip is also attached to each release for manual copying; its `README.txt` has 
 | | macOS | Windows |
 |---|---|---|
 | **Panel** | ScriptUI (dockable) | ScriptUI (dockable) |
-| **Engine** | Universal-ready arm64 `.plugin`, notarized | `.aex`, x64 |
+| **Engine** | `.plugin`, arm64, notarized | `.aex`, x64 |
 | **Configs** | OCIO 2.4 (AE's embedded OCIO), generated from Blender 5.2 + ACES | same |
 | **Installer** | signed `.pkg` | `.msi` |
 
