@@ -8,6 +8,8 @@ Additionally, Windows- and macOS-flavored view transforms are provided to counte
 
 ![mC_001.png](images/mC_001.png)
 
+---
+
 ## Install
 
 ### macOS
@@ -22,6 +24,8 @@ Windows asks permission to run.
 
 A zip is also attached to each release for manual installation; its `README.txt` shows how to install the plugin and script components.
 
+---
+
 ## The Basics
 
 1. **Set Up or Migrate and existing project** by selecting a working color space. If you pick ACEScg, the default media color space will be ACEScg.
@@ -31,7 +35,24 @@ A zip is also attached to each release for manual installation; its `README.txt`
 3. Use **Interpret Footage** to manually change a layers color space or...
 4. Use the **native AE OCIO effects**. The loaded configs will be recognized.
 5. Set your **View** Adjustment layer to what you want to see when working. Set your **Render** Adjustment layer to what you want to output when rendering. Use the Apply buttons to toggle between the two.
-   
+
+---
+
+## The Extras
+
+Regular sRGB, rec.709, rec.1886, ACES, and Blender workflows are supported, and all the view, looks, and media names you expect are present. You can use these configs without the plugins if you want.
+
+To make things easier and reduce inconsistencies between AE on macOS and Windows, some common-name aliases are provided. Essentially, any View or Render option that is called "Desktop" is an alias for sRGB flows typical in web/social/direct/tech branding work. Any View or Render option called "Video" is more typical for broadcast delivery or standard commercial post-production flows.
+
+Meaning, if you work for tech/web/direct, this will most likely match your normal workflow:
+- Windows Desktop View or macOS Desktop View- depending on what machine you are currently sitting in front of.
+- Desktop Render
+
+If you are working in post-production in an offline/online flow, you will most likely want:
+- Windows or macOS Desktop view is what viewers will see on a TV or a professional broadcast monitor in an Online room. Windows or macOS Video views are what people will see when they watch videos online or on a desktop post. Pick your poison (and lament the state of video today).
+- Video Render is what you will be outputting to offline editors and online finishing artists.
+
+---
 
 ## Documentation
 
