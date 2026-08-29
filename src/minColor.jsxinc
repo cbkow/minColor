@@ -3,7 +3,7 @@
 // Facts and constraints this encodes are documented in ../PREPLAN.md and ../probes/RESULTS.md.
 
 var MinColor = (function () {
-  var VERSION = "0.9.0";
+  var VERSION = "0.9.1";
   var ROOT = new File($.fileName).parent.parent.fsName;            // repo root (src/..)
   var DIST = ROOT + "/config/dist";
   var STICKY_SEC = "After Effects Sticky Prefs", STICKY_KEY = "AE Last Project Settings";
@@ -238,6 +238,7 @@ var MinColor = (function () {
     var p2 = app.project, info = sidecarInfo();
     if (!info) return { status: "unmanaged", text: p2.file ? "not a minColor project (no pin, provenance, or sidecar)" : "unsaved project", canRepair: false, preset: null, family: "Linear" };
     var pr = presetMeta(info.preset) || null, fam = familyFor(info.preset);
+    var pinBase = (p2.ocioConfigurationFile || "").replace(/\\/g, "/"); pinBase = pinBase.substring(pinBase.lastIndexOf("/") + 1);
     var cfgOk = new File(p2.ocioConfigurationFile).exists && p2.ocioConfigurationFile === info.configPath;
     var cmsOk = (p2.colorManagementSystem === 1);
     var wsOk = pr ? (p2.workingSpace === pr.workingSpaceLabel) : (p2.workingSpace !== "None");
@@ -257,16 +258,16 @@ var MinColor = (function () {
             var cn = rec.colorspace.replace(/^[^\/]*\//, "");
             if (cn !== wn && cn !== "default") bad++;
           }
-          if (bad > 0) return { status: "red", text: bad + " footage item(s) carry footage-level assignments — run Set Up / Migrate to strip", canRepair: false, preset: info.preset, family: fam };
+          if (bad > 0) return { status: "red", text: bad + " footage item(s) carry footage-level assignments — run Set Up / Migrate to strip", canRepair: false, preset: info.preset, family: fam, pin: pinBase };
         }
       } catch (eAud) {}
       var locus = ((p2.ocioConfigurationFile || "").indexOf(CENTRAL_ROOT) === 0) ? "central" : "sidecar";
       var behind = pinBehind();
-      if (behind) return { status: "yellow", text: info.preset + " · pinned " + behind.pinned.replace(/^config-|\.ocio$/g, "") + " \u2192 update available (" + behind.current.replace(/^config-|\.ocio$/g, "") + "): Set Up / Migrate, same preset", canRepair: false, preset: info.preset, family: fam, pinBehind: behind };
-      return { status: "green", text: info.preset + (pr && pr.retired ? " (retired)" : "") + " · " + p2.workingSpace + " · " + locus, canRepair: false, preset: info.preset, family: fam };
+      if (behind) return { status: "yellow", text: info.preset + " · pinned " + behind.pinned.replace(/^config-|\.ocio$/g, "") + " \u2192 update available (" + behind.current.replace(/^config-|\.ocio$/g, "") + "): Set Up / Migrate, same preset", canRepair: false, preset: info.preset, family: fam, pinBehind: behind, pin: pinBase };
+      return { status: "green", text: info.preset + (pr && pr.retired ? " (retired)" : "") + " · " + p2.workingSpace + " · " + locus, canRepair: false, preset: info.preset, family: fam, pin: pinBase };
     }
-    if (!wsOk) return { status: "red", text: "working space is " + p2.workingSpace + " (want " + (pr ? pr.workingSpaceLabel : "?") + ") — run Set Up / Migrate", canRepair: false, preset: info.preset, family: fam };
-    return { status: "yellow", text: (!cmsOk ? "engine fell back to Adobe mode; " : "") + (!cfgOk ? "config path needs re-pointing" : ""), canRepair: (info.configPath !== null) || (findConfigByName(info.config) !== null), preset: info.preset, family: fam };
+    if (!wsOk) return { status: "red", text: "working space is " + p2.workingSpace + " (want " + (pr ? pr.workingSpaceLabel : "?") + ") — run Set Up / Migrate", canRepair: false, preset: info.preset, family: fam, pin: pinBase };
+    return { status: "yellow", text: (!cmsOk ? "engine fell back to Adobe mode; " : "") + (!cfgOk ? "config path needs re-pointing" : ""), canRepair: (info.configPath !== null) || (findConfigByName(info.config) !== null), preset: info.preset, family: fam, pin: pinBase };
   }
   function repair() {                                                // one-click / auto: re-point at any local copy of the SAME hashed config
     var p2 = app.project, info = sidecarInfo();
@@ -276,7 +277,7 @@ var MinColor = (function () {
     if (p2.colorManagementSystem !== 1) p2.colorManagementSystem = 1;
     p2.ocioConfigurationFile = target;
     var d2 = doctor();
-    if (d2.status !== "green") throw new Error("repair incomplete: " + d2.text);
+    if (d2.status !== "green" && !d2.pinBehind) throw new Error("repair incomplete: " + d2.text);   // "update available" = healed onto an older hash: fine
     try { syncPluginNames(); } catch (eSy) {}                        // refresh MINC registry against the healed authority
     try { app.purge(PurgeTarget.ALL_CACHES); } catch (ePu) {}        // cached frames predate the heal — without this the viewer
     return "repaired \u2192 " + target;                             // keeps showing pre-heal pixels and looks like it needs a restart

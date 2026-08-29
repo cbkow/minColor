@@ -15,7 +15,7 @@
     $.global.__minColorWin = win;                     // keep the palette alive after the launching script returns
   }
   win.orientation = "column"; win.alignChildren = ["fill", "top"]; win.spacing = 6; win.margins = 10;
-  var presets = {}, keys = [], lists = { inputSpaces: [], viewSpaces: [], renderSpaces: [], family: "Linear" }, payloadError = null, currentPreset = null;
+  var presets = {}, keys = [], lists = { inputSpaces: [], viewSpaces: [], renderSpaces: [], family: "Linear" }, payloadError = null, currentPreset = null, currentPin = null;
   try {
     presets = MinColor.presets(); for (var k in presets) keys.push(k);
     currentPreset = MinColor.currentPresetKey();                    // menus are PER PRESET; null = linear fallback lists
@@ -246,8 +246,8 @@
           }
         } catch (eAR) {}
       }
-      var pk = d.preset || null;                                     // preset changed (open / migrate / new / closed) -> menus follow
-      if (pk !== currentPreset) { try { repopulateMenus(pk); } catch (eRp) {} }
+      var pk = d.preset || null, pin = d.pin || null;                // preset OR pin changed (open / migrate / new / closed / HEAL) -> menus follow the pinned config
+      if (pk !== currentPreset || pin !== currentPin) { try { repopulateMenus(pk); currentPin = pin; } catch (eRp) {} }
       var colors = { green: [0.28, 0.82, 0.4, 1], yellow: [0.95, 0.78, 0.18, 1], red: [0.94, 0.32, 0.28, 1], unmanaged: [0.55, 0.55, 0.55, 1] };
       dot.dotColor = colors[d.status] || colors.unmanaged;
       dot.helpTip = "Doctor: " + d.status + " \u2014 " + d.text + "  (click to re-check)";
