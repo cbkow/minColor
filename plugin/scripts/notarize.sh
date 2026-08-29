@@ -2,14 +2,16 @@
 # Sign the mac plugin with Developer ID, notarize it, staple the ticket. Run after `cmake --build`
 # and BEFORE build/build.py, so the release zip carries a bundle that loads straight from a download.
 #
-# One-time: store notarization credentials (Apple ID + app-specific password, team 5Z4S9VHV56):
-#   xcrun notarytool store-credentials AC_PASSWORD --apple-id you@example.com --team-id 5Z4S9VHV56   (QCView-Player already did this)
-# Then:  plugin/scripts/notarize.sh ["Developer ID Application: Name (TEAMID)"]
+# One-time: store notarization credentials in a notarytool keychain profile (Apple ID +
+# app-specific password + team ID):
+#   xcrun notarytool store-credentials <profile> --apple-id you@example.com --team-id <TEAMID>
+# Then:  NOTARY_PROFILE=<profile> plugin/scripts/notarize.sh ["Developer ID Application: Name (TEAMID)"]
+# (identity defaults to the first Developer ID Application identity in the keychain; profile defaults to "notary")
 set -e
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
 PLUGIN="$HERE/build/minColorCST.plugin"
 IDENTITY="${1:-$(security find-identity -v -p codesigning | grep -o '"Developer ID Application: [^"]*"' | head -1 | tr -d '"')}"
-PROFILE="${NOTARY_PROFILE:-AC_PASSWORD}"   # same keychain profile QCView-Player uses
+PROFILE="${NOTARY_PROFILE:-notary}"
 [ -d "$PLUGIN" ] || { echo "build first (cmake --build plugin/build)"; exit 1; }
 [ -n "$IDENTITY" ] || { echo "no Developer ID Application identity found"; exit 1; }
 echo "signing with: $IDENTITY"

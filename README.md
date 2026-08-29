@@ -71,14 +71,15 @@ ScriptUI Panels, and the platform's `minColor` folder into
 macOS Gatekeeper: a plugin that arrives by download carries the quarantine flag, and an unsigned
 or unnotarized bundle is then reported as "damaged" (and offered for the Trash). Release builds
 are signed with Developer ID and notarized (`plugin/scripts/notarize.sh`, run before
-`build/build.py`), which loads straight from a download. For any other copy, clear the flag once
+`build/build.py`; needs a Developer ID identity and a notarytool keychain profile), which loads
+straight from a download. For any other copy, clear the flag once
 after copying: `xattr -dr com.apple.quarantine "/Library/Application Support/Adobe/Common/Plug-ins/7.0/MediaCore/minColor"`.
 Windows has no equivalent gate for `.aex` plug-ins; the `.aex` loads unsigned.
 
 ## Installers
 
 - **macOS**: `packaging/macos/build-pkg.sh` → `dist-panel/minColor-<ver>.pkg`. Signed with the
-  "Developer ID Installer" identity and notarized (profile `AC_PASSWORD`) when present, otherwise an
+  "Developer ID Installer" identity and notarized (keychain profile `$NOTARY_PROFILE`) when present, otherwise an
   unsigned pkg for local testing. Payload: plug-in + config store into MediaCore, panel into every
   After Effects ≥ 2025 for the console user, settings seeded under `/Users/Shared/minColor/settings`
   (never overwritten). Refuses to run while After Effects is open. Log:

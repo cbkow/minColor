@@ -40,7 +40,7 @@ PKG="$OUT/minColor-$VER.pkg"
 if [ -n "$INSTALLER_ID" ]; then
   productbuild --distribution "$STAGE/distribution.xml" --package-path "$STAGE/pkgs" --sign "$INSTALLER_ID" --timestamp "$PKG" >/dev/null
   echo "signed with: $INSTALLER_ID"
-  PROFILE="${NOTARY_PROFILE:-AC_PASSWORD}"
+  PROFILE="${NOTARY_PROFILE:-notary}"                              # your notarytool keychain profile (see plugin/scripts/notarize.sh)
   xcrun notarytool submit "$PKG" --keychain-profile "$PROFILE" --wait | tail -2
   xcrun stapler staple "$PKG" && xcrun stapler validate "$PKG" | tail -1
   spctl --assess --type install --verbose=2 "$PKG" 2>&1 | tail -1

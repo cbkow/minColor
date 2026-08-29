@@ -1,6 +1,6 @@
 # minColor plugin — Windows build
 
-STATUS: built and proven on the Union Windows machine (2026-08-27) — this doc
+STATUS: built and proven on a Windows 11 workstation (2026-08-27) — this doc
 describes the pipeline as it actually shipped.
 
 Prereqs: Visual Studio 2022 (C++ workload), CMake 3.24+, git.
