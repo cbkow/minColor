@@ -41,7 +41,7 @@ A zip is also attached to each release for manual installation; its `README.txt`
 
 ## The Extras
 
-Regular `sRGB, rec.709, rec.1886, ACES`, and `Blender` workflows are supported, and all the view, looks, and media names you expect are present. *You can use these configs without the plugins.*
+Regular `sRGB, rec.709, rec.1886, ACES`, and `Blender` workflows are supported, and all the view, looks, and media names you expect are present. AE fully supports the bundled configs, so you can skip the plugins and use them directly as well.
 
 To make things easier and reduce inconsistencies between AE on macOS and Windows, minColor provides common-name aliases. Essentially, any **Desktop-labeled** **View** or **Render** option is an alias for `sRGB` flows—typical in web/social/direct/tech branding work. Any **View** or **Render** option labeled **"Video”** is better suited for broadcast delivery and standard commercial post-production workflows. They are all aliases for `Rec. 709 gamma 2.4 / Rec. 1886 / BT. 1886`.
 
@@ -55,6 +55,10 @@ If you are working in post-production in an offline/online flow, you will most l
 - **Windows or macOS Desktop View** is what viewers will see on a TV or a professional broadcast monitor in an Online room.
 - **Windows or macOS Video Views** are what people will see when they watch videos online or via a desktop video player. *Pick your poison (and lament the state of video today).*
 - **Video Render** is what you will be outputting to offline editors and online finishing artists.
+
+To be extra clear, except for the macOS flavors, these are all aliases for common settings like ’sRGB’ but are helpful for artists who are unfamiliar. The macOS views counteract a bug in how macOS communicates to macOS. If you are curious:
+
+> AE's macOS viewport hands content to a Display P3 macOS surface without applying proper conversion — sRGB projects don't get the sRGB→P3 primary matrix applied, and P3 projects don't get the encoding curve adjusted to match what the macOS compositor actually decodes, producing wrong colors in the first case and wrong midtones in the second.
 
 ---
 
