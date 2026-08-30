@@ -56,7 +56,7 @@ If you are working in post-production in an offline/online flow, you will most l
 - **Windows or macOS Video Views** are what people will see when they watch videos online or via a desktop video player. *Pick your poison (and lament the state of video today).*
 - **Video Render** is what you will be outputting to offline editors and online finishing artists.
 
-To be extra clear, except for the macOS flavors, these are all aliases for common settings like ’sRGB’ but are helpful for artists who are unfamiliar. The macOS views counteract a bug in how macOS communicates to macOS. If you are curious:
+To be extra clear, except for the macOS flavors, these are all aliases for common settings like `sRGB` but are helpful for artists who are unfamiliar. The macOS views counteract a bug in how macOS communicates to macOS. If you are curious:
 
 > AE's macOS viewport hands content to a Display P3 macOS surface without applying proper conversion — sRGB projects don't get the sRGB→P3 primary matrix applied, and P3 projects don't get the encoding curve adjusted to match what the macOS compositor actually decodes, producing wrong colors in the first case and wrong midtones in the second.
 
