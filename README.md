@@ -53,7 +53,7 @@ If you work for tech/web/direct, this will most likely match your normal workflo
 ### Commercial and Broadcast
 If you are working in post-production in an offline/online flow, you will most likely want:
 - **Windows or macOS Desktop View** is what viewers will see on a TV or a professional broadcast monitor in an Online room.
-- **Windows or macOS Video Views** are what people will see when they watch videos online or via a desktop video player. Pick your poison (and lament the state of video today).
+- **Windows or macOS Video Views** are what people will see when they watch videos online or via a desktop video player. *Pick your poison (and lament the state of video today).*
 - **Video Render** is what you will be outputting to offline editors and online finishing artists.
 
 ---
