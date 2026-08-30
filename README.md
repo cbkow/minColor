@@ -54,6 +54,10 @@ If you are working in post-production in an offline/online flow, you will most l
 
 ---
 
+## Worth Noting
+
+The AE SDK doesn't currently expose everything we need to manage color space programmatically, so minColor is a bit of a hack. On migration, it backs up the current .aep file to a `_minColor` folder next to the project and timestamps the backup. Then it opens the file, manually edits the project file to have the correct colorspace and settings, and reloads the project. Backups are always available from before any migration — just in case. There are requests for more API control over the settings we need, so this could change in the future and be more seamless. 
+
 ## Documentation
 
 - [Using minColor](docs/using.md)
