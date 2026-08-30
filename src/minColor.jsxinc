@@ -3,7 +3,7 @@
 // Facts and constraints this encodes are documented in ../PREPLAN.md and ../probes/RESULTS.md.
 
 var MinColor = (function () {
-  var VERSION = "0.9.1";
+  var VERSION = "0.9.2";
   var ROOT = new File($.fileName).parent.parent.fsName;            // repo root (src/..)
   var DIST = ROOT + "/config/dist";
   var STICKY_SEC = "After Effects Sticky Prefs", STICKY_KEY = "AE Last Project Settings";
@@ -308,6 +308,20 @@ var MinColor = (function () {
     return pr;
   }
 
+  function bitDepthFor(presetKey) { return familyFor(presetKey) === "Display" ? 16 : 32; }   // linear flows 32-bit float, SDR 16 bpc
+  function applyBitDepth(presetKey) {                                // AE's setter rejects 16 in OCIO mode (8/32 fine); with colour
+    var p = app.project, want = bitDepthFor(presetKey);              // management off it takes 16 and keeps it when OCIO comes back
+    if (p.bitsPerChannel === want) return want;
+    try { p.bitsPerChannel = want; if (p.bitsPerChannel === want) return want; } catch (e0) {}
+    var pin = p.ocioConfigurationFile, cms = p.colorManagementSystem;
+    try {
+      p.colorManagementSystem = 0;
+      p.bitsPerChannel = want;
+    } catch (e1) {}
+    try { p.colorManagementSystem = (cms === 1 ? 1 : cms); } catch (e2) {}
+    try { if (pin && p.ocioConfigurationFile !== pin) p.ocioConfigurationFile = pin; } catch (e3) {}
+    return p.bitsPerChannel;
+  }
   function newProject(presetKey, opts) {
     var p0 = app.project;
     if (p0.dirty) {                                                 // never let app.newProject() raise a modal save prompt
@@ -319,7 +333,7 @@ var MinColor = (function () {
     var p = app.project;
     if (p.colorManagementSystem !== 1) p.colorManagementSystem = 1;
     p.ocioConfigurationFile = payloadRoot() + "/" + pr.config;      // bootstrap config (not carried by the pref); re-pinned to sidecar below
-    try { p.bitsPerChannel = 32; } catch (e) {}                     // 16 must be set in the UI (setter quirk)
+    try { p.bitsPerChannel = 32; } catch (e) {}                     // provisional; applyBitDepth() below sets the family depth
     p.compensateForSceneReferredProfiles = false;
     // a minColor project needs a file (sidecar home); ask where it lives, then pin the sidecar config
     if (!p.file) {
@@ -331,6 +345,7 @@ var MinColor = (function () {
     try { stampProvenance(presetKey, presets()[presetKey].config); } catch (eSt2) {}
     if (!readEngine()) stampEngine("native");
     p.ocioConfigurationFile = pinned;
+    try { applyBitDepth(presetKey); } catch (eBd) {}
     if (p.workingSpace !== pr.workingSpaceLabel) {
       // AE resolved the seeded working space against its DEFAULT config and dropped it (RESULTS 15):
       // recover via save -> patch -> reopen against the sidecar-pinned project
@@ -728,6 +743,7 @@ var MinColor = (function () {
     AEPPatch.patchFile(p.file.fsName, { working: { name: pr.working, family: pr.family }, footage: strip });
     app.beginSuppressDialogs(); app.open(new File(p.file.fsName)); app.endSuppressDialogs(false);
     var rebuilt = rebuildMinColorEffects();                          // stale-config CSTs from a previous preset can crash AE's validator
+    var bpc = null; try { bpc = applyBitDepth(presetKey); } catch (eBd2) {}   // 32 for linear flows, 16 for SDR
     /* the migrated TIMELINE (the comp that was active) gets both utility layers, view enabled —
        the panel's dropdown values are remapped into the NEW preset's family first */
     var utility = null;
@@ -750,7 +766,7 @@ var MinColor = (function () {
     var audit = syncReport(), bad = 0;
     for (var a2 = 0; a2 < audit.rows.length; a2++) if (!audit.rows[a2].okFlag) bad++;
     var pinNow = app.project.ocioConfigurationFile || "";
-    return { preset: presetKey, working: app.project.workingSpace, pinLocus: (pinNow.indexOf(CENTRAL_ROOT) === 0 ? "central" : "sidecar (central store not installed)"), stripped: strip.length, residual: bad, backup: bpath, harvested: strip.length, effectsRebuilt: rebuilt.rebuilt.length, effectsFailed: rebuilt.failed, effectsRemapped: rebuilt.remapped || [], effectsRemoved: rebuilt.removed || [], utility: utility, effectsForeign: rebuilt.foreign, strippedPipeline: rebuilt.strippedPipeline, gradesLeft: rebuilt.gradesLeft, viewRenderRetargeted: rebuilt.viewRender || 0, orphanLayers: rebuilt.orphans || [], backups: backupStats() };
+    return { preset: presetKey, working: app.project.workingSpace, pinLocus: (pinNow.indexOf(CENTRAL_ROOT) === 0 ? "central" : "sidecar (central store not installed)"), stripped: strip.length, residual: bad, backup: bpath, harvested: strip.length, effectsRebuilt: rebuilt.rebuilt.length, effectsFailed: rebuilt.failed, effectsRemapped: rebuilt.remapped || [], effectsRemoved: rebuilt.removed || [], utility: utility, bitsPerChannel: bpc, effectsForeign: rebuilt.foreign, strippedPipeline: rebuilt.strippedPipeline, gradesLeft: rebuilt.gradesLeft, viewRenderRetargeted: rebuilt.viewRender || 0, orphanLayers: rebuilt.orphans || [], backups: backupStats() };
   }
 
   // ---------- suggestions & interpret passes (single-authority model: effects only) ----------
@@ -1346,7 +1362,7 @@ var MinColor = (function () {
   function addViewGuideLayer(comp, viewColorspace) { return upsertUtilityLayer(comp, "view", viewColorspace || familyDefaults(familyFor(currentPresetKey())).view); }
   function addRenderLayer(comp, renderSpace) { return upsertUtilityLayer(comp, "render", renderSpace || familyDefaults(familyFor(currentPresetKey())).render); }
 
-  return { VERSION: VERSION, presets: presets, presetMeta: presetMeta, configSpaces: configSpaces, pinnedSpaces: pinnedSpaces, pinBehind: pinBehind, currentPresetKey: currentPresetKey, familyFor: familyFor, familyDefaults: familyDefaults, parseFxName: parseFxName, menuLists: menuLists, preflight: preflight, payloadRoot: payloadRoot, ensureSidecar: ensureSidecar, sidecarInfo: sidecarInfo, doctor: doctor, repair: repair, pinConfig: pinConfig, findConfigByName: findConfigByName, stampProvenance: stampProvenance, readProvenance: readProvenance, archiveProject: archiveProject, packageForAnyAE: packageForAnyAE, syncPluginNames: syncPluginNames, stampEngine: stampEngine, readEngine: readEngine, stampHarvest: stampHarvest, migrateProject: migrateProject, interpretPass: interpretPass, extDefaults: extDefaults, saveExtDefaults: saveExtDefaults, suggestionFor: suggestionFor, collectDetected: collectDetected, readHarvest: readHarvest, harvestPath: harvestPath, seedStickyPref: seedStickyPref, newProject: newProject,
+  return { VERSION: VERSION, presets: presets, presetMeta: presetMeta, bitDepthFor: bitDepthFor, applyBitDepth: applyBitDepth, configSpaces: configSpaces, pinnedSpaces: pinnedSpaces, pinBehind: pinBehind, currentPresetKey: currentPresetKey, familyFor: familyFor, familyDefaults: familyDefaults, parseFxName: parseFxName, menuLists: menuLists, preflight: preflight, payloadRoot: payloadRoot, ensureSidecar: ensureSidecar, sidecarInfo: sidecarInfo, doctor: doctor, repair: repair, pinConfig: pinConfig, findConfigByName: findConfigByName, stampProvenance: stampProvenance, readProvenance: readProvenance, archiveProject: archiveProject, packageForAnyAE: packageForAnyAE, syncPluginNames: syncPluginNames, stampEngine: stampEngine, readEngine: readEngine, stampHarvest: stampHarvest, migrateProject: migrateProject, interpretPass: interpretPass, extDefaults: extDefaults, saveExtDefaults: saveExtDefaults, suggestionFor: suggestionFor, collectDetected: collectDetected, readHarvest: readHarvest, harvestPath: harvestPath, seedStickyPref: seedStickyPref, newProject: newProject,
            assertProject: assertProject, applyPresetToCurrent: applyPresetToCurrent,
            syncReport: syncReport, syncApply: syncApply, rebuildMinColorEffects: rebuildMinColorEffects, translateEffects: translateEffects, pluginAvailable: pluginAvailable, uiState: uiState, saveUiState: saveUiState,
            setPopupByName: setPopupByName, addInputTransform: addInputTransform, addViewGuideLayer: addViewGuideLayer, addRenderLayer: addRenderLayer, ensureUtilityLayers: ensureUtilityLayers, findUtilityLayer: findUtilityLayer,

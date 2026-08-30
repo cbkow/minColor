@@ -315,7 +315,7 @@
         if (r.orphanLayers && r.orphanLayers.length) warn.push("EMPTY minColor VIEW/RENDER layers (artifacts of an old bug \u2014 safe to delete):\n  " + r.orphanLayers.join("\n  "));
         if (warn.length) alert("minColor \u2014 migrate warnings\n\n" + warn.join("\n\n").substr(0, 3000));
         var ut = r.utility && !r.utility.error ? " | " + r.utility.comp + ": view " + r.utility.view + ", render " + r.utility.render : "";
-        return "working=" + r.working + ut + " | pin: " + (r.pinLocus || "?") + " | stripped=" + r.stripped + " rebuilt=" + (r.effectsRebuilt || 0) + " remapped=" + (r.effectsRemapped ? r.effectsRemapped.length : 0) + " view/render retargeted=" + (r.viewRenderRetargeted || 0) + " residual=" + r.residual + " | backups: " + (r.backups ? r.backups.count + " (" + r.backups.mb + " MB)" : "?");
+        return "working=" + r.working + (r.bitsPerChannel ? " · " + r.bitsPerChannel + " bpc" : "") + ut + " | pin: " + (r.pinLocus || "?") + " | stripped=" + r.stripped + " rebuilt=" + (r.effectsRebuilt || 0) + " remapped=" + (r.effectsRemapped ? r.effectsRemapped.length : 0) + " view/render retargeted=" + (r.viewRenderRetargeted || 0) + " residual=" + r.residual + " | backups: " + (r.backups ? r.backups.count + " (" + r.backups.mb + " MB)" : "?");
       });
     }
   };
@@ -396,7 +396,14 @@
   };
   bMatches.onClick = function () {
     var dlg = new Window("dialog", "minColor — Extension matches");
-    dlg.orientation = "column"; dlg.alignChildren = ["fill", "top"]; dlg.margins = 12; dlg.spacing = 6;
+    dlg.orientation = "column"; dlg.alignChildren = ["fill", "top"]; dlg.margins = 14; dlg.spacing = 8;
+    var mh = dlg.add("group"); mh.spacing = 6; mh.alignChildren = ["left", "center"]; mh.alignment = ["fill", "top"];   // themed header, like the Setup dialog
+    var mic = mh.add("iconbutton", undefined, undefined, { style: "toolbutton" }); mic.preferredSize = [18, 18];
+    mic.onDraw = function () { GLYPH.bars(this.graphics); };
+    var mst = mh.add("statictext", undefined, "Extension matches");
+    try { mst.graphics.font = ScriptUI.newFont("dialog", "BOLD", 11); } catch (eMh) {}
+    var mln = mh.add("panel"); mln.alignment = ["fill", "center"]; mln.preferredSize.height = 2; mln.minimumSize.width = 20;
+    dlg.add("statictext", undefined, "Extension \u2192 colour space the Interpret passes assume. \"working\" = leave as is.");
     var lb = dlg.add("listbox", undefined, [], { numberOfColumns: 2, showHeaders: true, columnTitles: ["ext", "space"], columnWidths: [70, 200] });
     lb.preferredSize = [300, 180];
     function refreshMap() {
@@ -408,10 +415,11 @@
     var et = row.add("edittext", undefined, ""); et.characters = 6;
     var dds = row.add("dropdownlist", undefined, ["working (identity)"].concat(lists.inputSpaces)); dds.selection = 0; dds.preferredSize.width = 200;
     bindDD(dds, "matchesSpace");
-    var row2 = dlg.add("group");
-    var bSet = row2.add("button", undefined, "Add / Update");
-    var bDel = row2.add("button", undefined, "Remove");
-    var bDone = row2.add("button", undefined, "Done", { name: "ok" });
+    var row2 = dlg.add("group"); row2.alignment = ["right", "top"];
+    var bSet = flatButton(row2, "Add / Update", { width: 104, primary: true });
+    var bDel = flatButton(row2, "Remove", { width: 76, outline: true });
+    var bDone = flatButton(row2, "Done", { width: 64 });
+    try { dlg.defaultElement = bDone; } catch (eDe) {}
     lb.onChange = function () { if (lb.selection) { et.text = lb.selection.text; var want = lb.selection.subItems[0].text; dds.selection = 0; for (var i = 1; i < dds.items.length; i++) if (dds.items[i].text === want) dds.selection = i; } };
     function applyRule(quiet) {
       try { var ext = et.text.replace(/^\./, "").toLowerCase(); if (!ext) { if (quiet) return; throw new Error("type an extension"); }
