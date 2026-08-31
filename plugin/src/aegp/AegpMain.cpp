@@ -29,7 +29,7 @@ static void CmdMigrate(void);
 static void CmdStripForeign(void);
 static void CmdStripAll(void);
 static void CmdArchive(void);
-static void CmdProbeH(void);
+static void CmdPackage(void);
 
 static MincCommandDef g_commands[] = {
     { "minColor: Sync From Names",     CmdSync,        0 },
@@ -41,8 +41,7 @@ static MincCommandDef g_commands[] = {
     { "minColor: Strip Foreign OCIO",  CmdStripForeign, 0 },
     { "minColor: Strip ALL",           CmdStripAll,    0 },
     { "minColor: Archive Project",     CmdArchive,     0 },
-    { "minColor: Probe H",             CmdProbeH,      0 },   /* TEMPORARY: Package gate */
-    /* M1 ceremonies append here step by step */
+    { "minColor: Package for Any AE",  CmdPackage,     0 },
 };
 static const int g_nCommands = (int)(sizeof(g_commands) / sizeof(g_commands[0]));
 
@@ -124,61 +123,7 @@ static void CmdMigrate(void) {
 static void CmdStripForeign(void) { ReportCeremony("strip-foreign", MincStripForeignOcio(g_pica, g_id, false)); }
 static void CmdStripAll(void)     { ReportCeremony("strip-all",     MincStripForeignOcio(g_pica, g_id, true)); }
 static void CmdArchive(void)      { ReportCeremony("archive",       MincArchiveProject(g_pica, g_id)); }
-
-/* TEMPORARY — Probe H (M1 step 6 gate): can ADBE OCIO CST popups be enumerated + written
-   HEADLESS via AEGP? Verdict decides ship-vs-defer for the Package ceremony. Removed after. */
-static void CmdProbeH(void) {
-    SPBasicSuite *bp = g_pica;
-    Acq<AEGP_ItemSuite9>  its(bp, kAEGPItemSuite,  kAEGPItemSuiteVersion9);
-    Acq<AEGP_CompSuite12> cps(bp, kAEGPCompSuite,  kAEGPCompSuiteVersion12);
-    Acq<AEGP_LayerSuite9> lys(bp, kAEGPLayerSuite, kAEGPLayerSuiteVersion9);
-    Acq<AEGP_EffectSuite5> efs(bp, kAEGPEffectSuite, kAEGPEffectSuiteVersion5);
-    Acq<AEGP_StreamSuite6> sts(bp, kAEGPStreamSuite, kAEGPStreamSuiteVersion6);
-    if (!its || !cps || !lys || !efs || !sts) { MincLog("H: suites failed"); return; }
-    AEGP_ItemH active = nullptr; its->AEGP_GetActiveItem(&active);
-    AEGP_CompH comp = nullptr;
-    if (active) cps->AEGP_GetCompFromItem(active, &comp);
-    if (!comp) { MincLog("H: no active comp"); return; }
-    AEGP_LayerH ly = nullptr;
-    lys->AEGP_GetCompLayerByIndex(comp, 0, &ly);
-    if (!ly) { MincLog("H: no layer"); return; }
-    /* find the NATIVE CST key */
-    AEGP_InstalledEffectKey key = 0, k = AEGP_InstalledEffectKey_NONE, nx = AEGP_InstalledEffectKey_NONE;
-    while (efs->AEGP_GetNextInstalledEffect(k, &nx) == A_Err_NONE && nx != AEGP_InstalledEffectKey_NONE) {
-        A_char mn[64] = "";
-        if (efs->AEGP_GetEffectMatchName(nx, mn) == A_Err_NONE && !strcmp(mn, "ADBE OCIO Color Space Transform")) { key = nx; break; }
-        k = nx;
-    }
-    if (!key) { MincLog("H: native CST not installed"); return; }
-    AEGP_EffectRefH effH = nullptr;
-    if (efs->AEGP_ApplyEffect(g_id, ly, key, &effH) != A_Err_NONE || !effH) { MincLog("H: apply failed"); return; }
-    MincLog("H: native CST applied HEADLESS (no viewer opened by us)");
-    for (PF_ParamIndex pi = 1; pi <= 3; ++pi) {
-        PF_ParamType pt = PF_Param_RESERVED;
-        PF_ParamDefUnion u;
-        memset(&u, 0, sizeof(u));
-        A_Err pe = efs->AEGP_GetEffectParamUnionByIndex(g_id, effH, pi, &pt, &u);
-        if (pe != A_Err_NONE) { MincLog("H: param %d union err=%d", (int)pi, (int)pe); continue; }
-        if (pt == PF_Param_POPUP) {
-            const char *names = u.pd.u.namesptr;
-            char head[121] = "";
-            if (names) { strncpy(head, names, 120); head[120] = 0; }
-            MincLog("H: param %d POPUP choices=%d names[0..120]='%s'", (int)pi, (int)u.pd.num_choices, head);
-        } else MincLog("H: param %d type=%d (not popup)", (int)pi, (int)pt);
-    }
-    /* write Input Space popup (param 1) = index 3 (arbitrary known-valid) headless */
-    AEGP_StreamRefH s1 = nullptr;
-    if (sts->AEGP_GetNewEffectStreamByIndex(g_id, effH, 1, &s1) == A_Err_NONE && s1) {
-        AEGP_StreamValue2 v;
-        memset(&v, 0, sizeof(v));
-        v.streamH = s1;
-        v.val.one_d = 3;
-        A_Err se = sts->AEGP_SetStreamValue(g_id, s1, &v);
-        MincLog("H: SetStreamValue(param1, one_d=3) err=%d", (int)se);
-        sts->AEGP_DisposeStream(s1);
-    } else MincLog("H: param1 stream acquire failed");
-    efs->AEGP_DisposeEffect(effH);
-}
+static void CmdPackage(void)      { ReportCeremony("package",       MincPackageForAnyAE(g_pica, g_id)); }
 
 /* ---------------- hooks ---------------- */
 static A_Err IdleHook(AEGP_GlobalRefcon, AEGP_IdleRefcon, A_long *max_sleepPL) {

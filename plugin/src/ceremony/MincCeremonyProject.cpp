@@ -3,6 +3,8 @@
 #include "MincSettings.h"
 #include "MincSuggest.h"
 #include "MincEffectOps.h"
+#include "MincTranslate.h"
+#include "MincArchive.h"
 #include "MincJson.h"
 #include "../core/MincRifx.h"
 #include <cstdio>
@@ -444,4 +446,53 @@ std::string MincMigrateProject(SPBasicSuite *bp, AEGP_PluginID id, const std::st
            ", \"gradesLeft\": " + JArr(rb.gradesLeft) +
            ", \"orphanLayers\": " + JArr(rb.orphans) +
            ", \"backups\": " + bstats + " }\n";
+}
+
+std::string MincPackageForAnyAE(SPBasicSuite *bp, AEGP_PluginID id) {
+    AEGP_SuiteHandler suites(bp);
+    Acq<AEGP_ProjSuite6> pjs(bp, kAEGPProjSuite, kAEGPProjSuiteVersion6);
+    Acq<AEGP_ItemSuite9> its(bp, kAEGPItemSuite, kAEGPItemSuiteVersion9);
+    Acq<AEGP_CompSuite12> cps(bp, kAEGPCompSuite, kAEGPCompSuiteVersion12);
+    Acq<AEGP_LayerSuite9> lys(bp, kAEGPLayerSuite, kAEGPLayerSuiteVersion9);
+    Acq<AEGP_FootageSuite5> fts(bp, kAEGPFootageSuite, kAEGPFootageSuiteVersion5);
+    Acq<AEGP_UtilitySuite6> uts(bp, kAEGPUtilitySuite, kAEGPUtilitySuiteVersion6);
+    PEnv e;
+    if (!AcquireEnv(bp, id, suites, e, pjs, its, cps, lys, fts, uts)) return "{ \"error\": \"suite acquire failed\" }\n";
+    std::string projPath = ProjPath(e);
+    if (projPath.empty()) return "{ \"error\": \"save the project first\" }\n";
+
+    MincTranslateReport tr = MincTranslateToNative(bp, id);          /* :491 */
+
+    /* identity from the live pin (sidecarInfo semantics, :492) */
+    MincAuthorityRefreshBp(bp, id);
+    MincAuthoritySnapshot snap = {};
+    MincAuthorityGet(&snap);
+    std::string preset = MincPresetFromConfigBase(Basename2(snap.configPath));
+    if (preset.empty()) return "{ \"error\": \"not a minColor project\" }\n";
+    std::string cfgTarget, serr;
+    if (!MincEnsureSidecar(projPath, preset, &cfgTarget, &serr))     /* :493 */
+        return "{ \"error\": " + JStr(serr) + " }\n";
+
+    /* the panel re-pins live and stamps engine="native" during translate (:640); the native
+       path folds both into one patch ceremony — save (persists translated effects), patch
+       pin + engine, reopen. Working space and footage untouched.                          */
+    if (!SaveTo(e, projPath)) return "{ \"error\": \"save failed\" }\n";
+    std::vector<MincFootagePatch> none;
+    std::vector<MincXmpUpsert> xmp = { { "engine", "native" } };
+    std::string perr;
+    if (!MincRifxPatchProject(projPath.c_str(), cfgTarget.c_str(), nullptr, none, xmp, &perr))
+        return "{ \"error\": " + JStr("patch failed: " + perr) + " }\n";
+    if (!Reopen(e, projPath)) return "{ \"error\": \"reopen failed\" }\n";
+    MincAuthorityRefreshBp(bp, id);
+
+    std::string ar = MincArchiveProject(bp, id);                     /* :494 */
+    while (!ar.empty() && ar[ar.size() - 1] == '\n') ar.erase(ar.size() - 1);
+
+    char tn[16];
+    snprintf(tn, sizeof(tn), "%d", (int)tr.converted.size());
+    return std::string("{ \"translated\": ") + tn +
+           ", \"failed\": " + JArr(tr.failed) +
+           ", \"remapped\": " + JArr(tr.remapped) +
+           ", \"removed\": " + JArr(tr.removed) +
+           ", \"archive\": " + ar + " }\n";
 }

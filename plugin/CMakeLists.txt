@@ -154,6 +154,7 @@ if(APPLE)
     src/ceremony/MincCeremonyProject.cpp
     src/ceremony/MincStrip.cpp
     src/ceremony/MincArchive.cpp
+    src/ceremony/MincTranslate.cpp
     src/ceremony/MincPicker.mm
   )
   add_library(minColorAEGP MODULE

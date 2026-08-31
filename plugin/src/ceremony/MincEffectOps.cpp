@@ -109,6 +109,94 @@ bool MincMoveEffect(SPBasicSuite *bp, AEGP_PluginID id, AEGP_LayerH layerH, int 
     return ok;
 }
 
+#include <map>
+#include <vector>
+static AEGP_InstalledEffectKey KeyByMatch(SPBasicSuite *bp, const char *matchName) {
+    static std::map<std::string, AEGP_InstalledEffectKey> cache;
+    auto it = cache.find(matchName);
+    if (it != cache.end()) return it->second;
+    Acq<AEGP_EffectSuite5> efs(bp, kAEGPEffectSuite, kAEGPEffectSuiteVersion5);
+    AEGP_InstalledEffectKey found = 0;
+    if (efs) {
+        AEGP_InstalledEffectKey k = AEGP_InstalledEffectKey_NONE, nx = AEGP_InstalledEffectKey_NONE;
+        while (efs->AEGP_GetNextInstalledEffect(k, &nx) == A_Err_NONE && nx != AEGP_InstalledEffectKey_NONE) {
+            A_char mn[64] = "";
+            if (efs->AEGP_GetEffectMatchName(nx, mn) == A_Err_NONE && !strcmp(mn, matchName)) { found = nx; break; }
+            k = nx;
+        }
+    }
+    cache[matchName] = found;
+    return found;
+}
+
+AEGP_EffectRefH MincApplyByMatchWithName(SPBasicSuite *bp, AEGP_PluginID id, AEGP_LayerH layerH,
+                                         const char *matchName, const std::string &dispName,
+                                         int targetIndex1) {
+    Acq<AEGP_EffectSuite5> efs(bp, kAEGPEffectSuite, kAEGPEffectSuiteVersion5);
+    if (!efs) return nullptr;
+    AEGP_InstalledEffectKey key = KeyByMatch(bp, matchName);
+    if (!key) { MincLog("apply: '%s' not installed", matchName); return nullptr; }
+    AEGP_EffectRefH effH = nullptr;
+    if (efs->AEGP_ApplyEffect(id, layerH, key, &effH) != A_Err_NONE || !effH) return nullptr;
+    std::vector<MincFxEntry> fx;
+    MincEnumLayerEffects(bp, id, layerH, &fx);
+    int newIdx = (int)fx.size();
+    if (!MincRenameEffectAt(bp, id, layerH, newIdx, dispName)) { efs->AEGP_DisposeEffect(effH); return nullptr; }
+    if (targetIndex1 > 0 && targetIndex1 != newIdx)
+        efs->AEGP_ReorderEffect(effH, targetIndex1 - 1);
+    return effH;                                          /* caller disposes */
+}
+
+bool MincSetPopupByName(SPBasicSuite *bp, AEGP_PluginID id, AEGP_EffectRefH effH,
+                        int paramIdx, const std::string &wanted, std::string *errOut) {
+    Acq<AEGP_EffectSuite5> efs(bp, kAEGPEffectSuite, kAEGPEffectSuiteVersion5);
+    Acq<AEGP_StreamSuite6> sts(bp, kAEGPStreamSuite, kAEGPStreamSuiteVersion6);
+    if (!efs || !sts) { if (errOut) *errOut = "suites"; return false; }
+    PF_ParamType pt = PF_Param_RESERVED;
+    PF_ParamDefUnion u;
+    memset(&u, 0, sizeof(u));
+    if (efs->AEGP_GetEffectParamUnionByIndex(id, effH, paramIdx, &pt, &u) != A_Err_NONE ||
+        pt != PF_Param_POPUP || !u.pd.u.namesptr) {
+        if (errOut) *errOut = "popup enumerate failed";
+        return false;
+    }
+    std::vector<std::string> list;
+    {
+        const char *p = u.pd.u.namesptr;
+        std::string cur;
+        for (; *p; ++p) { if (*p == '|') { list.push_back(cur); cur.clear(); } else cur += *p; }
+        list.push_back(cur);
+    }
+    int idx = -1;
+    for (size_t i = 0; i < list.size() && idx < 0; ++i) if (list[i] == wanted) idx = (int)i;
+    if (idx < 0)                                          /* role entries: "wanted: <name>" */
+        for (size_t i = 0; i < list.size() && idx < 0; ++i)
+            if (list[i].compare(0, wanted.size() + 2, wanted + ": ") == 0) idx = (int)i;
+    if (idx < 0)                                          /* suffix "/wanted" or ": wanted" */
+        for (size_t i = 0; i < list.size() && idx < 0; ++i) {
+            const std::string &s = list[i];
+            if (s.size() > wanted.size() + 1 && s.compare(s.size() - wanted.size() - 1, std::string::npos, "/" + wanted) == 0) idx = (int)i;
+            else if (s.size() > wanted.size() + 2 && s.compare(s.size() - wanted.size() - 2, std::string::npos, ": " + wanted) == 0) idx = (int)i;
+        }
+    if (idx < 0) {
+        if (errOut) *errOut = "'" + wanted + "' not found among " + std::to_string(list.size()) + " entries";
+        return false;
+    }
+    AEGP_StreamRefH s1 = nullptr;
+    if (sts->AEGP_GetNewEffectStreamByIndex(id, effH, paramIdx, &s1) != A_Err_NONE || !s1) {
+        if (errOut) *errOut = "stream";
+        return false;
+    }
+    AEGP_StreamValue2 v;
+    memset(&v, 0, sizeof(v));
+    v.streamH = s1;
+    v.val.one_d = idx + 1;                                /* 1-based, Probe H verified */
+    A_Err se = sts->AEGP_SetStreamValue(id, s1, &v);
+    sts->AEGP_DisposeStream(s1);
+    if (se != A_Err_NONE) { if (errOut) *errOut = "SetStreamValue err"; return false; }
+    return true;
+}
+
 bool MincLayerLocked(SPBasicSuite *bp, AEGP_LayerH layerH) {
     Acq<AEGP_LayerSuite9> lys(bp, kAEGPLayerSuite, kAEGPLayerSuiteVersion9);
     if (!lys) return false;

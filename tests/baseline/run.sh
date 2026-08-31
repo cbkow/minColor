@@ -49,8 +49,11 @@ for i in $(seq 1 600); do [ -f "$OUT/DONE.txt" ] && break; sleep 2; done
 wait $OSA_PID 2>/dev/null || true
 ae_quit
 
-# restore settings
+# restore settings — but keep the handshake the AEGP just wrote: aegp-api.json is
+# last-launch info by design, and restoring a stale copy would make it lie
+[ -f "$SETTINGS/aegp-api.json" ] && cp "$SETTINGS/aegp-api.json" "$OUT/.aegp-api.json" || true
 if [ -d "$SETTINGS_BAK" ]; then rm -rf "$SETTINGS"; cp -R "$SETTINGS_BAK" "$SETTINGS"; fi
+[ -f "$OUT/.aegp-api.json" ] && mkdir -p "$SETTINGS" && cp "$OUT/.aegp-api.json" "$SETTINGS/aegp-api.json" || true
 
 grep -q "^done" "$OUT/DONE.txt" || { echo "driver failed:"; cat "$OUT/DONE.txt"; exit 1; }
 rm -rf "$OUT"/scratch-* "$WRAP"

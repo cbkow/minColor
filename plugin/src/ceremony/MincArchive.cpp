@@ -40,6 +40,47 @@ static void ACopyTree(const std::string &from, const std::string &to) {   /* cop
     closedir(d);
 }
 
+bool MincEnsureSidecar(const std::string &projPath, const std::string &preset,
+                       std::string *cfgOut, std::string *errOut) {
+    MincPresetInfo pr = MincPresetMeta(preset);
+    if (!pr.valid) { if (errOut) *errOut = "unknown preset " + preset; return false; }
+    size_t sl = projPath.find_last_of('/');
+    std::string projDir = projPath.substr(0, sl);
+    std::string projName = projPath.substr(sl + 1);
+    std::string sd = projDir + "/_minColor";
+    mkdir(sd.c_str(), 0777);
+    std::string root = MincCentralConfigsDir();
+    const char *trees[] = { "luts", "filmic", "icc" };
+    for (int i = 0; i < 3; ++i) ACopyTree(root + "/" + trees[i], sd + "/" + trees[i]);
+    std::string cfgTarget = sd + "/" + pr.config;
+    if (!AExists(cfgTarget)) {
+        if (!ACopy(root + "/" + pr.config, cfgTarget)) { if (errOut) *errOut = "config copy failed"; return false; }
+    }
+    {   /* minColor.json v2 merge: per-project entries keyed by display name */
+        MincJsonPtr j = MincJsonParseFile(sd + "/minColor.json");
+        std::string parts;
+        bool first = true;
+        auto addEntry = [&](const std::string &k, const std::string &pk, const std::string &cf, const std::string &pv) {
+            std::string esc;
+            for (char c : k) { if (c == '"' || c == '\\') esc += '\\'; esc += c; }
+            if (!first) parts += ",\n  ";
+            parts += "\"" + esc + "\": { \"preset\": \"" + pk + "\", \"config\": \"" + cf + "\", \"panel\": \"" + pv + "\" }";
+            first = false;
+        };
+        if (j) {
+            MincJsonPtr projects = j->get("projects");
+            if (projects && projects->type == MincJsonValue::Object)
+                for (auto &kv : projects->obj)
+                    if (kv.second && kv.first != projName && !kv.second->str("config").empty())
+                        addEntry(kv.first, kv.second->str("preset"), kv.second->str("config"), kv.second->str("panel", MINC_VERSION_STR));
+        }
+        addEntry(projName, preset, pr.config, MINC_VERSION_STR);
+        MincWriteTextFile(sd + "/minColor.json", "{ \"projects\": {\n  " + parts + "\n} }");
+    }
+    if (cfgOut) *cfgOut = cfgTarget;
+    return true;
+}
+
 std::string MincArchiveProject(SPBasicSuite *bp, AEGP_PluginID id) {
     AEGP_SuiteHandler suites(bp);
     Acq<AEGP_ProjSuite6> pjs(bp, kAEGPProjSuite, kAEGPProjSuiteVersion6);
@@ -67,39 +108,11 @@ std::string MincArchiveProject(SPBasicSuite *bp, AEGP_PluginID id) {
     if (!pr.valid) return "{ \"error\": \"unknown preset\" }\n";
 
     /* ensureSidecar port (:177-196) — trees + config beside the project, minColor.json merge */
+    std::string cfgTarget, serr;
+    if (!MincEnsureSidecar(projPath, preset, &cfgTarget, &serr))
+        return "{ \"error\": " + AJStr(serr) + " }\n";
     size_t sl = projPath.find_last_of('/');
-    std::string projDir = projPath.substr(0, sl);
-    std::string projName = projPath.substr(sl + 1);
-    std::string sd = projDir + "/_minColor";
-    mkdir(sd.c_str(), 0777);
-    std::string root = MincCentralConfigsDir();
-    const char *trees[] = { "luts", "filmic", "icc" };
-    for (int i = 0; i < 3; ++i) ACopyTree(root + "/" + trees[i], sd + "/" + trees[i]);
-    std::string cfgTarget = sd + "/" + pr.config;
-    if (!AExists(cfgTarget)) {
-        if (!ACopy(root + "/" + pr.config, cfgTarget)) return "{ \"error\": \"config copy failed\" }\n";
-    }
-    {   /* minColor.json v2 merge: per-project entries keyed by display name */
-        MincJsonPtr j = MincJsonParseFile(sd + "/minColor.json");
-        std::string parts;
-        bool first = true;
-        auto addEntry = [&](const std::string &k, const std::string &pk, const std::string &cf, const std::string &pv) {
-            std::string esc;
-            for (char c : k) { if (c == '"' || c == '\\') esc += '\\'; esc += c; }
-            if (!first) parts += ",\n  ";
-            parts += "\"" + esc + "\": { \"preset\": \"" + pk + "\", \"config\": \"" + cf + "\", \"panel\": \"" + pv + "\" }";
-            first = false;
-        };
-        if (j) {
-            MincJsonPtr projects = j->get("projects");
-            if (projects && projects->type == MincJsonValue::Object)
-                for (auto &kv : projects->obj)
-                    if (kv.second && kv.first != projName && !kv.second->str("config").empty())
-                        addEntry(kv.first, kv.second->str("preset"), kv.second->str("config"), kv.second->str("panel", MINC_VERSION_STR));
-        }
-        addEntry(projName, preset, pr.config, MINC_VERSION_STR);
-        MincWriteTextFile(sd + "/minColor.json", "{ \"projects\": {\n  " + parts + "\n} }");
-    }
+    std::string sd = projPath.substr(0, sl) + "/_minColor";
     /* provenance.json from the SAVED file's XMP (:504-507) */
     std::string prov = MincXmpReadElement(MincReadFileTail(projPath.c_str()), "provenance");
     if (prov.empty()) prov = "{}";

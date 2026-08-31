@@ -27,3 +27,15 @@ bool MincMoveEffect(SPBasicSuite *bp, AEGP_PluginID id, AEGP_LayerH layerH, int 
 
 bool MincLayerLocked(SPBasicSuite *bp, AEGP_LayerH layerH);
 void MincSetLayerLocked(SPBasicSuite *bp, AEGP_LayerH layerH, bool locked);
+
+/* generic apply-by-match (cached key lookup per match name) + rename + optional reorder;
+   returns the live effect ref for popup writes — caller MUST dispose. nullptr on failure. */
+AEGP_EffectRefH MincApplyByMatchWithName(SPBasicSuite *bp, AEGP_PluginID id, AEGP_LayerH layerH,
+                                         const char *matchName, const std::string &dispName,
+                                         int targetIndex1);
+
+/* popup-by-name (setPopupByName :1086-1094 semantics, HEADLESS — Probe H, RESULTS §32):
+   exact match, then "wanted: " role-prefix, then "/wanted" or ": wanted" suffix.
+   Writes 1-based index via SetStreamValue one_d. */
+bool MincSetPopupByName(SPBasicSuite *bp, AEGP_PluginID id, AEGP_EffectRefH effH,
+                        int paramIdx, const std::string &wanted, std::string *errOut);
