@@ -4,10 +4,10 @@
 <dict>
 	<key>CFBundleDevelopmentRegion</key>      <string>English</string>
 	<key>CFBundleExecutable</key>             <string>${MACOSX_BUNDLE_EXECUTABLE_NAME}</string>
-	<key>CFBundleIdentifier</key>             <string>ski.bialkow.minColor.CST</string>
+	<key>CFBundleIdentifier</key>             <string>ski.bialkow.minColor.AEGP</string>
 	<key>CFBundleInfoDictionaryVersion</key>  <string>6.0</string>
-	<key>CFBundleName</key>                   <string>minColorCST</string>
-	<key>CFBundlePackageType</key>            <string>eFKT</string>
+	<key>CFBundleName</key>                   <string>minColorAEGP</string>
+	<key>CFBundlePackageType</key>            <string>AEgx</string>
 	<key>CFBundleSignature</key>              <string>FXTC</string>
 	<key>CFBundleVersion</key>                <string>${MINC_VERSION}</string>
 	<key>CFBundleShortVersionString</key>     <string>${MINC_VERSION}</string>

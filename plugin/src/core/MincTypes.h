@@ -7,6 +7,8 @@
 #define MINC_ARB_VERSION 1
 #define MINC_SPACE_LEN   200
 
+#define MINC_MATCH_NAME  "MINC CST"     /* the effect's registered match name (walk + PiPL + panel) */
+
 enum MinColorDirection { MINC_DIR_TO_WORKING = 0, MINC_DIR_FROM_WORKING = 1, MINC_DIR_LOOK = 2 };
 
 typedef struct {
