@@ -6,6 +6,7 @@
 #include "../ceremony/MincSettings.h"
 #include "../ceremony/MincEffectOps.h"
 #include "../ceremony/MincDoctor.h"
+#include "../ceremony/MincInterpret.h"
 #include <cstdio>
 
 static AEGP_PluginID  g_id = 0;
@@ -18,11 +19,13 @@ struct MincCommandDef { const char *label; MincCmdHandler handler; AEGP_Command 
 static void CmdSync(void);
 static void CmdAbout(void);
 static void CmdDoctor(void);
+static void CmdInterpret(void);
 
 static MincCommandDef g_commands[] = {
-    { "minColor: Sync From Names", CmdSync,   0 },
-    { "minColor: About",           CmdAbout,  0 },
-    { "minColor: Doctor",          CmdDoctor, 0 },
+    { "minColor: Sync From Names",     CmdSync,      0 },
+    { "minColor: About",               CmdAbout,     0 },
+    { "minColor: Doctor",              CmdDoctor,    0 },
+    { "minColor: Interpret Timeline",  CmdInterpret, 0 },
     /* M1 ceremonies append here step by step */
 };
 static const int g_nCommands = (int)(sizeof(g_commands) / sizeof(g_commands[0]));
@@ -59,6 +62,24 @@ static void CmdDoctor(void) {
     AEGP_SuiteHandler suites(g_pica);
     A_UTF16Char u16[600];
     MincU8ToU16(msg.c_str(), u16, 600);
+    suites.UtilitySuite6()->AEGP_ReportInfoUnicode(g_id, u16);
+}
+
+static void CmdInterpret(void) {
+    MincInterpretReport r = MincInterpretTimeline(g_pica, g_id);
+    MincWriteReport("interpret", r.toJson());
+    MincLog("interpret: added=%d skipped=%d flagged=%d failed=%d identity=%d contained=%d%s%s",
+            (int)r.added.size(), (int)r.skipped.size(), (int)r.flagged.size(),
+            (int)r.failed.size(), (int)r.identity.size(), (int)r.contained.size(),
+            r.error.empty() ? "" : " error=", r.error.c_str());
+    if (MincQuietMode()) return;
+    char msg[256];
+    if (!r.error.empty()) snprintf(msg, sizeof(msg), "Interpret Timeline: %s", r.error.c_str());
+    else snprintf(msg, sizeof(msg), "Interpret Timeline: %d added, %d skipped, %d flagged, %d failed",
+                  (int)r.added.size(), (int)r.skipped.size(), (int)r.flagged.size(), (int)r.failed.size());
+    AEGP_SuiteHandler suites(g_pica);
+    A_UTF16Char u16[300];
+    MincU8ToU16(msg, u16, 300);
     suites.UtilitySuite6()->AEGP_ReportInfoUnicode(g_id, u16);
 }
 

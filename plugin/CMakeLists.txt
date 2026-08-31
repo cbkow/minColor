@@ -149,6 +149,8 @@ if(APPLE)
     src/ceremony/MincEffectOps.cpp
     src/ceremony/MincPresets.cpp
     src/ceremony/MincDoctor.cpp
+    src/ceremony/MincSuggest.cpp
+    src/ceremony/MincInterpret.cpp
   )
   add_library(minColorAEGP MODULE
     src/aegp/AegpMain.cpp
