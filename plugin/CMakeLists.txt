@@ -151,6 +151,8 @@ if(APPLE)
     src/ceremony/MincDoctor.cpp
     src/ceremony/MincSuggest.cpp
     src/ceremony/MincInterpret.cpp
+    src/ceremony/MincCeremonyProject.cpp
+    src/ceremony/MincPicker.mm
   )
   add_library(minColorAEGP MODULE
     src/aegp/AegpMain.cpp
@@ -160,6 +162,8 @@ if(APPLE)
   add_dependencies(minColorAEGP buildstamp)
   target_include_directories(minColorAEGP PRIVATE ${MINC_COMMON_INCLUDES})
   target_compile_definitions(minColorAEGP PRIVATE MINC_LOG_BASENAME="minColorAEGP")
+  set_source_files_properties(src/ceremony/MincPicker.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
+  target_link_libraries(minColorAEGP PRIVATE "-framework AppKit")
   set_target_properties(minColorAEGP PROPERTIES
     CXX_VISIBILITY_PRESET hidden
     VISIBILITY_INLINES_HIDDEN ON

@@ -68,6 +68,160 @@ bool MincRifxReplaceTopUtf8After(std::string &d, const char *marker, const std::
     return true;
 }
 
+/* ---- node-tree parse (AEPPatch parse/replaceBody port :18-44) — needed for NESTED chunks
+   (footage ocsp lives under Fold > [Sfdr >] Item > Pin  > CLRS)                          ---- */
+struct RNode { size_t start = 0, end = 0; std::string tag, ltype; int parent = -1; int depth = -1; };
+
+static void NodeWalk(const std::string &d, size_t off, size_t end, int depth, int parent, std::vector<RNode> &nodes) {
+    while (off + 8 <= end) {
+        std::string tag = d.substr(off, 4);
+        uint32_t size = 0;
+        if (!U32BE(d, off + 4, &size)) return;
+        if (tag == "LIST" && off + 12 <= end) {
+            RNode n; n.start = off; n.end = off + 8 + size; n.tag = tag; n.ltype = d.substr(off + 8, 4);
+            n.parent = parent; n.depth = depth;
+            int idx = (int)nodes.size();
+            nodes.push_back(n);
+            NodeWalk(d, off + 12, off + 8 + size, depth + 1, idx, nodes);
+        } else {
+            RNode n; n.start = off; n.end = off + 8 + size; n.tag = tag; n.parent = parent; n.depth = depth;
+            nodes.push_back(n);
+        }
+        off += 8 + size + (size & 1);
+    }
+}
+static bool ParseNodes(const std::string &d, std::vector<RNode> &nodes) {
+    uint32_t rootSize = 0;
+    if (d.size() < 12 || d.compare(0, 4, "RIFX") != 0 || d.compare(8, 4, "Egg!") != 0 || !U32BE(d, 4, &rootSize)) return false;
+    RNode root; root.start = 0; root.end = 8 + rootSize; root.tag = "RIFX"; root.ltype = "Egg!"; root.parent = -1; root.depth = -1;
+    nodes.push_back(root);
+    NodeWalk(d, 12, root.end, 0, 0, nodes);
+    return true;
+}
+static bool ReplaceNodeBody(std::string &d, const std::vector<RNode> &nodes, int idx, const std::string &nb) {
+    const RNode &n = nodes[idx];
+    size_t oldSize = n.end - n.start - 8;
+    uint32_t oldPad = (uint32_t)(oldSize & 1), newPad = (uint32_t)(nb.size() & 1);
+    std::string out = d.substr(0, n.start) + n.tag;
+    { std::string sz = "0000"; P32BE(sz, 0, (uint32_t)nb.size()); out += sz; }
+    out += nb;
+    if (newPad) out += '\0';
+    out += d.substr(n.end + oldPad);
+    long delta = (long)(8 + nb.size() + newPad) - (long)(8 + oldSize + oldPad);
+    int p = n.parent;
+    while (p >= 0) {                                     /* fix every ancestor's size (incl. RIFX root) */
+        size_t ps = nodes[p].start;
+        uint32_t v = 0; U32BE(out, ps + 4, &v);
+        P32BE(out, ps + 4, (uint32_t)((long)v + delta));
+        p = nodes[p].parent;
+    }
+    d.swap(out);
+    return true;
+}
+static int FindFootageJSONById(const std::string &d, const std::vector<RNode> &nodes, int32_t itemId) {
+    for (size_t i = 0; i < nodes.size(); ++i) {
+        if (nodes[i].tag != "iide") continue;
+        size_t bo = nodes[i].start + 8;
+        if (bo + 4 > d.size()) continue;
+        const unsigned char *b = (const unsigned char *)d.data() + bo;
+        int32_t id = (int32_t)((uint32_t)b[0] | ((uint32_t)b[1] << 8) | ((uint32_t)b[2] << 16) | ((uint32_t)b[3] << 24));
+        if (id != itemId) continue;
+        int itemP = nodes[i].parent;                      /* the Item list */
+        for (size_t j = i + 1; j < nodes.size() && nodes[j].start < nodes[itemP].end; ++j) {
+            if (nodes[j].tag == "ocsp") {
+                for (size_t k = j + 1; k < nodes.size(); ++k)
+                    if (nodes[k].tag == "Utf8" && nodes[k].parent == nodes[j].parent) return (int)k;
+            }
+        }
+        return -1;
+    }
+    return -1;
+}
+
+bool MincXmpUpsertElement(std::string &tail, const char *localName, const std::string &content) {
+    std::string open = std::string("<minColor:") + localName + ">";
+    std::string close = std::string("</minColor:") + localName + ">";
+    size_t pkEnd = tail.rfind("<?xpacket end");
+    if (pkEnd == std::string::npos) return false;
+    size_t a = tail.find(open);
+    std::string out;
+    long delta;
+    if (a != std::string::npos) {                        /* REPLACE inner text (panel semantics :131-136) */
+        size_t s = a + open.size();
+        size_t b = tail.find(close, s);
+        if (b == std::string::npos || b > pkEnd) return false;
+        delta = (long)content.size() - (long)(b - s);
+        out = tail.substr(0, s) + content + tail.substr(b);
+    } else {                                             /* INSERT the whole element before </rdf:RDF> */
+        size_t rdfEnd = tail.find("</rdf:RDF>");
+        if (rdfEnd == std::string::npos || rdfEnd > pkEnd) return false;
+        std::string element = "<rdf:Description rdf:about=\"\" xmlns:minColor=\"https://bialkow.ski/minColor/ns/\">"
+                              + open + content + close + "</rdf:Description>";
+        delta = (long)element.size();
+        out = tail.substr(0, rdfEnd) + element + tail.substr(rdfEnd);
+    }
+    /* size-neutral rebalance against the packet padding (end="w" contract) */
+    size_t pk2 = out.rfind("<?xpacket end");
+    if (pk2 == std::string::npos) return false;
+    if (delta > 0) {                                     /* consume padding */
+        size_t padEnd = pk2, padStart = padEnd;
+        while (padStart > 0 && (out[padStart-1] == ' ' || out[padStart-1] == '\n' || out[padStart-1] == '\r' || out[padStart-1] == '\t')) --padStart;
+        if ((long)(padEnd - padStart) < delta + 8) return false;   /* padding exhausted — fail BEFORE any write */
+        out = out.substr(0, padEnd - delta) + out.substr(padEnd);
+    } else if (delta < 0) {                              /* add padding */
+        out = out.substr(0, pk2) + std::string((size_t)(-delta), ' ') + out.substr(pk2);
+    }
+    if (out.size() != tail.size()) return false;
+    tail.swap(out);
+    return true;
+}
+
+bool MincRifxPatchProject(const char *path,
+                          const char *configAbs,
+                          const char *pwcsBody,
+                          const std::vector<MincFootagePatch> &footage,
+                          const std::vector<MincXmpUpsert> &xmp,
+                          std::string *errOut) {
+    auto fail = [&](const char *m) { if (errOut) *errOut = m; return false; };
+    FILE *f = fopen(path, "rb");
+    if (!f) return fail("cannot open");
+    std::string d;
+    { char buf[65536]; size_t n; while ((n = fread(buf, 1, sizeof(buf), f)) > 0) d.append(buf, n); }
+    fclose(f);
+    uint32_t rootSize = 0;
+    if (d.size() < 12 || d.compare(0, 4, "RIFX") != 0 || d.compare(8, 4, "Egg!") != 0 || !U32BE(d, 4, &rootSize)) return fail("not an AE RIFX project");
+    if (8 + (size_t)rootSize > d.size()) return fail("truncated RIFX");
+    std::string tail = d.substr(8 + rootSize);
+    std::string rifx = d.substr(0, 8 + rootSize);
+    if (configAbs) {
+        std::string pinJson = std::string("{\"colorManagementSystem\":1,\"ocioConfigurationFile\":\"") + JsonEsc(configAbs) + "\"}";
+        if (!MincRifxReplaceTopUtf8After(rifx, "pcms", pinJson, "pin/cms")) return fail("pcms not found");
+    }
+    if (pwcsBody) {
+        if (!MincRifxReplaceTopUtf8After(rifx, "PwCs", pwcsBody, "working")) return fail("PwCs not found");
+    }
+    for (auto &fp : footage) {                            /* re-parse after each splice (panel :76) */
+        std::vector<RNode> nodes;
+        if (!ParseNodes(rifx, nodes)) return fail("parse failed");
+        int idx = FindFootageJSONById(rifx, nodes, fp.id);
+        if (idx < 0) return fail("footage ocsp JSON not found");
+        if (!ReplaceNodeBody(rifx, nodes, idx, fp.profileJSON)) return fail("footage splice failed");
+    }
+    {   /* trailer invariant: the RIFX rewrite must end exactly where the tail begins */
+        std::vector<RNode> check;
+        if (!ParseNodes(rifx, check)) return fail("post-patch parse failed");
+        if (check[0].end != rifx.size()) return fail("trailer mismatch after patch — aborting, file untouched");
+    }
+    for (auto &x : xmp)
+        if (!MincXmpUpsertElement(tail, x.name.c_str(), x.content)) return fail("xmp upsert failed (padding?)");
+    FILE *w = fopen(path, "wb");
+    if (!w) return fail("cannot write");
+    fwrite(rifx.data(), 1, rifx.size(), w);
+    fwrite(tail.data(), 1, tail.size(), w);
+    fclose(w);
+    return true;
+}
+
 bool MincXmpInsertElement(std::string &tail, const std::string &element) {
     size_t rdfEnd = tail.find("</rdf:RDF>");
     size_t pkEnd = tail.rfind("<?xpacket end");

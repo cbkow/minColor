@@ -7,6 +7,8 @@
 #include "../ceremony/MincEffectOps.h"
 #include "../ceremony/MincDoctor.h"
 #include "../ceremony/MincInterpret.h"
+#include "../ceremony/MincCeremonyProject.h"
+#include "../ceremony/MincPicker.h"
 #include <cstdio>
 
 static AEGP_PluginID  g_id = 0;
@@ -20,12 +22,16 @@ static void CmdSync(void);
 static void CmdAbout(void);
 static void CmdDoctor(void);
 static void CmdInterpret(void);
+static void CmdSetUp(void);
+static void CmdMigrate(void);
 
 static MincCommandDef g_commands[] = {
     { "minColor: Sync From Names",     CmdSync,      0 },
     { "minColor: About",               CmdAbout,     0 },
     { "minColor: Doctor",              CmdDoctor,    0 },
     { "minColor: Interpret Timeline",  CmdInterpret, 0 },
+    { "minColor: Set Up Project",      CmdSetUp,     0 },
+    { "minColor: Migrate Project",     CmdMigrate,   0 },
     /* M1 ceremonies append here step by step */
 };
 static const int g_nCommands = (int)(sizeof(g_commands) / sizeof(g_commands[0]));
@@ -81,6 +87,28 @@ static void CmdInterpret(void) {
     A_UTF16Char u16[300];
     MincU8ToU16(msg, u16, 300);
     suites.UtilitySuite6()->AEGP_ReportInfoUnicode(g_id, u16);
+}
+
+static void ReportCeremony(const char *name, const std::string &json) {
+    MincWriteReport(name, json);
+    MincLog("%s: %s", name, json.substr(0, 200).c_str());
+    if (MincQuietMode()) return;
+    std::string msg = std::string(name) + (json.find("\"error\"") != std::string::npos ? ": FAILED — see report" : ": done");
+    AEGP_SuiteHandler suites(g_pica);
+    A_UTF16Char u16[300];
+    MincU8ToU16(msg.c_str(), u16, 300);
+    suites.UtilitySuite6()->AEGP_ReportInfoUnicode(g_id, u16);
+}
+
+static void CmdSetUp(void) {
+    std::string key;
+    if (!MincPickPreset(&key)) { MincLog("setup: no preset picked"); return; }
+    ReportCeremony("setup", MincApplyPresetToCurrent(g_pica, g_id, key));
+}
+static void CmdMigrate(void) {
+    std::string key;
+    if (!MincPickPreset(&key)) { MincLog("migrate: no preset picked"); return; }
+    ReportCeremony("migrate", MincMigrateProject(g_pica, g_id, key));
 }
 
 /* ---------------- hooks ---------------- */

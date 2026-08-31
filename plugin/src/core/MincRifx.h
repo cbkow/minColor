@@ -41,3 +41,20 @@ bool MincRifxPatchCeremony(const char *path,
                            const char *configAbsOrNull,
                            const char *wsNameOrNull, const char *wsFamilyOrNull,
                            const char *xmpElementOrNull);
+
+/* XMP UPSERT — replaces an existing <minColor:name> element's text in place, else inserts
+   before </rdf:RDF>. Size-neutral in BOTH directions (growth consumes packet padding,
+   shrink adds padding) — re-migrating a project must never duplicate elements.           */
+bool MincXmpUpsertElement(std::string &xmpTail, const char *localName, const std::string &content);
+
+/* Migrate/Set-Up project patch — pin+cms, raw PwCs body (presets.json pwcsJSON verbatim),
+   footage-level strips (ocsp Utf8 by LITTLE-endian item id, node-tree parse with parent
+   size fix-ups), and XMP upserts. All-or-nothing: any failure leaves the file untouched. */
+struct MincFootagePatch { int32_t id = 0; std::string profileJSON; };
+struct MincXmpUpsert { std::string name, content; };
+bool MincRifxPatchProject(const char *path,
+                          const char *configAbsOrNull,
+                          const char *pwcsBodyOrNull,
+                          const std::vector<MincFootagePatch> &footage,
+                          const std::vector<MincXmpUpsert> &xmp,
+                          std::string *errOut);

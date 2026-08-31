@@ -89,6 +89,13 @@ var MincBase = (function () {
     app.project.save(f);
     return f;
   }
+  function savedProjectNamed(dirTag, base) {            // M1 equiv: same FILE basename on both legs
+    app.newProject();                                   // (backup filenames embed it — scrub-identical)
+    var dir = new Folder(OUTDIR + "/scratch-" + dirTag); if (!dir.exists) dir.create();
+    var f = new File(dir.fsName + "/" + base + ".aep");
+    app.project.save(f);
+    return f;
+  }
   function finish(scriptName) {
     var f = new File(OUTDIR + "/" + scriptName + ".txt");
     f.encoding = "UTF-8";
@@ -103,5 +110,6 @@ var MincBase = (function () {
   return { log: log, scrub: scrub, dumpProject: dumpProject, dumpComp: dumpComp,
            dumpReport: dumpReport, importFixture: importFixture, freshProject: freshProject,
            savedProject: savedProject, finish: finish, fail: fail, MinColor: MinColor,
-           captureBegin: captureBegin, captureEnd: captureEnd, readJson: readJson, diffDumps: diffDumps };
+           captureBegin: captureBegin, captureEnd: captureEnd, readJson: readJson, diffDumps: diffDumps,
+           savedProjectNamed: savedProjectNamed };
 })();
