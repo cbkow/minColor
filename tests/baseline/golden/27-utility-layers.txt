@@ -1,0 +1,24 @@
+[first] render=Video Render
+[first] renderAction=created
+[first] renderLook=none
+[first] view=macOS Video View
+[first] viewAction=created
+[first] viewLook=none
+[after-first] comp 'util' layers=3
+  layer 1 'minColor VIEW (guide)' enabled=true guide=true adj=true
+    fx 1 [MINC VIEW] 'minColor: view macOS Video View'
+  layer 2 'minColor RENDER' enabled=false guide=false adj=true
+    fx 1 [MINC RENDER] 'minColor: render Video Render'
+  layer 3 'subject' enabled=true guide=false adj=false
+[second] render=Video Render
+[second] renderAction=updated
+[second] renderLook=none
+[second] view=macOS Video View
+[second] viewAction=updated
+[second] viewLook=none
+[after-second] comp 'util' layers=3
+  layer 1 'minColor VIEW (guide)' enabled=true guide=true adj=true
+    fx 1 [MINC VIEW] 'minColor: view macOS Video View'
+  layer 2 'minColor RENDER' enabled=false guide=false adj=true
+    fx 1 [MINC RENDER] 'minColor: render Video Render'
+  layer 3 'subject' enabled=true guide=false adj=false

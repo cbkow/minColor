@@ -13,6 +13,7 @@
 #include "../ceremony/MincArchive.h"
 #include "../ceremony/MincMenusWrite.h"
 #include "../ceremony/MincArgs.h"
+#include "../ceremony/MincUtility.h"
 #include <cstdio>
 
 static AEGP_PluginID  g_id = 0;
@@ -27,6 +28,7 @@ static void CmdAbout(void);
 static void CmdDoctor(void);
 static void CmdInterpret(void);
 static void CmdInterpretSel(void);
+static void CmdUtility(void);
 static void CmdSetUp(void);
 static void CmdMigrate(void);
 static void CmdStripForeign(void);
@@ -40,6 +42,7 @@ static MincCommandDef g_commands[] = {
     { "minColor: Doctor",              CmdDoctor,      0 },
     { "minColor: Interpret Timeline",  CmdInterpret,   0 },
     { "minColor: Interpret Selected",  CmdInterpretSel, 0 },
+    { "minColor: Utility Layers",      CmdUtility,     0 },
     { "minColor: Set Up Project",      CmdSetUp,       0 },
     { "minColor: Migrate Project",     CmdMigrate,     0 },
     { "minColor: Strip Foreign OCIO",  CmdStripForeign, 0 },
@@ -149,6 +152,13 @@ static void CmdStripForeign(void) { ReportCeremony("strip-foreign", MincStripFor
 static void CmdStripAll(void)     { ReportCeremony("strip-all",     MincStripForeignOcio(g_pica, g_id, true)); }
 static void CmdArchive(void)      { ReportCeremony("archive",       MincArchiveProject(g_pica, g_id)); }
 static void CmdPackage(void)      { ReportCeremony("package",       MincPackageForAnyAE(g_pica, g_id)); }
+static void CmdUtility(void) {
+    std::string view, render;
+    {   MincJsonPtr a = MincArgsConsume("minColor: Utility Layers");
+        if (a) { view = a->str("view"); render = a->str("render"); }
+    }
+    ReportCeremony("utility-layers", MincEnsureUtilityLayers(g_pica, g_id, view, render));
+}
 
 /* ---------------- hooks ---------------- */
 static A_Err IdleHook(AEGP_GlobalRefcon, AEGP_IdleRefcon, A_long *max_sleepPL) {
