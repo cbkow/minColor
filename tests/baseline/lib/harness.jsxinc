@@ -75,6 +75,7 @@ var MincBase = (function () {
   function finish(scriptName) {
     var f = new File(OUTDIR + "/" + scriptName + ".txt");
     f.encoding = "UTF-8";
+    f.lineFeed = "Unix";                                // mac default is CR — unreadable diffs
     if (f.open("w")) { f.write(lines.join("\n") + "\n"); f.close(); }
     lines = [];
   }
