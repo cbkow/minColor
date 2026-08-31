@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-/* Find (once, cached) the installed-effect key for MINC_MATCH_NAME by iterating
+/* Find (once, cached) the installed-effect key for MINC_MATCH_LEGACY by iterating
    AEGP_GetNextInstalledEffect. First call logs entry count + duration. 0 = not installed. */
 AEGP_InstalledEffectKey MincInstalledKey(SPBasicSuite *bp, AEGP_PluginID id);
 
@@ -28,11 +28,15 @@ bool MincMoveEffect(SPBasicSuite *bp, AEGP_PluginID id, AEGP_LayerH layerH, int 
 bool MincLayerLocked(SPBasicSuite *bp, AEGP_LayerH layerH);
 void MincSetLayerLocked(SPBasicSuite *bp, AEGP_LayerH layerH, bool locked);
 
-/* generic apply-by-match (cached key lookup per match name) + rename + optional reorder;
-   returns the live effect ref for popup writes — caller MUST dispose. nullptr on failure. */
+/* generic apply-by-match (cached key lookup per match name) + rename. The effect lands at
+   the parade END and STAYS there (appliedIndex1 reports the 1-based slot): the returned ref
+   resolves by parade position, so reordering before the caller's stream writes rebinds it
+   to the WRONG effect (M2 crash of record — popup value written into a MINC arb stream).
+   Finish all writes through the ref, dispose it, THEN MincMoveEffect into place.
+   Caller MUST dispose. nullptr on failure.                                                */
 AEGP_EffectRefH MincApplyByMatchWithName(SPBasicSuite *bp, AEGP_PluginID id, AEGP_LayerH layerH,
                                          const char *matchName, const std::string &dispName,
-                                         int targetIndex1);
+                                         int *appliedIndex1);
 
 /* popup-by-name (setPopupByName :1086-1094 semantics, HEADLESS — Probe H, RESULTS §32):
    exact match, then "wanted: " role-prefix, then "/wanted" or ": wanted" suffix.

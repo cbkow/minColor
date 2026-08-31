@@ -131,7 +131,13 @@ static AEGP_InstalledEffectKey KeyByMatch(SPBasicSuite *bp, const char *matchNam
 
 AEGP_EffectRefH MincApplyByMatchWithName(SPBasicSuite *bp, AEGP_PluginID id, AEGP_LayerH layerH,
                                          const char *matchName, const std::string &dispName,
-                                         int targetIndex1) {
+                                         int *appliedIndex1) {
+    /* The effect is applied at the parade END and LEFT there — the returned ref resolves
+       by parade position, so a reorder here would silently rebind it to whatever effect
+       shifted into that slot (M2 crash of record: popup writes landed on a MINC arb stream
+       → SIGSEGV in the arb copy callback; Sentry dmp + our handler both show it). Callers
+       finish every stream write through this ref FIRST, dispose it, then position the
+       effect with MincMoveEffect.                                                        */
     Acq<AEGP_EffectSuite5> efs(bp, kAEGPEffectSuite, kAEGPEffectSuiteVersion5);
     if (!efs) return nullptr;
     AEGP_InstalledEffectKey key = KeyByMatch(bp, matchName);
@@ -142,8 +148,7 @@ AEGP_EffectRefH MincApplyByMatchWithName(SPBasicSuite *bp, AEGP_PluginID id, AEG
     MincEnumLayerEffects(bp, id, layerH, &fx);
     int newIdx = (int)fx.size();
     if (!MincRenameEffectAt(bp, id, layerH, newIdx, dispName)) { efs->AEGP_DisposeEffect(effH); return nullptr; }
-    if (targetIndex1 > 0 && targetIndex1 != newIdx)
-        efs->AEGP_ReorderEffect(effH, targetIndex1 - 1);
+    if (appliedIndex1) *appliedIndex1 = newIdx;
     return effH;                                          /* caller disposes */
 }
 
@@ -222,7 +227,7 @@ AEGP_InstalledEffectKey MincInstalledKey(SPBasicSuite *bp, AEGP_PluginID id) {
     while (efs->AEGP_GetNextInstalledEffect(k, &next) == A_Err_NONE && next != AEGP_InstalledEffectKey_NONE) {
         ++n;
         A_char mn[64] = "";
-        if (efs->AEGP_GetEffectMatchName(next, mn) == A_Err_NONE && !strcmp(mn, MINC_MATCH_NAME)) cached = next;
+        if (efs->AEGP_GetEffectMatchName(next, mn) == A_Err_NONE && !strcmp(mn, MINC_MATCH_LEGACY)) cached = next;   /* authoring stays legacy (P4) */
         k = next;
     }
     double dt = MincNowMs() - t0;

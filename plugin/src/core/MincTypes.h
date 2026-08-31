@@ -2,15 +2,12 @@
    without the After Effects SDK — used by tools/probe-engine and, later, tests).      */
 #pragma once
 #include <cstdint>
+#include <cstring>
 #include "MincIds.h"                    /* identity strings shared with the PiPLs (pure #defines) */
 
 #define MINC_ARB_MAGIC   0x4D6E4341u
 #define MINC_ARB_VERSION 1
 #define MINC_SPACE_LEN   200
-
-/* M2 step 1 TEMPORARY alias — keeps this step registration-only; step 2 deletes it and the
-   compile errors at every use site become the recognition-audit checklist (plan P3/P4). */
-#define MINC_MATCH_NAME  MINC_MATCH_LEGACY
 
 enum MinColorDirection { MINC_DIR_TO_WORKING = 0, MINC_DIR_FROM_WORKING = 1, MINC_DIR_LOOK = 2 };
 
@@ -18,6 +15,30 @@ enum MinColorDirection { MINC_DIR_TO_WORKING = 0, MINC_DIR_FROM_WORKING = 1, MIN
    name is the durable form; this enum is just its in-process shape (entry-point wrappers
    pass it statically). LEGACY = the pre-2.0 all-verbs effect, verb lives in the name.    */
 enum MincVerb { MINC_VERB_XFORM = 0, MINC_VERB_VIEW, MINC_VERB_RENDER, MINC_VERB_LOOK, MINC_VERB_LEGACY };
+
+/* match-name recognition — the P4 contract: match name = verb authority. Fills the verb
+   (LEGACY for the pre-2.0 effect) and returns true for any of the five registered minColor
+   effects; false for foreign match names.                                                */
+static inline bool MincMatchVerb(const char *match, MincVerb *out) {
+    if (!strcmp(match, MINC_MATCH_XFORM))  { *out = MINC_VERB_XFORM;  return true; }
+    if (!strcmp(match, MINC_MATCH_VIEW))   { *out = MINC_VERB_VIEW;   return true; }
+    if (!strcmp(match, MINC_MATCH_RENDER)) { *out = MINC_VERB_RENDER; return true; }
+    if (!strcmp(match, MINC_MATCH_LOOK))   { *out = MINC_VERB_LOOK;   return true; }
+    if (!strcmp(match, MINC_MATCH_LEGACY)) { *out = MINC_VERB_LEGACY; return true; }
+    return false;
+}
+static inline bool MincIsOurs(const char *match) { MincVerb v; return MincMatchVerb(match, &v); }
+/* does a display-name kind token agree with the match-name verb? (legacy: name is the
+   authority, everything agrees). A contradiction is NEVER silently reinterpreted.        */
+static inline bool MincKindMatchesVerb(const char *kind, MincVerb v) {
+    switch (v) {
+        case MINC_VERB_LEGACY: return true;
+        case MINC_VERB_XFORM:  return !strcmp(kind, "input") || !strcmp(kind, "contain");
+        case MINC_VERB_VIEW:   return !strcmp(kind, "view");
+        case MINC_VERB_RENDER: return !strcmp(kind, "render");
+        default:               return !strcmp(kind, "look");
+    }
+}
 
 typedef struct {
     uint32_t magic;                     /* fixed-width: this struct IS the flat serialized form */

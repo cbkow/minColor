@@ -124,11 +124,14 @@ static void DoLayer(IEnv &e, AEGP_CompH compH, AEGP_LayerH ly, const std::string
 
     std::vector<MincFxEntry> fx;
     MincEnumLayerEffects(e.bp, e.id, ly, &fx);
-    /* existing input CST (:974-975): FX_PREFIX name + (native CST | MINC CST) */
+    /* existing input CST (:974-975): FX_PREFIX name + (native CST | legacy | XFORM).
+       INPUT transforms only — a VIEW/RENDER/LOOK variant here must never read as
+       "interpreted" (G1/G2 narrowing, plan P4).                                    */
     int haveIdx = -1;
     for (size_t fi = 0; fi < fx.size(); ++fi)
         if (fx[fi].name.compare(0, 10, "minColor: ") == 0 &&
-            (fx[fi].match == "ADBE OCIO Color Space Transform" || fx[fi].match == MINC_MATCH_NAME)) { haveIdx = (int)fi + 1; break; }
+            (fx[fi].match == "ADBE OCIO Color Space Transform" ||
+             fx[fi].match == MINC_MATCH_LEGACY || fx[fi].match == MINC_MATCH_XFORM)) { haveIdx = (int)fi + 1; break; }
     if (haveIdx > 0) {                                       /* self-heal (:976-993) */
         MincFxName pr0 = MincParseFxName(fx[haveIdx - 1].name);
         MincRemap r0;
@@ -137,7 +140,9 @@ static void DoLayer(IEnv &e, AEGP_CompH compH, AEGP_LayerH ly, const std::string
         if (r0.changed) {
             bool wl0 = MincLayerLocked(e.bp, ly);
             if (wl0) MincSetLayerLocked(e.bp, ly, false);
-            if (!r0.space.empty() && fx[haveIdx - 1].match == MINC_MATCH_NAME) {
+            if (!r0.space.empty() && (fx[haveIdx - 1].match == MINC_MATCH_LEGACY ||
+                                      fx[haveIdx - 1].match == MINC_MATCH_XFORM)) {
+                /* rename-in-place: the arrow grammar is valid on legacy AND XFORM */
                 MincRenameEffectAt(e.bp, e.id, ly, haveIdx, "minColor: " + r0.space + " \xe2\x86\x92 working");
                 if (wl0) MincSetLayerLocked(e.bp, ly, true);
                 e.rep->flagged.push_back(label + " \xe2\x80\x94 renamed " + r0.note);

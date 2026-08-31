@@ -60,12 +60,18 @@ MincTranslateReport MincTranslateToNative(SPBasicSuite *bp, AEGP_PluginID id) {
                     for (int k = 0; k < (int)fx.size(); ++k) {
                         const std::string nm = fx[k].name;   /* copy — branches below rewrite fx[k] */
                         if (nm.compare(0, 10, "minColor: ") != 0) continue;      /* :567 */
-                        if (fx[k].match != MINC_MATCH_NAME) continue;            /* plugin->native only */
+                        MincVerb tv = MINC_VERB_LEGACY;
+                        if (!MincMatchVerb(fx[k].match.c_str(), &tv)) continue;  /* plugin->native only (all five ours) */
                         std::string label = std::string(compName) + "/" + lyName + " [" + nm + "]";
                         bool wl = MincLayerLocked(bp, ly);
                         if (wl) MincSetLayerLocked(bp, ly, false);
                         std::string rest = nm.substr(10);
                         if (rest.compare(0, 5, "look ") == 0) {                  /* look branch :596-610 */
+                            if (!MincKindMatchesVerb("look", tv)) {
+                                out.skipped.push_back(label + " (verb contradicts match \xe2\x80\x94 left as plugin effect)");
+                                if (wl) MincSetLayerLocked(bp, ly, true);
+                                continue;
+                            }
                             std::string look = rest.substr(5);
                             if (!hasLooks) {
                                 if (MincRemoveEffectAt(bp, id, ly, k + 1)) {
@@ -77,7 +83,9 @@ MincTranslateReport MincTranslateToNative(SPBasicSuite *bp, AEGP_PluginID id) {
                             }
                             int idx = k + 1;
                             if (!MincRemoveEffectAt(bp, id, ly, idx)) { out.failed.push_back(label + " \xe2\x80\x94 remove failed"); if (wl) MincSetLayerLocked(bp, ly, true); continue; }
-                            AEGP_EffectRefH nEff = MincApplyByMatchWithName(bp, id, ly, "ADBE OCIO Look Transform", nm, idx);
+                            /* popups FIRST (ref is position-bound to the parade end), move LAST */
+                            int endIdx = 0;
+                            AEGP_EffectRefH nEff = MincApplyByMatchWithName(bp, id, ly, "ADBE OCIO Look Transform", nm, &endIdx);
                             std::string perr;
                             if (!nEff) {               /* removed but not replaced: parade shifted down */
                                 out.failed.push_back(label + " \xe2\x80\x94 native apply failed");
@@ -89,12 +97,20 @@ MincTranslateReport MincTranslateToNative(SPBasicSuite *bp, AEGP_PluginID id) {
                                 out.failed.push_back(label + " \xe2\x80\x94 " + perr);
                                 fx[k].match = "ADBE OCIO Look Transform";   /* native effect exists; popup default */
                             }
-                            if (nEff) { Acq<AEGP_EffectSuite5> efs2(bp, kAEGPEffectSuite, kAEGPEffectSuiteVersion5); if (efs2) efs2->AEGP_DisposeEffect(nEff); }
+                            if (nEff) {
+                                { Acq<AEGP_EffectSuite5> efs2(bp, kAEGPEffectSuite, kAEGPEffectSuiteVersion5); if (efs2) efs2->AEGP_DisposeEffect(nEff); }
+                                if (endIdx != idx) MincMoveEffect(bp, id, ly, endIdx, idx);
+                            }
                             if (wl) MincSetLayerLocked(bp, ly, true);
                             continue;
                         }
                         MincFxName pn = MincParseFxName(nm);                     /* :611-612 */
                         if (!pn.valid) { out.skipped.push_back(label + " (unparsed name)"); if (wl) MincSetLayerLocked(bp, ly, true); continue; }
+                        if (!MincKindMatchesVerb(pn.kind.c_str(), tv)) {
+                            out.skipped.push_back(label + " (verb contradicts match \xe2\x80\x94 left as plugin effect)");
+                            if (wl) MincSetLayerLocked(bp, ly, true);
+                            continue;
+                        }
                         MincRemap rn = MincRemapSpace(pn.kind, pn.space, ctx);   /* :613 */
                         if (rn.space.empty() && rn.identity) {
                             if (MincRemoveEffectAt(bp, id, ly, k + 1)) {
@@ -114,11 +130,15 @@ MincTranslateReport MincTranslateToNative(SPBasicSuite *bp, AEGP_PluginID id) {
                         if (pn.kind == "contain" || pn.kind == "input") { src2 = rn.space; dst2 = "default"; }
                         else { src2 = "default"; dst2 = rn.space; }
                         int idx2 = k + 1;
+                        MincLog("translate: removing idx=%d", idx2);
                         if (!MincRemoveEffectAt(bp, id, ly, idx2)) { out.failed.push_back(label + " \xe2\x80\x94 remove failed"); if (wl) MincSetLayerLocked(bp, ly, true); continue; }
+                        MincLog("translate: removed, applying native");
                         std::string newName = (pn.kind == "input")                       /* fxName port (:781) */
                             ? "minColor: " + rn.space + " \xe2\x86\x92 working"
                             : "minColor: " + pn.kind + " " + rn.space;
-                        AEGP_EffectRefH nEff = MincApplyByMatchWithName(bp, id, ly, "ADBE OCIO Color Space Transform", newName, idx2);
+                        /* popups FIRST (ref is position-bound to the parade end), move LAST */
+                        int endIdx2 = 0;
+                        AEGP_EffectRefH nEff = MincApplyByMatchWithName(bp, id, ly, "ADBE OCIO Color Space Transform", newName, &endIdx2);
                         std::string e1, e2;
                         if (!nEff) {               /* removed but not replaced: parade shifted down */
                             out.failed.push_back(label + " \xe2\x80\x94 native apply failed");
@@ -132,7 +152,10 @@ MincTranslateReport MincTranslateToNative(SPBasicSuite *bp, AEGP_PluginID id) {
                             fx[k].match = "ADBE OCIO Color Space Transform";
                             fx[k].name = newName;
                         }
-                        if (nEff) { Acq<AEGP_EffectSuite5> efs3(bp, kAEGPEffectSuite, kAEGPEffectSuiteVersion5); if (efs3) efs3->AEGP_DisposeEffect(nEff); }
+                        if (nEff) {
+                            { Acq<AEGP_EffectSuite5> efs3(bp, kAEGPEffectSuite, kAEGPEffectSuiteVersion5); if (efs3) efs3->AEGP_DisposeEffect(nEff); }
+                            if (endIdx2 != idx2) MincMoveEffect(bp, id, ly, endIdx2, idx2);
+                        }
                         if (wl) MincSetLayerLocked(bp, ly, true);
                     }
                 }

@@ -9,26 +9,58 @@
 #include <cstring>
 #include <cstdio>
 
-static bool ParseGrammar(const char *utf8, MinColorArb *out) {
+static bool ParseGrammar(MincVerb verb, const char *utf8, MinColorArb *out) {
     const char *PRE = "minColor: ";
     if (strncmp(utf8, PRE, 10) != 0) return false;
     const char *rest = utf8 + 10;
     memset(out, 0, sizeof(*out));
     out->magic = MINC_ARB_MAGIC; out->version = MINC_ARB_VERSION;
-    if (!strncmp(rest, "look ", 5))   { out->direction = MINC_DIR_LOOK;         snprintf(out->space, MINC_SPACE_LEN, "%s", rest + 5); return true; }
-    if (!strncmp(rest, "contain ", 8)) { out->direction = MINC_DIR_TO_WORKING;   snprintf(out->space, MINC_SPACE_LEN, "%s", rest + 8); return true; }   /* boundary: comp output IS media in X */
-    if (!strncmp(rest, "view ", 5))   { out->direction = MINC_DIR_FROM_WORKING; snprintf(out->space, MINC_SPACE_LEN, "%s", rest + 5); return true; }
-    if (!strncmp(rest, "render ", 7)) { out->direction = MINC_DIR_FROM_WORKING; snprintf(out->space, MINC_SPACE_LEN, "%s", rest + 7); return true; }
-    const char *arrow = strstr(rest, " \xe2\x86\x92 working");        /* " -> working", real arrow */
+    if (verb == MINC_VERB_LEGACY) {
+        /* the pre-2.0 grammar, verbatim: the NAME carries the verb (scenario 12 contract) */
+        if (!strncmp(rest, "look ", 5))   { out->direction = MINC_DIR_LOOK;         snprintf(out->space, MINC_SPACE_LEN, "%s", rest + 5); return true; }
+        if (!strncmp(rest, "contain ", 8)) { out->direction = MINC_DIR_TO_WORKING;   snprintf(out->space, MINC_SPACE_LEN, "%s", rest + 8); return true; }   /* boundary: comp output IS media in X */
+        if (!strncmp(rest, "view ", 5))   { out->direction = MINC_DIR_FROM_WORKING; snprintf(out->space, MINC_SPACE_LEN, "%s", rest + 5); return true; }
+        if (!strncmp(rest, "render ", 7)) { out->direction = MINC_DIR_FROM_WORKING; snprintf(out->space, MINC_SPACE_LEN, "%s", rest + 7); return true; }
+        const char *arrow = strstr(rest, " \xe2\x86\x92 working");    /* " -> working", real arrow */
+        if (!arrow) arrow = strstr(rest, " -> working");
+        if (!arrow) return false;
+        out->direction = MINC_DIR_TO_WORKING;
+        size_t n = (size_t)(arrow - rest); if (n >= MINC_SPACE_LEN) n = MINC_SPACE_LEN - 1;
+        memcpy(out->space, rest, n);
+        return true;
+    }
+    /* variant: the MATCH NAME is the verb authority, the name carries the space. Accepted:
+       "minColor: <verb> <space>" (redundant token must AGREE), bare "minColor: <space>",
+       and on XFORM only "<space> → working" and "contain <space>". A contradicting verb
+       token or a misplaced arrow is NEVER silently reinterpreted (-> unparsed -> warn),
+       and an empty space stays unset.                                                    */
+    static const struct { const char *tok; size_t n; MincVerb v; } TOKS[] = {
+        { "look ",    5, MINC_VERB_LOOK   },
+        { "contain ", 8, MINC_VERB_XFORM  },
+        { "view ",    5, MINC_VERB_VIEW   },
+        { "render ",  7, MINC_VERB_RENDER },
+    };
+    for (size_t i = 0; i < sizeof(TOKS) / sizeof(TOKS[0]); ++i) {
+        if (!strncmp(rest, TOKS[i].tok, TOKS[i].n)) {
+            if (TOKS[i].v != verb) return false;                     /* verb contradiction */
+            rest += TOKS[i].n;
+            break;
+        }
+    }
+    const char *arrow = strstr(rest, " \xe2\x86\x92 working");
     if (!arrow) arrow = strstr(rest, " -> working");
-    if (!arrow) return false;
-    out->direction = MINC_DIR_TO_WORKING;
-    size_t n = (size_t)(arrow - rest); if (n >= MINC_SPACE_LEN) n = MINC_SPACE_LEN - 1;
-    memcpy(out->space, rest, n);
-    return true;
+    if (arrow) {
+        if (verb != MINC_VERB_XFORM) return false;                   /* arrow is XFORM-only */
+        size_t n = (size_t)(arrow - rest); if (n >= MINC_SPACE_LEN) n = MINC_SPACE_LEN - 1;
+        memcpy(out->space, rest, n);
+    } else snprintf(out->space, MINC_SPACE_LEN, "%s", rest);
+    out->direction = (verb == MINC_VERB_LOOK)  ? MINC_DIR_LOOK
+                   : (verb == MINC_VERB_XFORM) ? MINC_DIR_TO_WORKING
+                                               : MINC_DIR_FROM_WORKING;
+    return out->space[0] != 0;
 }
 
-void MincSyncFromNames(SPBasicSuite *bp, AEGP_PluginID aegpId) {
+static int SyncOnce(SPBasicSuite *bp, AEGP_PluginID aegpId) {
     AEGP_SuiteHandler suites(bp);
     Acq<AEGP_ProjSuite6>          pjs(bp, kAEGPProjSuite,          kAEGPProjSuiteVersion6);
     Acq<AEGP_ItemSuite9>          its(bp, kAEGPItemSuite,          kAEGPItemSuiteVersion9);
@@ -37,7 +69,7 @@ void MincSyncFromNames(SPBasicSuite *bp, AEGP_PluginID aegpId) {
     Acq<AEGP_DynamicStreamSuite4> dss(bp, kAEGPDynamicStreamSuite, kAEGPDynamicStreamSuiteVersion4);
     Acq<AEGP_StreamSuite6>        sts(bp, kAEGPStreamSuite,        kAEGPStreamSuiteVersion6);
     Acq<AEGP_EffectSuite5>        efs(bp, kAEGPEffectSuite,        kAEGPEffectSuiteVersion5);
-    if (!pjs || !its || !cps || !lys || !dss || !sts || !efs) { MincLog("sync: suite acquire failed"); return; }
+    if (!pjs || !its || !cps || !lys || !dss || !sts || !efs) { MincLog("sync: suite acquire failed"); return 0; }
     /* passport source: the CURRENT healthy authority. Written into every synced instance so the
        .aep carries the content-addressed config basename + working space across platforms. */
     MincAuthoritySnapshot snap = {}; MincAuthorityGet(&snap);
@@ -48,10 +80,10 @@ void MincSyncFromNames(SPBasicSuite *bp, AEGP_PluginID aegpId) {
         for (const char *p = snap.configPath; *p; ++p) if (*p == '/' || *p == '\\') b = p + 1;
         if (b[0] && !strstr(b, "..") && strlen(b) < sizeof(passBase)) strncpy(passBase, b, sizeof(passBase) - 1);
     }
-    int seen = 0, wrote = 0, badname = 0, reminted = 0;
+    int seen = 0, wrote = 0, badname = 0, reminted = 0, placeholders = 0;
     std::set<uint32_t> idsThisWalk;                 /* duplicate ids (cross-session mints) get re-minted here */
     AEGP_ProjectH projH = nullptr;
-    if (pjs->AEGP_GetProjectByIndex(0, &projH) != A_Err_NONE || !projH) return;
+    if (pjs->AEGP_GetProjectByIndex(0, &projH) != A_Err_NONE || !projH) return 0;
     AEGP_ItemH itemH = nullptr;
     its->AEGP_GetFirstProjItem(projH, &itemH);
     while (itemH) {
@@ -87,7 +119,8 @@ void MincSyncFromNames(SPBasicSuite *bp, AEGP_PluginID aegpId) {
                             if (dss->AEGP_GetNewStreamRefByIndex(aegpId, fxGroup, fi, &fxRef) != A_Err_NONE || !fxRef) continue;
                             A_char match[AEGP_MAX_STREAM_MATCH_NAME_SIZE] = "";
                             dss->AEGP_GetMatchName(fxRef, match);
-                            if (!strcmp(match, MINC_MATCH_NAME)) {
+                            MincVerb fxVerb = MINC_VERB_LEGACY;
+                            if (MincMatchVerb(match, &fxVerb)) {
                                 ++seen;
                                 {   /* legacy re-hide: pre-1.2 instances persist a VISIBLE Sync Serial row
                                        (AE stores ui_flags per instance). AEGP_DynStreamFlag_HIDDEN is the
@@ -116,7 +149,7 @@ void MincSyncFromNames(SPBasicSuite *bp, AEGP_PluginID aegpId) {
                                 if (sts->AEGP_GetStreamName(aegpId, fxRef, FALSE, &nameH) == A_Err_NONE)
                                     MincUtf16HandleToUtf8(suites, nameH, name8, sizeof(name8));
                                 MinColorArb want;
-                                if (ParseGrammar(name8, &want)) {
+                                if (ParseGrammar(fxVerb, name8, &want)) {
                                     /* write via the EFFECT's param stream (Projector-sample pattern):
                                        parade child index == effect index, verified by matchname */
                                     AEGP_EffectRefH effH = nullptr;
@@ -125,7 +158,8 @@ void MincSyncFromNames(SPBasicSuite *bp, AEGP_PluginID aegpId) {
                                         A_char em[64] = "";
                                         efs->AEGP_GetInstalledKeyFromLayerEffect(effH, &key);
                                         efs->AEGP_GetEffectMatchName(key, em);
-                                        if (strcmp(em, MINC_MATCH_NAME) != 0) { MincLog("sync: index misalign '%s'", em); efs->AEGP_DisposeEffect(effH); effH = nullptr; }
+                                        /* must be the SAME variant the parade stream showed */
+                                        if (strcmp(em, match) != 0) { MincLog("sync: index misalign '%s' vs '%s'", em, match); efs->AEGP_DisposeEffect(effH); effH = nullptr; }
                                     }
                                     if (effH) {
                                         /* transport: CallGeneric -> seq data + registry (names are the durable store; auto-sync re-derives on project open) */
@@ -138,7 +172,6 @@ void MincSyncFromNames(SPBasicSuite *bp, AEGP_PluginID aegpId) {
                                         }
                                         A_Time tg = {0, 100};
                                         if (efs->AEGP_EffectCallGeneric(aegpId, effH, &tg, PF_Cmd_COMPLETELY_GENERAL, &pay) == A_Err_NONE) {
-                                            ++wrote;
                                             /* registry is keyed by instanceId: an id already claimed in THIS walk belongs to
                                                another instance (pre-1.3.1 mints restarted at 1 every session) -> re-mint */
                                             if (pay.outId == 0 || idsThisWalk.count(pay.outId)) {
@@ -147,9 +180,15 @@ void MincSyncFromNames(SPBasicSuite *bp, AEGP_PluginID aegpId) {
                                                 uint32_t old = pay.outId;
                                                 pay.newId = fresh; pay.outId = 0;
                                                 if (efs->AEGP_EffectCallGeneric(aegpId, effH, &tg, PF_Cmd_COMPLETELY_GENERAL, &pay) == A_Err_NONE && pay.outId == fresh) {
-                                                    ++reminted; MincLog("sync: re-minted duplicate instance id %u -> %u ('%s')", old, fresh, name8);
-                                                } else MincLog("sync: re-mint FAILED for id %u ('%s')", old, name8);
-                                            }
+                                                    ++wrote; ++reminted; MincLog("sync: re-minted duplicate instance id %u -> %u ('%s')", old, fresh, name8);
+                                                } else if (old) {
+                                                    ++wrote; MincLog("sync: re-mint FAILED for id %u ('%s')", old, name8);
+                                                } else {
+                                                    /* handler never answered (outId stayed 0 twice): the effect binary
+                                                       isn't installed — a placeholder instance, not a real write */
+                                                    ++placeholders; MincLog("sync: no responder for '%s' (placeholder effect?)", name8);
+                                                }
+                                            } else ++wrote;
                                             if (pay.outId) idsThisWalk.insert(pay.outId);
                                         }
                                         efs->AEGP_DisposeEffect(effH);
@@ -168,5 +207,15 @@ void MincSyncFromNames(SPBasicSuite *bp, AEGP_PluginID aegpId) {
         its->AEGP_GetNextProjItem(projH, itemH, &nextH);
         itemH = nextH;
     }
-    MincLog("sync: instances=%d wrote=%d unparsed=%d reminted=%d", seen, wrote, badname, reminted);
+    MincLog("sync: instances=%d wrote=%d unparsed=%d reminted=%d placeholders=%d",
+            seen, wrote, badname, reminted, placeholders);
+    return reminted;
+}
+
+void MincSyncFromNames(SPBasicSuite *bp, AEGP_PluginID aegpId) {
+    /* two bounded passes: within one walk a later duplicate's first CallGeneric clobbers the
+       first claimant's registry entry before re-minting (serialization audit); whenever any
+       id was re-minted, one repeat re-writes every instance under now-unique ids. Converges —
+       pass 2 mints nothing.                                                                */
+    if (SyncOnce(bp, aegpId) > 0) SyncOnce(bp, aegpId);
 }

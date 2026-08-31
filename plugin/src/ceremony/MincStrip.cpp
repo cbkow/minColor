@@ -82,7 +82,7 @@ static void SWalk(SEnv &e, AEGP_CompH compH, std::set<int32_t> &seen) {
         MincEnumLayerEffects(e.bp, e.id, ly, &fx);
         for (int k = 0; k < (int)fx.size(); ++k) {
             const std::string &mn = fx[k].match, &nm = fx[k].name;
-            bool isMinc = (mn == MINC_MATCH_NAME);
+            bool isMinc = MincIsOurs(mn.c_str());       /* all five: legacy + the four variants */
             bool isPipeline = (mn == "ADBE OCIO Display Transform" || mn == "ADBE OCIO Look Transform" ||
                                mn == "ADBE OCIO Color Space Transform" || isMinc);
             bool isGrade = (mn == "ADBE OCIO CDL Transform" || mn == "ADBE OCIO FILE Transform");

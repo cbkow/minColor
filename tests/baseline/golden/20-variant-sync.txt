@@ -1,0 +1,11 @@
+[walk] sync: instances=7 wrote=6 unparsed=1 reminted=0 placeholders=0
+[after-sync] comp 'vsync' layers=1
+  layer 1 'subject' enabled=true guide=false adj=false
+    fx 1 [MINC CST] 'minColor: Rec.709 → working'
+    fx 2 [MINC XFORM] 'minColor: sRGB → working'
+    fx 3 [MINC XFORM] 'minColor: contain Display P3'
+    fx 4 [MINC VIEW] 'minColor: view macOS Video View'
+    fx 5 [MINC RENDER] 'minColor: Video Render'
+    fx 6 [MINC LOOK] 'minColor: look Some Look'
+    fx 7 [MINC VIEW] 'minColor: render Video Render'
+[state] project: items=3 working='Linear/ACEScg' pin='config-acescg-1066cdbf.ocio' bpc=32 engine=-

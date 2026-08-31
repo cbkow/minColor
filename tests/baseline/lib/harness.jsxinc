@@ -96,6 +96,21 @@ var MincBase = (function () {
     app.project.save(f);
     return f;
   }
+  // ---- AEGP log tail (M2): the walk's counters are log-only; scenarios mark the log
+  //      before a sync command and dump the appended "sync:" lines (verification-only read).
+  var AEGP_LOG = "/tmp/minColorAEGP.log";
+  function logMark() { var f = new File(AEGP_LOG); return f.exists ? f.length : 0; }
+  function syncLinesSince(mark) {
+    var f = new File(AEGP_LOG);
+    if (!f.exists || !f.open("r")) return ["(no aegp log)"];
+    f.encoding = "BINARY";
+    f.seek(mark, 0);
+    var s = f.read(); f.close();
+    var out = [], ls = s.split("\n");
+    for (var i = 0; i < ls.length; i++) if (ls[i].indexOf("sync: instances=") === 0) out.push(ls[i]);
+    return out.length ? out : ["(no sync lines)"];
+  }
+
   function finish(scriptName) {
     var f = new File(OUTDIR + "/" + scriptName + ".txt");
     f.encoding = "UTF-8";
@@ -111,5 +126,5 @@ var MincBase = (function () {
            dumpReport: dumpReport, importFixture: importFixture, freshProject: freshProject,
            savedProject: savedProject, finish: finish, fail: fail, MinColor: MinColor,
            captureBegin: captureBegin, captureEnd: captureEnd, readJson: readJson, diffDumps: diffDumps,
-           savedProjectNamed: savedProjectNamed };
+           savedProjectNamed: savedProjectNamed, logMark: logMark, syncLinesSince: syncLinesSince };
 })();

@@ -246,9 +246,12 @@ static void RebuildEffects(PEnv &e, const MincSuggestCtx &ctx, bool hasLooks, Re
                             out->gradesLeft.push_back(label + " [" + nm + "]");
                             continue;
                         }
-                        if (mn == MINC_MATCH_NAME && oursName) {              /* :405-415 */
+                        MincVerb mv = MINC_VERB_LEGACY;
+                        if (MincMatchVerb(mn.c_str(), &mv) && oursName) {     /* :405-415 — all five ours */
                             MincFxName pm = MincParseFxName(nm);
                             if (!pm.valid) continue;
+                            /* variant whose name-verb contradicts the match name: unparsed — leave, never reinterpret */
+                            if (!MincKindMatchesVerb(pm.kind.c_str(), mv)) continue;
                             if (pm.kind == "look") {
                                 if (!hasLooks) {
                                     if (MincRemoveEffectAt(e.bp, e.id, ly, k + 1)) {
