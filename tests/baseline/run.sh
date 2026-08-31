@@ -14,7 +14,7 @@ OUT="$BASE/out/current"
 SETTINGS="/Users/Shared/minColor/settings"
 SETTINGS_BAK="$BASE/out/settings-snapshot"
 
-ae_running() { osascript -e "tell application \"System Events\" to (name of processes) contains \"After Effects $AE_VER\"" ; }
+ae_running() { osascript -e "tell application \"System Events\" to (name of processes) contains \"After Effects\"" ; }
 ae_quit() {
   if [ "$(ae_running)" = "true" ]; then
     osascript -e "tell application \"$AE_APP\" to DoScript \"try{app.project.close(CloseOptions.DO_NOT_SAVE_CHANGES);}catch(e){}; app.quit();\"" >/dev/null 2>&1 || true

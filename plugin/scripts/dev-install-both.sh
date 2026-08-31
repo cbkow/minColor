@@ -20,7 +20,7 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-if osascript -e 'tell application "System Events" to (name of processes) contains "After Effects '"$AE_VER"'"' | grep -q true; then
+if osascript -e 'tell application "System Events" to (name of processes) contains "After Effects"' | grep -q true; then
   echo "After Effects $AE_VER is running — quit it first."; exit 1
 fi
 
