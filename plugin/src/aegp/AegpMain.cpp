@@ -32,6 +32,8 @@ static void CmdInterpretSel(void);
 static void CmdUtility(void);
 static void CmdApplyLook(void);
 static void CmdAdopt(void);
+static void CmdRepair(void);
+static void CmdRenderPreset(void);
 static void CmdSetUp(void);
 static void CmdMigrate(void);
 static void CmdStripForeign(void);
@@ -48,6 +50,8 @@ static MincCommandDef g_commands[] = {
     { "minColor: Utility Layers",      CmdUtility,     0 },
     { "minColor: Apply Look",          CmdApplyLook,   0 },
     { "minColor: Adopt Effects",       CmdAdopt,       0 },
+    { "minColor: Repair",              CmdRepair,      0 },
+    { "minColor: Apply Render Preset", CmdRenderPreset, 0 },
     { "minColor: Set Up Project",      CmdSetUp,       0 },
     { "minColor: Migrate Project",     CmdMigrate,     0 },
     { "minColor: Strip Foreign OCIO",  CmdStripForeign, 0 },
@@ -157,6 +161,14 @@ static void CmdStripForeign(void) { ReportCeremony("strip-foreign", MincStripFor
 static void CmdStripAll(void)     { ReportCeremony("strip-all",     MincStripForeignOcio(g_pica, g_id, true)); }
 static void CmdArchive(void)      { ReportCeremony("archive",       MincArchiveProject(g_pica, g_id)); }
 static void CmdPackage(void)      { ReportCeremony("package",       MincPackageForAnyAE(g_pica, g_id)); }
+static void CmdRepair(void)       { ReportCeremony("repair",        MincRepairProject(g_pica, g_id)); }
+static void CmdRenderPreset(void) {
+    std::string name;
+    {   MincJsonPtr a = MincArgsConsume("minColor: Apply Render Preset");
+        if (a) name = a->str("name");
+    }
+    ReportCeremony("render-preset", MincApplyRenderPreset(g_pica, g_id, name));
+}
 static void CmdApplyLook(void) {
     std::string look;
     {   MincJsonPtr a = MincArgsConsume("minColor: Apply Look");

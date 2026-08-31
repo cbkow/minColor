@@ -220,3 +220,23 @@ std::string MincEnsureUtilityLayers(SPBasicSuite *bp, AEGP_PluginID id,
            ", \"render\": " + UJ(render) + ", \"renderAction\": " + UJ(rr.action) +
            ", \"viewLook\": " + UJ(rv.lookAction) + ", \"renderLook\": " + UJ(rr.lookAction) + " }\n";
 }
+
+/* applyRenderPreset port (:1347-1354): recipe {view, render, look?} -> BOTH utility layers
+   (view ends enabled), recipe look set or — absent — REMOVED (pr.look || null semantics).
+   Recipes from settings/render-presets.json (user-editable, seeded by the installer).     */
+#include "MincJson.h"
+#include "MincSettings.h"
+std::string MincApplyRenderPreset(SPBasicSuite *bp, AEGP_PluginID id, const std::string &name) {
+    if (name.empty()) return "{ \"error\": \"no preset name given\" }\n";
+    MincJsonPtr j = MincJsonParseFile(MincSettingsDir() + "/render-presets.json");
+    MincJsonPtr presets = j ? j->get("presets") : nullptr;
+    MincJsonPtr pr = presets ? presets->get(name) : nullptr;
+    if (!pr) return "{ \"error\": " + UJ("unknown render preset '" + name + "'") + " }\n";   /* :1349 verbatim */
+    std::string view = pr->str("view"), render = pr->str("render"), look = pr->str("look");
+    std::string uj = MincEnsureUtilityLayers(bp, id, view, render);
+    if (uj.find("\"error\"") != std::string::npos) return uj;
+    std::string lj = MincApplyLook(bp, id, look);          /* "" = remove (pr.look || null) */
+    if (lj.find("\"error\"") != std::string::npos) return lj;
+    return "{ \"preset\": " + UJ(name) + ", \"view\": " + UJ(view) + ", \"render\": " + UJ(render) +
+           ", \"look\": " + UJ(look.empty() ? "(none)" : look) + " }\n";
+}

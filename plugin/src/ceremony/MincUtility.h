@@ -26,3 +26,6 @@ MincUtilLayer MincFindUtilityLayer(SPBasicSuite *bp, AEGP_PluginID id, AEGP_Comp
 /* applyLook port (:1216-1236): set/replace/remove the MINC LOOK partner on EXISTING utility
    layers, spaces and enabled states untouched. look "" = remove. JSON report or {"error"}. */
 std::string MincApplyLook(SPBasicSuite *bp, AEGP_PluginID id, const std::string &look);
+
+/* applyRenderPreset port: recipe -> both utility layers + look (absent look = remove). */
+std::string MincApplyRenderPreset(SPBasicSuite *bp, AEGP_PluginID id, const std::string &name);

@@ -13,3 +13,7 @@ std::string MincMigrateProject(SPBasicSuite *bp, AEGP_PluginID id, const std::st
 /* Package for Any AE — packageForAnyAE port (:490-496): translate plugin→native, re-pin to
    the sidecar config (patch ceremony; the panel re-pins live), engine stamp, archive. */
 std::string MincPackageForAnyAE(SPBasicSuite *bp, AEGP_PluginID id);
+
+/* Native Repair (M3) — same-hash re-point via the patch ceremony (shell-less twin of the
+   shell's live heal). Green -> action none; no target -> error.                          */
+std::string MincRepairProject(SPBasicSuite *bp, AEGP_PluginID id);

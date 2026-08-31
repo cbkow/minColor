@@ -42,6 +42,7 @@ std::string MincDoctorResult::toJson(void) const {
                     ", \"family\": " + JsonStr(family);
     if (!pin.empty()) j += ", \"pin\": " + JsonStr(pin);
     if (behind) j += ", \"pinBehind\": { \"pinned\": " + JsonStr(behindPinned) + ", \"current\": " + JsonStr(behindCurrent) + " }";
+    if (!repairTarget.empty()) j += ", \"repairTarget\": " + JsonStr(repairTarget);
     return j + " }\n";
 }
 
@@ -208,5 +209,7 @@ MincDoctorResult MincDoctorDiagnose(SPBasicSuite *bp, AEGP_PluginID id) {
     r.status = "yellow";
     r.text = std::string(!cmsOk ? "engine fell back to Adobe mode; " : "") + (!cfgOk ? "config path needs re-pointing" : "");
     r.canRepair = !info.configPath.empty() || !MincFindConfigByName(info.config, projPath).empty();
+    if (r.canRepair)                                     /* the heal's target (panel repair :275) */
+        r.repairTarget = !info.configPath.empty() ? info.configPath : MincFindConfigByName(info.config, projPath);
     return r;
 }

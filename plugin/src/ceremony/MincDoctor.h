@@ -13,6 +13,9 @@ struct MincDoctorResult {
     std::string pin;           /* basename */
     bool        behind = false;
     std::string behindPinned, behindCurrent;
+    std::string repairTarget;  /* same-hash local config the heal re-points to; emitted only
+                                  when nonempty (equivalence 13: the panel report has no such
+                                  key and the empty case must stay byte-identical) */
     std::string toJson(void) const;
 };
 

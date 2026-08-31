@@ -6,6 +6,7 @@
 #include "MincTranslate.h"
 #include "MincArchive.h"
 #include "MincMenusWrite.h"
+#include "MincDoctor.h"
 #include "MincJson.h"
 #include "../core/MincRifx.h"
 #include <cstdio>
@@ -581,4 +582,41 @@ std::string MincPackageForAnyAE(SPBasicSuite *bp, AEGP_PluginID id) {
            ", \"remapped\": " + JArr(tr.remapped) +
            ", \"removed\": " + JArr(tr.removed) +
            ", \"archive\": " + ar + " }\n";
+}
+
+/* Native Repair (M3 decision: BOTH shapes — the shell heals live for the instant UX; this
+   command is the shell-less zero-bridge twin): same-hash re-point via the patch ceremony,
+   save -> backup -> pin patch -> reopen -> re-diagnose. Never a different config.        */
+std::string MincRepairProject(SPBasicSuite *bp, AEGP_PluginID id) {
+    AEGP_SuiteHandler suites(bp);
+    Acq<AEGP_ProjSuite6> pjs(bp, kAEGPProjSuite, kAEGPProjSuiteVersion6);
+    Acq<AEGP_ItemSuite9> its(bp, kAEGPItemSuite, kAEGPItemSuiteVersion9);
+    Acq<AEGP_CompSuite12> cps(bp, kAEGPCompSuite, kAEGPCompSuiteVersion12);
+    Acq<AEGP_LayerSuite9> lys(bp, kAEGPLayerSuite, kAEGPLayerSuiteVersion9);
+    Acq<AEGP_FootageSuite5> fts(bp, kAEGPFootageSuite, kAEGPFootageSuiteVersion5);
+    Acq<AEGP_UtilitySuite6> uts(bp, kAEGPUtilitySuite, kAEGPUtilitySuiteVersion6);
+    PEnv e;
+    if (!AcquireEnv(bp, id, suites, e, pjs, its, cps, lys, fts, uts)) return "{ \"error\": \"suite acquire failed\" }\n";
+    std::string projPath = ProjPath(e);
+    if (projPath.empty()) return "{ \"error\": \"save the project first\" }\n";
+    MincAuthorityRefreshBp(bp, id);
+    MincDoctorResult d = MincDoctorDiagnose(bp, id);
+    if (d.status == "green") return "{ \"status\": \"green\", \"action\": \"none\" }\n";
+    if (d.repairTarget.empty())
+        return "{ \"error\": " + JStr("cannot repair (" + d.status + ": " + d.text + ") \xe2\x80\x94 run Set Up / Migrate") + " }\n";
+    if (!SaveTo(e, projPath)) return "{ \"error\": \"save failed\" }\n";
+    std::string berr, bpath = BackupCopy(projPath, "prerepair", &berr);
+    if (bpath.empty()) return "{ \"error\": " + JStr(berr) + " }\n";
+    std::vector<MincFootagePatch> none;
+    std::vector<MincXmpUpsert> noXmp;
+    std::string perr;
+    if (!MincRifxPatchProject(projPath.c_str(), d.repairTarget.c_str(), nullptr, none, noXmp, &perr))
+        return "{ \"error\": " + JStr("patch failed: " + perr) + " }\n";
+    if (!Reopen(e, projPath)) return "{ \"error\": \"reopen failed\" }\n";
+    MincAuthorityRefreshBp(bp, id);
+    MincWriteMenus(bp, id);
+    MincSyncFromNames(bp, id);                           /* panel repair's syncPluginNames */
+    MincDoctorResult after = MincDoctorDiagnose(bp, id);
+    return "{ \"status\": " + JStr(after.status) + ", \"repairedTo\": " + JStr(d.repairTarget) +
+           ", \"backup\": " + JStr(bpath) + " }\n";
 }
