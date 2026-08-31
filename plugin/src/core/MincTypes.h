@@ -2,14 +2,22 @@
    without the After Effects SDK — used by tools/probe-engine and, later, tests).      */
 #pragma once
 #include <cstdint>
+#include "MincIds.h"                    /* identity strings shared with the PiPLs (pure #defines) */
 
 #define MINC_ARB_MAGIC   0x4D6E4341u
 #define MINC_ARB_VERSION 1
 #define MINC_SPACE_LEN   200
 
-#define MINC_MATCH_NAME  "MINC CST"     /* the effect's registered match name (walk + PiPL + panel) */
+/* M2 step 1 TEMPORARY alias — keeps this step registration-only; step 2 deletes it and the
+   compile errors at every use site become the recognition-audit checklist (plan P3/P4). */
+#define MINC_MATCH_NAME  MINC_MATCH_LEGACY
 
 enum MinColorDirection { MINC_DIR_TO_WORKING = 0, MINC_DIR_FROM_WORKING = 1, MINC_DIR_LOOK = 2 };
+
+/* which registered effect an instance came in through. NOT serialized — AE's stored match
+   name is the durable form; this enum is just its in-process shape (entry-point wrappers
+   pass it statically). LEGACY = the pre-2.0 all-verbs effect, verb lives in the name.    */
+enum MincVerb { MINC_VERB_XFORM = 0, MINC_VERB_VIEW, MINC_VERB_RENDER, MINC_VERB_LOOK, MINC_VERB_LEGACY };
 
 typedef struct {
     uint32_t magic;                     /* fixed-width: this struct IS the flat serialized form */

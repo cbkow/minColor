@@ -22,18 +22,15 @@
 #include "AE_GeneralPlug.h"
 #include "AEGP_SuiteHandler.h"
 
-#define MINC_NAME          "minColor CST"
-#define MINC_CATEGORY      "minColor"
-#define MINC_MAJOR_VERSION 2
-#define MINC_MINOR_VERSION 0
-#define MINC_BUG_VERSION   0
+/* identity strings + version ints come from core/MincIds.h (single source shared with the
+   five PiPLs, pulled in via MincCore.h -> MincTypes.h). Only the stage macro is C-only. */
 #define MINC_STAGE_VERSION PF_Stage_DEVELOP
-#define MINC_BUILD_VERSION 1
 
 enum { MINC_INPUT = 0, MINC_ARB, MINC_SERIAL, MINC_NUM_PARAMS };
 enum { ARB_DISK_ID = 1, SERIAL_DISK_ID = 2 };
 
-#include "MincCore.h"       /* shared core: types, log, utf16, authority, mint, walk, MINC_MATCH_NAME */
+#include "MincCore.h"       /* shared core: types (incl. MincIds.h identities + MincVerb), log,
+                               utf16, authority, mint, walk */
 
 /* Arb.cpp */
 PF_Err MincHandleArbitrary(PF_InData *in_data, PF_OutData *out_data,
@@ -55,5 +52,15 @@ PF_Err MincHandleEvent(PF_InData *in_data, PF_OutData *out_data, PF_ParamDef *pa
 PF_Err MincSmartPreRender(PF_InData *in_data, PF_OutData *out_data, PF_PreRenderExtra *extra);
 PF_Err MincSmartRender(PF_InData *in_data, PF_OutData *out_data, PF_SmartRenderExtra *extra);
 
-extern "C" DllExport PF_Err EffectMain(PF_Cmd cmd, PF_InData *in_data, PF_OutData *out_data,
-                                       PF_ParamDef *params[], PF_LayerDef *output, void *extra);
+/* five registered effects, one shared implementation — the entry wrapper passes the verb
+   statically (MincVerb is in-process only; AE's stored match name is the durable form) */
+extern "C" DllExport PF_Err EffectMain      (PF_Cmd cmd, PF_InData *in_data, PF_OutData *out_data,
+                                             PF_ParamDef *params[], PF_LayerDef *output, void *extra);
+extern "C" DllExport PF_Err EffectMainXform (PF_Cmd cmd, PF_InData *in_data, PF_OutData *out_data,
+                                             PF_ParamDef *params[], PF_LayerDef *output, void *extra);
+extern "C" DllExport PF_Err EffectMainView  (PF_Cmd cmd, PF_InData *in_data, PF_OutData *out_data,
+                                             PF_ParamDef *params[], PF_LayerDef *output, void *extra);
+extern "C" DllExport PF_Err EffectMainRender(PF_Cmd cmd, PF_InData *in_data, PF_OutData *out_data,
+                                             PF_ParamDef *params[], PF_LayerDef *output, void *extra);
+extern "C" DllExport PF_Err EffectMainLook  (PF_Cmd cmd, PF_InData *in_data, PF_OutData *out_data,
+                                             PF_ParamDef *params[], PF_LayerDef *output, void *extra);

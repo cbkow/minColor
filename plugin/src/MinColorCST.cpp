@@ -1,11 +1,22 @@
 #include "MinColorCST.h"
 
-static PF_Err About(PF_InData *in_data, PF_OutData *out_data) {
+static const char *VerbEffectName(MincVerb verb) {
+    switch (verb) {
+        case MINC_VERB_XFORM:  return MINC_NAME_XFORM;
+        case MINC_VERB_VIEW:   return MINC_NAME_VIEW;
+        case MINC_VERB_RENDER: return MINC_NAME_RENDER;
+        case MINC_VERB_LOOK:   return MINC_NAME_LOOK;
+        default:               return MINC_NAME_LEGACY;
+    }
+}
+
+static PF_Err About(MincVerb verb, PF_InData *in_data, PF_OutData *out_data) {
     AEGP_SuiteHandler suites(in_data->pica_basicP);
     suites.ANSICallbacksSuite1()->sprintf(out_data->return_msg,
-        "%s v%d.%d — late-binding OCIO colorspace transform (minColor stage two).\n"
+        "%s v%d.%d — late-binding OCIO colorspace transform.\n"
+        "The match name carries the verb; the effect name carries the space.\n"
         "Destination is always the project's CURRENT working space.",
-        MINC_NAME, MINC_MAJOR_VERSION, MINC_MINOR_VERSION);
+        VerbEffectName(verb), MINC_MAJOR_VERSION, MINC_MINOR_VERSION);
     return PF_Err_NONE;
 }
 
@@ -168,12 +179,14 @@ static PF_Err HandleGeneric(PF_InData *in_data, PF_OutData *out_data, PF_ParamDe
     return PF_Err_NONE;
 }
 
-extern "C" DllExport PF_Err EffectMain(PF_Cmd cmd, PF_InData *in_data, PF_OutData *out_data,
-                                       PF_ParamDef *params[], PF_LayerDef *output, void *extra) {
+/* one implementation, five registered effects: the wrapper passes the verb statically.
+   The verb is About-only until M2 step 2 (verb authority lands in the walk).            */
+static PF_Err EffectMainCommon(MincVerb verb, PF_Cmd cmd, PF_InData *in_data, PF_OutData *out_data,
+                               PF_ParamDef *params[], PF_LayerDef *output, void *extra) {
     PF_Err err = PF_Err_NONE;
     try {
         switch (cmd) {
-            case PF_Cmd_ABOUT:               err = About(in_data, out_data);        break;
+            case PF_Cmd_ABOUT:               err = About(verb, in_data, out_data);  break;
             case PF_Cmd_GLOBAL_SETUP:        err = GlobalSetup(in_data, out_data);  break;
             case PF_Cmd_PARAMS_SETUP:        err = ParamsSetup(in_data, out_data);  break;
             case PF_Cmd_ARBITRARY_CALLBACK:
@@ -203,4 +216,25 @@ extern "C" DllExport PF_Err EffectMain(PF_Cmd cmd, PF_InData *in_data, PF_OutDat
         }
     } catch (...) { err = PF_Err_INTERNAL_STRUCT_DAMAGED; }   /* nothing throws across PF */
     return err;
+}
+
+extern "C" DllExport PF_Err EffectMain(PF_Cmd cmd, PF_InData *in_data, PF_OutData *out_data,
+                                       PF_ParamDef *params[], PF_LayerDef *output, void *extra) {
+    return EffectMainCommon(MINC_VERB_LEGACY, cmd, in_data, out_data, params, output, extra);
+}
+extern "C" DllExport PF_Err EffectMainXform(PF_Cmd cmd, PF_InData *in_data, PF_OutData *out_data,
+                                            PF_ParamDef *params[], PF_LayerDef *output, void *extra) {
+    return EffectMainCommon(MINC_VERB_XFORM, cmd, in_data, out_data, params, output, extra);
+}
+extern "C" DllExport PF_Err EffectMainView(PF_Cmd cmd, PF_InData *in_data, PF_OutData *out_data,
+                                           PF_ParamDef *params[], PF_LayerDef *output, void *extra) {
+    return EffectMainCommon(MINC_VERB_VIEW, cmd, in_data, out_data, params, output, extra);
+}
+extern "C" DllExport PF_Err EffectMainRender(PF_Cmd cmd, PF_InData *in_data, PF_OutData *out_data,
+                                             PF_ParamDef *params[], PF_LayerDef *output, void *extra) {
+    return EffectMainCommon(MINC_VERB_RENDER, cmd, in_data, out_data, params, output, extra);
+}
+extern "C" DllExport PF_Err EffectMainLook(PF_Cmd cmd, PF_InData *in_data, PF_OutData *out_data,
+                                           PF_ParamDef *params[], PF_LayerDef *output, void *extra) {
+    return EffectMainCommon(MINC_VERB_LOOK, cmd, in_data, out_data, params, output, extra);
 }

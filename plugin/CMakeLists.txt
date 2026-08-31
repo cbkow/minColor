@@ -114,20 +114,26 @@ if(APPLE)
   else()
     set(MINC_CODESIGN_FLAGS --force --deep --options runtime --timestamp --sign "${MINC_CODESIGN_IDENTITY}")
   endif()
-  function(minc_mac_bundle tgt pipl_r plist entry_symbol)
+  function(minc_mac_bundle tgt pipl_r plist entry_symbols)
     set_target_properties(${tgt} PROPERTIES
       BUNDLE TRUE
       BUNDLE_EXTENSION "plugin"
       MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/${plist}"
     )
-    # export ONLY the entry point (the static OCIO otherwise leaks thousands of symbols)
-    target_link_options(${tgt} PRIVATE "-Wl,-exported_symbol,_${entry_symbol}" "-Wl,-dead_strip")
+    # export ONLY the entry points (the static OCIO otherwise leaks thousands of symbols).
+    # entry_symbols is a ;-list: every PiPL CodeMac* string needs its exported symbol here
+    # or -dead_strip removes it and AE can't bind the effect.
+    foreach(_sym IN LISTS entry_symbols)
+      target_link_options(${tgt} PRIVATE "-Wl,-exported_symbol,_${_sym}")
+    endforeach()
+    target_link_options(${tgt} PRIVATE "-Wl,-dead_strip")
     set(_rsrc "${CMAKE_CURRENT_BINARY_DIR}/${tgt}.rsrc")
     add_custom_command(OUTPUT "${_rsrc}"
       COMMAND ${REZ_TOOL} "${CMAKE_CURRENT_SOURCE_DIR}/${pipl_r}"
               -o "${_rsrc}" -useDF
               -i "${AE_SDK_HEADERS}" -i "${AE_SDK_EXAMPLES}/Resources" -i "${AE_SDK_EXAMPLES}/Util"
-      DEPENDS "${pipl_r}"
+              -i "${CMAKE_CURRENT_SOURCE_DIR}/src/core"
+      DEPENDS "${pipl_r}" "${CMAKE_CURRENT_SOURCE_DIR}/src/core/MincIds.h"
       COMMENT "Rez PiPL (${tgt})")
     add_custom_target(${tgt}_pipl DEPENDS "${_rsrc}")
     add_dependencies(${tgt} ${tgt}_pipl)
@@ -139,7 +145,8 @@ if(APPLE)
       COMMENT "PiPL into bundle, then codesign (${tgt}, ${MINC_CODESIGN_IDENTITY})" VERBATIM)
   endfunction()
 
-  minc_mac_bundle(minColorCST src/MinColorCST_PiPL.r src/Info.plist.in EffectMain)
+  minc_mac_bundle(minColorCST src/MinColorCST_PiPL.r src/Info.plist.in
+                  "EffectMain;EffectMainXform;EffectMainView;EffectMainRender;EffectMainLook")
 
   # ============================== bundle 2: the ceremonies AEGP ==============================
   # AEgx package type, app Plug-ins folder, loads at AE launch. No OCIO — the admin-installed
@@ -187,11 +194,12 @@ elseif(WIN32)
             -DCL=${CMAKE_CXX_COMPILER}
             -DPIPLTOOL=${AE_SDK_EXAMPLES}/Resources/PiPLtool.exe
             -DINC=${AE_SDK_HEADERS}
+            -DINC2=${CMAKE_CURRENT_SOURCE_DIR}/src/core
             -DIN_R=${CMAKE_CURRENT_SOURCE_DIR}/src/MinColorCST_PiPL.r
             -DOUT_RC=${PIPL_RC}
             -DWORK=${CMAKE_CURRENT_BINARY_DIR}
             -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/BuildPiPL.cmake"
-    DEPENDS src/MinColorCST_PiPL.r cmake/BuildPiPL.cmake
+    DEPENDS src/MinColorCST_PiPL.r src/core/MincIds.h cmake/BuildPiPL.cmake
     COMMENT "PiPL (cl /EP -> PiPLtool -> rc)"
     VERBATIM)
   target_sources(minColorCST PRIVATE "${PIPL_RC}")

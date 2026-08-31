@@ -12,7 +12,12 @@ set(_rr  "${WORK}/${_name}.rr")
 set(_rrc "${WORK}/${_name}.rrc")
 
 # /TC: cl refuses unknown extensions (.r/.rrc) otherwise; /EP: preprocess to stdout, no #line
-execute_process(COMMAND "${CL}" /nologo /TC /EP /I "${INC}" "${IN_R}"
+# INC2: optional second include dir (src/core for MincIds.h)
+set(_inc2 "")
+if(DEFINED INC2)
+  set(_inc2 /I "${INC2}")
+endif()
+execute_process(COMMAND "${CL}" /nologo /TC /EP /I "${INC}" ${_inc2} "${IN_R}"
                 OUTPUT_FILE "${_rr}" ERROR_VARIABLE _err RESULT_VARIABLE _rc)
 if(NOT _rc EQUAL 0)
   message(FATAL_ERROR "PiPL: cl /EP ${IN_R} failed (${_rc}):\n${_err}")
