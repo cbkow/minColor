@@ -69,6 +69,7 @@ static void CmdSync(void) {
 }
 
 static void CmdAbout(void) {
+    MincArgsConsume("minColor: About");
     char txt[512];
     snprintf(txt, sizeof(txt),
              "minColor %s\nBuild %s\nEffect: MediaCore \xc2\xb7 Ceremonies: this AEGP\n"
@@ -76,7 +77,7 @@ static void CmdAbout(void) {
              MINC_VERSION_STR, MINC_BUILD_STAMP);
     MincWriteReport("about", std::string("{ \"version\": \"") + MINC_VERSION_STR +
                              "\", \"buildStamp\": \"" + MINC_BUILD_STAMP + "\" }\n");
-    if (MincQuietMode()) return;                         /* automation seam: no dialogs */
+    if (MincQuietMode() || MincArgsTakeSilent()) return;                         /* automation seam: no dialogs */
     AEGP_SuiteHandler suites(g_pica);
     A_UTF16Char u16[512];
     MincU8ToU16(txt, u16, 512);
@@ -84,11 +85,12 @@ static void CmdAbout(void) {
 }
 
 static void CmdDoctor(void) {
+    MincArgsConsume("minColor: Doctor");
     MincAuthorityRefreshBp(g_pica, g_id);
     MincDoctorResult d = MincDoctorDiagnose(g_pica, g_id);
     MincWriteReport("doctor", d.toJson());
     MincLog("doctor: %s — %s", d.status.c_str(), d.text.c_str());
-    if (MincQuietMode()) return;
+    if (MincQuietMode() || MincArgsTakeSilent()) return;
     std::string msg = d.status + " \xe2\x80\x94 " + d.text;
     AEGP_SuiteHandler suites(g_pica);
     A_UTF16Char u16[600];
@@ -97,13 +99,14 @@ static void CmdDoctor(void) {
 }
 
 static void CmdInterpret(void) {
+    MincArgsConsume("minColor: Interpret Timeline");
     MincInterpretReport r = MincInterpretTimeline(g_pica, g_id);
     MincWriteReport("interpret", r.toJson());
     MincLog("interpret: added=%d skipped=%d flagged=%d failed=%d identity=%d contained=%d%s%s",
             (int)r.added.size(), (int)r.skipped.size(), (int)r.flagged.size(),
             (int)r.failed.size(), (int)r.identity.size(), (int)r.contained.size(),
             r.error.empty() ? "" : " error=", r.error.c_str());
-    if (MincQuietMode()) return;
+    if (MincQuietMode() || MincArgsTakeSilent()) return;
     char msg[256];
     if (!r.error.empty()) snprintf(msg, sizeof(msg), "Interpret Timeline: %s", r.error.c_str());
     else snprintf(msg, sizeof(msg), "Interpret Timeline: %d added, %d skipped, %d flagged, %d failed",
@@ -124,7 +127,7 @@ static void CmdInterpretSel(void) {
     MincLog("interpret-selected: added=%d skipped=%d flagged=%d failed=%d%s%s",
             (int)r.added.size(), (int)r.skipped.size(), (int)r.flagged.size(), (int)r.failed.size(),
             r.error.empty() ? "" : " error=", r.error.c_str());
-    if (MincQuietMode()) return;
+    if (MincQuietMode() || MincArgsTakeSilent()) return;
     char msg[256];
     if (!r.error.empty()) snprintf(msg, sizeof(msg), "Interpret Selected: %s", r.error.c_str());
     else snprintf(msg, sizeof(msg), "Interpret Selected: %d added, %d skipped, %d flagged, %d failed",
@@ -138,7 +141,7 @@ static void CmdInterpretSel(void) {
 static void ReportCeremony(const char *name, const std::string &json) {
     MincWriteReport(name, json);
     MincLog("%s: %s", name, json.substr(0, 200).c_str());
-    if (MincQuietMode()) return;
+    if (MincQuietMode() || MincArgsTakeSilent()) return;
     std::string msg = std::string(name) + (json.find("\"error\"") != std::string::npos ? ": FAILED — see report" : ": done");
     AEGP_SuiteHandler suites(g_pica);
     A_UTF16Char u16[300];
@@ -157,11 +160,11 @@ static void CmdMigrate(void) {
     ReportCeremony("migrate", MincMigrateProject(g_pica, g_id, key));
 }
 
-static void CmdStripForeign(void) { ReportCeremony("strip-foreign", MincStripForeignOcio(g_pica, g_id, false)); }
-static void CmdStripAll(void)     { ReportCeremony("strip-all",     MincStripForeignOcio(g_pica, g_id, true)); }
-static void CmdArchive(void)      { ReportCeremony("archive",       MincArchiveProject(g_pica, g_id)); }
-static void CmdPackage(void)      { ReportCeremony("package",       MincPackageForAnyAE(g_pica, g_id)); }
-static void CmdRepair(void)       { ReportCeremony("repair",        MincRepairProject(g_pica, g_id)); }
+static void CmdStripForeign(void) { MincArgsConsume("minColor: Strip Foreign OCIO"); ReportCeremony("strip-foreign", MincStripForeignOcio(g_pica, g_id, false)); }
+static void CmdStripAll(void)     { MincArgsConsume("minColor: Strip ALL"); ReportCeremony("strip-all",     MincStripForeignOcio(g_pica, g_id, true)); }
+static void CmdArchive(void)      { MincArgsConsume("minColor: Archive Project"); ReportCeremony("archive",       MincArchiveProject(g_pica, g_id)); }
+static void CmdPackage(void)      { MincArgsConsume("minColor: Package for Any AE"); ReportCeremony("package",       MincPackageForAnyAE(g_pica, g_id)); }
+static void CmdRepair(void)       { MincArgsConsume("minColor: Repair"); ReportCeremony("repair",        MincRepairProject(g_pica, g_id)); }
 static void CmdRenderPreset(void) {
     std::string name;
     {   MincJsonPtr a = MincArgsConsume("minColor: Apply Render Preset");
@@ -177,6 +180,7 @@ static void CmdApplyLook(void) {
     ReportCeremony("apply-look", MincApplyLook(g_pica, g_id, look));
 }
 static void CmdAdopt(void) {
+    MincArgsConsume("minColor: Adopt Effects");
     MincTranslateReport tr = MincTranslateToPlugin(g_pica, g_id);
     char tn[16]; snprintf(tn, sizeof(tn), "%d", (int)tr.converted.size());
     std::string json = std::string("{ \"converted\": ") + tn + ", \"failed\": [";
@@ -227,6 +231,7 @@ static A_Err CommandHook(AEGP_GlobalRefcon, AEGP_CommandRefcon, AEGP_Command com
     if (!g_pica) return A_Err_NONE;
     for (int i = 0; i < g_nCommands; ++i) {
         if (g_commands[i].cmd && command == g_commands[i].cmd) {
+            MincArgsResetSilent();               /* silent never leaks across dispatches */
             try { g_commands[i].handler(); }
             catch (...) { MincLog("command '%s': exception", g_commands[i].label); }
             if (handledPB) *handledPB = TRUE;

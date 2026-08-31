@@ -10,3 +10,9 @@
 #include "MincJson.h"
 
 MincJsonPtr MincArgsConsume(const char *commandLabel);   /* null = no args for this command */
+
+/* {"silent": true} in consumed args suppresses the invocation's dialog (the shell renders
+   reports itself). Take-once; reset at every command dispatch so it can never leak into a
+   menu-direct invocation.                                                                */
+bool MincArgsTakeSilent(void);
+void MincArgsResetSilent(void);
