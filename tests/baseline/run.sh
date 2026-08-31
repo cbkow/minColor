@@ -28,6 +28,9 @@ ae_quit
 # settings snapshot (repair/heal and ui-state writes must not leak between runs)
 rm -rf "$SETTINGS_BAK"
 [ -d "$SETTINGS" ] && cp -R "$SETTINGS" "$SETTINGS_BAK" || true
+# M1 quiet-mode: ceremonies must show no dialogs during automation (restore removes the marker)
+mkdir -p "$SETTINGS"
+touch "$SETTINGS/quiet-mode"
 
 # wrapper sets the globals then runs the driver (DoScript cannot pass arguments)
 WRAP="$OUT/wrap.jsx"
@@ -52,11 +55,17 @@ if [ -d "$SETTINGS_BAK" ]; then rm -rf "$SETTINGS"; cp -R "$SETTINGS_BAK" "$SETT
 grep -q "^done" "$OUT/DONE.txt" || { echo "driver failed:"; cat "$OUT/DONE.txt"; exit 1; }
 rm -rf "$OUT"/scratch-* "$WRAP"
 
+# M1 equivalence scenarios are self-verifying: every *-equiv-* output must carry the verdict
+for eq in "$OUT"/*-equiv-*.txt; do
+  [ -e "$eq" ] || continue
+  grep -q "EQUIVALENT: YES" "$eq" || { echo "EQUIVALENCE RED: $(basename "$eq")"; grep -v "^$" "$eq" | tail -20; exit 1; }
+done
+
 if [ "$MODE" = "--record" ]; then
   mkdir -p "$BASE/golden"
   rm -f "$BASE/golden"/*.txt
   cp "$OUT"/*.txt "$BASE/golden/"
-  rm -f "$BASE/golden/DONE.txt"
+  rm -f "$BASE/golden/DONE.txt" "$BASE/golden/"*-equiv-*.txt   # equiv scenarios are self-verifying, never goldened
   echo "recorded $(ls "$BASE/golden" | wc -l | tr -d ' ') goldens"
 else
   FAIL=0

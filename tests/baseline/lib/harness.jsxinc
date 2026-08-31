@@ -10,7 +10,24 @@ var MincBase = (function () {
   $.evalFile(REPO + "/src/minColor.jsxinc");
 
   var lines = [];
-  function log(s) { lines.push(String(s)); }
+  var __cap = null;                                    // M1: equivalence capture (additive; golden output unchanged)
+  function log(s) { if (__cap !== null) __cap.push(String(s)); else lines.push(String(s)); }
+  function captureBegin() { __cap = []; }
+  function captureEnd() { var c = __cap; __cap = null; return c; }
+  function readJson(path) {                            // our own generated files only
+    var f = new File(path); if (!f.open("r")) return null;
+    var s = f.read(); f.close();
+    try { return eval("(" + s + ")"); } catch (e) { return null; }
+  }
+  function diffDumps(a, b) {                           // logs the verdict line run.sh greps for
+    var n = Math.max(a.length, b.length), bad = 0;
+    for (var i = 0; i < n; i++) {
+      var x = i < a.length ? a[i] : "(missing)", y = i < b.length ? b[i] : "(missing)";
+      if (x !== y) { if (!bad) log("DIVERGENCE at line " + i + ":"); log("  panel:  " + x); log("  native: " + y); bad++; }
+    }
+    log(bad === 0 ? "EQUIVALENT: YES" : "EQUIVALENT: NO (" + bad + " diffs)");
+    return bad === 0;
+  }
 
   // ---- normalization: everything volatile is scrubbed BEFORE writing ----
   function scrub(s) {
@@ -85,5 +102,6 @@ var MincBase = (function () {
   }
   return { log: log, scrub: scrub, dumpProject: dumpProject, dumpComp: dumpComp,
            dumpReport: dumpReport, importFixture: importFixture, freshProject: freshProject,
-           savedProject: savedProject, finish: finish, fail: fail, MinColor: MinColor };
+           savedProject: savedProject, finish: finish, fail: fail, MinColor: MinColor,
+           captureBegin: captureBegin, captureEnd: captureEnd, readJson: readJson, diffDumps: diffDumps };
 })();

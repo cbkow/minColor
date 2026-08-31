@@ -56,6 +56,7 @@ find_package(OpenColorIO REQUIRED CONFIG)
 # --- shared core: compiled INTO each bundle (not a prebuilt lib) so per-target compile defs
 #     like MINC_LOG_BASENAME apply; statics are per-binary by design (see core/MincCore.h) ---
 set(MINC_CORE_SOURCES
+  src/core/MincJson.cpp
   src/core/MincLog.cpp
   src/core/MincUtf16.cpp
   src/core/MincAuthority.cpp
@@ -146,6 +147,8 @@ if(APPLE)
   set(MINC_CEREMONY_SOURCES
     src/ceremony/MincSettings.cpp
     src/ceremony/MincEffectOps.cpp
+    src/ceremony/MincPresets.cpp
+    src/ceremony/MincDoctor.cpp
   )
   add_library(minColorAEGP MODULE
     src/aegp/AegpMain.cpp

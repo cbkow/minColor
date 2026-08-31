@@ -81,6 +81,129 @@ bool MincXmpInsertElement(std::string &tail, const std::string &element) {
     return true;
 }
 
+/* ---- reader: port of AEPPatch.readAssignmentsStream (src/AEPPatch.jsxinc:99-157) ----
+   Pruned walk (Fold/Sfdr/Item/Pin /CLRS); ocsp/mcsp apply to the NEXT Utf8 in the SAME list
+   (sibling semantics); PwCs at depth 0; iide id is LE u32 while sizes are BE.              */
+static std::string ProfName(const std::string &jb) {
+    const char *k = "\"colorProfileName\":\"";
+    size_t p = jb.find(k);
+    if (p == std::string::npos) return std::string();
+    p += 20;                                             /* strlen(k) */
+    size_t e = jb.find('"', p);
+    return e == std::string::npos ? std::string() : jb.substr(p, e - p);
+}
+static std::string ColorSpace2(const std::string &jb) {
+    const char *k = "\"colorSpace2\":\"";
+    size_t p = jb.find(k);
+    if (p == std::string::npos) return std::string();
+    p += 15;
+    size_t e = jb.find('"', p);
+    return e == std::string::npos ? std::string() : jb.substr(p, e - p);
+}
+
+struct RdCtx { int32_t id = 0; bool hasId = false; std::string det; };
+
+static void RdWalk(const std::string &d, size_t off, size_t end, int depth, RdCtx *itemCtx,
+                   MincAssignments *out, std::vector<std::pair<RdCtx*, MincAssignItem>> &raw,
+                   std::vector<RdCtx*> &ctxPool, bool &pendingWorking) {
+    std::string pending;                                 /* "ocsp" | "mcsp" for the NEXT Utf8 sibling */
+    while (off + 8 <= end) {
+        std::string tag = d.substr(off, 4);
+        uint32_t size = 0;
+        if (!U32BE(d, off + 4, &size)) return;
+        size_t next = off + 8 + size + (size & 1);
+        if (tag == "LIST" && off + 12 <= end) {
+            std::string lt = d.substr(off + 8, 4);
+            if (lt == "Fold" || lt == "Sfdr" || lt == "Item" || lt == "Pin " || lt == "CLRS") {
+                RdCtx *ctx = itemCtx;
+                if (lt == "Item") { ctx = new RdCtx(); ctxPool.push_back(ctx); }
+                RdWalk(d, off + 12, off + 8 + size, depth + 1, ctx, out, raw, ctxPool, pendingWorking);
+                if (lt == "Item" && ctx->hasId && !ctx->det.empty() && !out->detected.count(ctx->id))
+                    out->detected[ctx->id] = ctx->det;
+            }
+        } else if (tag == "iide" && itemCtx && size >= 4) {
+            const unsigned char *b = (const unsigned char *)d.data() + off + 8;
+            itemCtx->id = (int32_t)((uint32_t)b[0] | ((uint32_t)b[1] << 8) | ((uint32_t)b[2] << 16) | ((uint32_t)b[3] << 24));
+            itemCtx->hasId = true;
+        } else if (tag == "ocsp" || tag == "mcsp" || tag == "Mcsp") {
+            pending = (tag == "ocsp") ? "ocsp" : "mcsp";
+        } else if (tag == "PwCs" && depth == 0) {
+            pendingWorking = true;
+        } else if (tag == "Utf8" && (!pending.empty() || (pendingWorking && depth == 0))) {
+            std::string jb = d.substr(off + 8, size);
+            if (pendingWorking && depth == 0) {
+                std::string w = ProfName(jb);
+                out->working = !w.empty() ? w : (jb == "{}" ? "(none)" : "?");
+                pendingWorking = false;
+            } else if (pending == "ocsp") {
+                std::string cs = ProfName(jb);
+                if (!cs.empty()) {
+                    MincAssignItem it2; it2.colorspace = cs; it2.view = ColorSpace2(jb);
+                    raw.push_back({ itemCtx, it2 });
+                }
+            } else {
+                std::string dl = ProfName(jb);
+                if (!dl.empty() && itemCtx && itemCtx->det.empty()) itemCtx->det = dl;
+            }
+            pending.clear();
+        }
+        off = next;
+    }
+}
+
+bool MincRifxReadAssignments(const char *path, MincAssignments *out) {
+    FILE *f = fopen(path, "rb");
+    if (!f) return false;
+    std::string d;
+    { char buf[65536]; size_t n; while ((n = fread(buf, 1, sizeof(buf), f)) > 0) d.append(buf, n); }
+    fclose(f);
+    uint32_t rootSize = 0;
+    if (d.size() < 12 || d.compare(0, 4, "RIFX") != 0 || d.compare(8, 4, "Egg!") != 0 || !U32BE(d, 4, &rootSize)) return false;
+    size_t rifxEnd = 8 + rootSize;
+    if (rifxEnd > d.size()) rifxEnd = d.size();
+    std::vector<std::pair<RdCtx*, MincAssignItem>> raw;
+    std::vector<RdCtx*> pool;
+    bool pendingWorking = false;
+    RdWalk(d, 12, rifxEnd, 0, nullptr, out, raw, pool, pendingWorking);
+    for (auto &r : raw) {                                /* ids resolve after the walk (iide can follow ocsp) */
+        MincAssignItem it2 = r.second;
+        it2.id = (r.first && r.first->hasId) ? r.first->id : 0;
+        out->items.push_back(it2);
+    }
+    for (auto *c : pool) delete c;
+    return true;
+}
+
+std::string MincReadFileTail(const char *path) {
+    FILE *f = fopen(path, "rb");
+    if (!f) return std::string();
+    std::string d;
+    { char buf[65536]; size_t n; while ((n = fread(buf, 1, sizeof(buf), f)) > 0) d.append(buf, n); }
+    fclose(f);
+    uint32_t rootSize = 0;
+    if (d.size() < 12 || d.compare(0, 4, "RIFX") != 0 || !U32BE(d, 4, &rootSize)) return std::string();
+    if (8 + (size_t)rootSize >= d.size()) return std::string();
+    return d.substr(8 + rootSize);
+}
+
+std::string MincXmpReadElement(const std::string &tail, const char *localName) {
+    std::string open = std::string("<minColor:") + localName + ">";
+    std::string close = std::string("</minColor:") + localName + ">";
+    size_t a = tail.find(open);
+    if (a == std::string::npos) return std::string();
+    a += open.size();
+    size_t b = tail.find(close, a);
+    if (b == std::string::npos) return std::string();
+    std::string raw = tail.substr(a, b - a), out2;
+    for (size_t i = 0; i < raw.size(); ++i) {            /* decode &lt; and &amp; (mirror of :144) */
+        if (raw.compare(i, 4, "&lt;") == 0) { out2 += '<'; i += 3; }
+        else if (raw.compare(i, 5, "&amp;") == 0) { out2 += '&'; i += 4; }
+        else if (raw.compare(i, 6, "&quot;") == 0) { out2 += '"'; i += 5; }
+        else out2 += raw[i];
+    }
+    return out2;
+}
+
 bool MincRifxPatchCeremony(const char *path,
                            const char *configAbs,
                            const char *wsName, const char *wsFamily,

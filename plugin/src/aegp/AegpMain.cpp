@@ -5,6 +5,7 @@
 #include "MincCore.h"
 #include "../ceremony/MincSettings.h"
 #include "../ceremony/MincEffectOps.h"
+#include "../ceremony/MincDoctor.h"
 #include <cstdio>
 
 static AEGP_PluginID  g_id = 0;
@@ -16,10 +17,12 @@ struct MincCommandDef { const char *label; MincCmdHandler handler; AEGP_Command 
 
 static void CmdSync(void);
 static void CmdAbout(void);
+static void CmdDoctor(void);
 
 static MincCommandDef g_commands[] = {
-    { "minColor: Sync From Names", CmdSync,  0 },
-    { "minColor: About",           CmdAbout, 0 },
+    { "minColor: Sync From Names", CmdSync,   0 },
+    { "minColor: About",           CmdAbout,  0 },
+    { "minColor: Doctor",          CmdDoctor, 0 },
     /* M1 ceremonies append here step by step */
 };
 static const int g_nCommands = (int)(sizeof(g_commands) / sizeof(g_commands[0]));
@@ -43,6 +46,19 @@ static void CmdAbout(void) {
     AEGP_SuiteHandler suites(g_pica);
     A_UTF16Char u16[512];
     MincU8ToU16(txt, u16, 512);
+    suites.UtilitySuite6()->AEGP_ReportInfoUnicode(g_id, u16);
+}
+
+static void CmdDoctor(void) {
+    MincAuthorityRefreshBp(g_pica, g_id);
+    MincDoctorResult d = MincDoctorDiagnose(g_pica, g_id);
+    MincWriteReport("doctor", d.toJson());
+    MincLog("doctor: %s — %s", d.status.c_str(), d.text.c_str());
+    if (MincQuietMode()) return;
+    std::string msg = d.status + " \xe2\x80\x94 " + d.text;
+    AEGP_SuiteHandler suites(g_pica);
+    A_UTF16Char u16[600];
+    MincU8ToU16(msg.c_str(), u16, 600);
     suites.UtilitySuite6()->AEGP_ReportInfoUnicode(g_id, u16);
 }
 
