@@ -3,6 +3,7 @@
 #include "AEFX_SuiteHelper.h"
 #include <cstring>
 #include <cstdio>
+#include <ctime>
 
 static void Ascii16(const char *s, DRAWBOT_UTF16Char *out, int cap) {
     /* byte-per-slot mangled 2-byte UTF-8 (the middle dot drew as "A^·") — decode 2-byte sequences */
@@ -15,8 +16,49 @@ static void Ascii16(const char *s, DRAWBOT_UTF16Char *out, int cap) {
     out[i] = 0;
 }
 
+/* M2 Step 0 — DO_CLICK diagnosis (plan P6): 1.4.0's "clicks never reached the plugin" was
+   unproven because the handler had zero logging. Log EVERY event's type+area at entry so
+   "AE never sends it" and "the handler bailed" become distinguishable in the log. No outflag
+   or behavior changes — DRAW path and PiPL hexes untouched.                                */
+static const char *EvtName(PF_EventType t) {
+    switch (t) {
+        case PF_Event_NEW_CONTEXT:   return "NEW_CONTEXT";
+        case PF_Event_ACTIVATE:      return "ACTIVATE";
+        case PF_Event_DO_CLICK:      return "DO_CLICK";
+        case PF_Event_DRAG:          return "DRAG";
+        case PF_Event_DRAW:          return "DRAW";
+        case PF_Event_DEACTIVATE:    return "DEACTIVATE";
+        case PF_Event_CLOSE_CONTEXT: return "CLOSE_CONTEXT";
+        case PF_Event_IDLE:          return "IDLE";
+        case PF_Event_ADJUST_CURSOR: return "ADJUST_CURSOR";
+        case PF_Event_KEYDOWN:       return "KEYDOWN";
+        case PF_Event_MOUSE_EXITED:  return "MOUSE_EXITED";
+        default:                     return "?";
+    }
+}
+
 PF_Err MincHandleEvent(PF_InData *in_data, PF_OutData *out_data, PF_ParamDef *params[], PF_EventExtra *extra) {
     PF_Err err = PF_Err_NONE, err2 = PF_Err_NONE;
+    {   /* diagnosis logging: DRAW once per session, ADJUST_CURSOR at most 1/s (mouse-move
+           spam), everything else every occurrence with click coordinates when present */
+        static bool drawLogged = false;
+        static long lastCursorS = 0;
+        if (extra->e_type == PF_Event_DRAW) {
+            if (!drawLogged) { drawLogged = true; MincLog("event: DRAW area=%d (logged once)", (int)extra->effect_win.area); }
+        } else if (extra->e_type == PF_Event_ADJUST_CURSOR) {
+            long nowS = (long)time(nullptr);
+            if (nowS != lastCursorS) {
+                lastCursorS = nowS;
+                MincLog("event: ADJUST_CURSOR area=%d", (int)extra->effect_win.area);
+            }
+        } else if (extra->e_type == PF_Event_DO_CLICK || extra->e_type == PF_Event_DRAG) {
+            MincLog("event: %s area=%d screen=(%d,%d)", EvtName(extra->e_type),
+                    (int)extra->effect_win.area,
+                    (int)extra->u.do_click.screen_point.h, (int)extra->u.do_click.screen_point.v);
+        } else {
+            MincLog("event: %s area=%d", EvtName(extra->e_type), (int)extra->effect_win.area);
+        }
+    }
     if (extra->e_type != PF_Event_DRAW || extra->effect_win.area != PF_EA_CONTROL) return err;
 
     MincSeqData sdRes; MincResolveSeq(in_data, &sdRes);
