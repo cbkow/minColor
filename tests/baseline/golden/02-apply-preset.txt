@@ -1,0 +1,9 @@
+[apply] backup=<dir>/preset02_prepatch_STAMP.aep
+[apply] working=Linear/ACEScg
+[state] project: items=0 working='Linear/ACEScg' pin='config-acescg-1066cdbf.ocio' bpc=32 engine=-
+[doctor] canRepair=false
+[doctor] family=Linear
+[doctor] pin=config-acescg-1066cdbf.ocio
+[doctor] preset=acescg
+[doctor] status=green
+[doctor] text=acescg · Linear/ACEScg · central

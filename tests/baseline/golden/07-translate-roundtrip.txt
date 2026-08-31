@@ -1,0 +1,37 @@
+[plugin-dialect] comp 'xlate' layers=3
+  layer 1 'minColor VIEW (guide)' enabled=true guide=true adj=true
+    fx 1 [MINC CST] 'minColor: view macOS Video View'
+  layer 2 'minColor RENDER' enabled=false guide=false adj=true
+    fx 1 [MINC CST] 'minColor: render Video Render'
+  layer 3 'subject' enabled=true guide=false adj=false
+    fx 1 [MINC CST] 'minColor: sRGB → working'
+[to-native] converted=3
+    xlate/minColor VIEW (guide) [minColor: view macOS Video View]
+    xlate/minColor RENDER [minColor: render Video Render]
+    xlate/subject [minColor: sRGB → working]
+[to-native] failed=0
+[to-native] remapped=0
+[to-native] removed=0
+[to-native] skipped=0
+[native-dialect] comp 'xlate' layers=3
+  layer 1 'minColor VIEW (guide)' enabled=true guide=true adj=true
+    fx 1 [ADBE OCIO Color Space Transform] 'minColor: view macOS Video View'
+  layer 2 'minColor RENDER' enabled=false guide=false adj=true
+    fx 1 [ADBE OCIO Color Space Transform] 'minColor: render Video Render'
+  layer 3 'subject' enabled=true guide=false adj=false
+    fx 1 [ADBE OCIO Color Space Transform] 'minColor: sRGB → working'
+[to-plugin] converted=3
+    xlate/minColor VIEW (guide) [minColor: view macOS Video View]
+    xlate/minColor RENDER [minColor: render Video Render]
+    xlate/subject [minColor: sRGB → working]
+[to-plugin] failed=0
+[to-plugin] remapped=0
+[to-plugin] removed=0
+[to-plugin] skipped=0
+[plugin-again] comp 'xlate' layers=3
+  layer 1 'minColor VIEW (guide)' enabled=true guide=true adj=true
+    fx 1 [MINC CST] 'minColor: view macOS Video View'
+  layer 2 'minColor RENDER' enabled=false guide=false adj=true
+    fx 1 [MINC CST] 'minColor: render Video Render'
+  layer 3 'subject' enabled=true guide=false adj=false
+    fx 1 [MINC CST] 'minColor: sRGB → working'

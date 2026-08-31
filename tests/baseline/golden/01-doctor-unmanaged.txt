@@ -1,0 +1,5 @@
+[doctor] canRepair=false
+[doctor] family=Linear
+[doctor] status=unmanaged
+[doctor] text=unsaved project
+[state] project: items=0 working='Linear/ACEScg' pin='ACES 1.2' bpc=32 engine=-

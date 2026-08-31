@@ -1,0 +1,26 @@
+[migrate] backup=<dir>/mig10_premigrate_STAMP.aep
+[migrate] backups=[object Object]
+[migrate] bitsPerChannel=32
+[migrate] effectsFailed=0
+[migrate] effectsForeign=0
+[migrate] effectsRebuilt=0
+[migrate] effectsRemapped=0
+[migrate] effectsRemoved=0
+[migrate] gradesLeft=0
+[migrate] harvested=0
+[migrate] orphanLayers=0
+[migrate] pinLocus=central
+[migrate] preset=lin709
+[migrate] residual=1
+[migrate] stripped=0
+[migrate] strippedPipeline=0
+[migrate] viewRenderRetargeted=0
+[migrate] working=Linear/Linear Rec.709
+[state] project: items=5 working='Linear/Linear Rec.709' pin='config-lin709-6f8ad009.ocio' bpc=32 engine=plugin
+[after] comp 'mig' layers=3
+  layer 1 'minColor VIEW (guide)' enabled=true guide=true adj=true
+    fx 1 [MINC CST] 'minColor: view macOS Video View'
+  layer 2 'minColor RENDER' enabled=false guide=false adj=true
+    fx 1 [MINC CST] 'minColor: render Video Render'
+  layer 3 'ramp_srgb_iccp.png' enabled=true guide=false adj=false
+    fx 1 [MINC CST] 'minColor: sRGB → working'

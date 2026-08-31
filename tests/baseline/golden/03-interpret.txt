@@ -1,0 +1,16 @@
+[interpret] added=3
+    interp/ramp_prores_nclc111.mov ← Gamma 2.4 Encoded Rec.709 [detected metadata]
+    interp/ramp_srgb_iccp.png ← sRGB [extension rule]
+    interp/ramp_linear.exr ← ACEScg [extension rule]
+[interpret] contained=0
+[interpret] failed=0
+[interpret] flagged=0
+[interpret] identity=0
+[interpret] skipped=0
+[after] comp 'interp' layers=3
+  layer 1 'ramp_prores_nclc111.mov' enabled=true guide=false adj=false
+    fx 1 [MINC CST] 'minColor: Gamma 2.4 Encoded Rec.709 → working'
+  layer 2 'ramp_srgb_iccp.png' enabled=true guide=false adj=false
+    fx 1 [MINC CST] 'minColor: sRGB → working'
+  layer 3 'ramp_linear.exr' enabled=true guide=false adj=false
+    fx 1 [MINC CST] 'minColor: ACEScg → working'

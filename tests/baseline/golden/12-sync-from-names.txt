@@ -1,0 +1,7 @@
+[synced] comp 'sync' layers=1
+  layer 1 'subject' enabled=true guide=false adj=false
+    fx 1 [MINC CST] 'minColor: sRGB → working'
+[renamed-and-synced] comp 'sync' layers=1
+  layer 1 'subject' enabled=true guide=false adj=false
+    fx 1 [MINC CST] 'minColor: Display P3 → working'
+[state] project: items=3 working='Linear/ACEScg' pin='config-acescg-1066cdbf.ocio' bpc=32 engine=plugin

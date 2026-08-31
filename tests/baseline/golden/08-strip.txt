@@ -1,0 +1,23 @@
+[strip-foreign] contained=0
+[strip-foreign] failed=0
+[strip-foreign] gradesLeft=0
+[strip-foreign] layersRemoved=0
+[strip-foreign] stripped=1
+    strip/subject [foreign display]
+[after-foreign] comp 'strip' layers=3
+  layer 1 'minColor VIEW (guide)' enabled=true guide=true adj=true
+    fx 1 [MINC CST] 'minColor: view macOS Video View'
+  layer 2 'minColor RENDER' enabled=false guide=false adj=true
+    fx 1 [MINC CST] 'minColor: render Video Render'
+  layer 3 'subject' enabled=true guide=false adj=false
+    fx 1 [MINC CST] 'minColor: sRGB → working'
+[strip-all] contained=0
+[strip-all] failed=0
+[strip-all] gradesLeft=0
+[strip-all] layersRemoved=2
+    strip/minColor VIEW (guide)
+    strip/minColor RENDER
+[strip-all] stripped=1
+    strip/subject [minColor: sRGB → working]
+[after-all] comp 'strip' layers=1
+  layer 1 'subject' enabled=true guide=false adj=false

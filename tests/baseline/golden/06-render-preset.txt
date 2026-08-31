@@ -1,0 +1,7 @@
+render preset used=(none)
+[after] comp 'rp' layers=3
+  layer 1 'minColor VIEW (guide)' enabled=true guide=true adj=true
+    fx 1 [MINC CST] 'minColor: view macOS Video View'
+  layer 2 'minColor RENDER' enabled=false guide=false adj=true
+    fx 1 [MINC CST] 'minColor: render Video Render'
+  layer 3 'subject' enabled=true guide=false adj=false
