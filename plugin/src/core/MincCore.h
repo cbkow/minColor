@@ -39,6 +39,7 @@ uint32_t MincMintInstanceId(void);
 /* christen=true additionally names default-named fresh VIEW/RENDER variants from the
    plugin-menus.json defaults (never invents a space — no menus file, no christening) */
 void MincSyncFromNames(SPBasicSuite *bp, AEGP_PluginID aegpId, bool christen = false);
+bool MincParseGrammarVerb(MincVerb verb, const char *utf8, MinColorArb *out);
 
 /* tiny RAII suite acquire */
 template <typename SUITE>

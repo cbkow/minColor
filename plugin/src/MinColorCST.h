@@ -46,8 +46,18 @@ void   MincAuthorityRefresh(PF_InData *in_data);       /* main-thread only; no-o
 /* SmartRender.cpp */
 void MincResolveSeq(PF_InData *in_data, MincSeqData *sd);   /* full resolve: seq clone + registry + param arb */
 void MincResolveArb(PF_InData *in_data, MinColorArb *arb);  /* thin wrapper over MincResolveSeq */
-/* Ui.cpp */
-PF_Err MincHandleEvent(PF_InData *in_data, PF_OutData *out_data, PF_ParamDef *params[], PF_EventExtra *extra);
+/* EffectAuthority.cpp — the reserved badge-edit id */
+AEGP_PluginID MincEffectAegpId(void);
+bool          MincEffectRegistered(void);
+
+/* EffectEdit.cpp — badge-edit transaction: rename + eager mint + targeted CallGeneric + marker */
+bool MincApplyEdit(PF_InData *in_data, int verbI, const char *space);
+
+/* UiMenuMac.mm / Ui.cpp(win) — blocking native popup, returns picked index or -1 */
+extern "C" int MincShowMenu(const char *const *items, int n, int checkedIdx);
+
+/* Ui.cpp — the wrapper passes the registered effect's verb (badge menu is per-verb) */
+PF_Err MincHandleEvent(MincVerb verb, PF_InData *in_data, PF_OutData *out_data, PF_ParamDef *params[], PF_EventExtra *extra);
 
 PF_Err MincSmartPreRender(PF_InData *in_data, PF_OutData *out_data, PF_PreRenderExtra *extra);
 PF_Err MincSmartRender(PF_InData *in_data, PF_OutData *out_data, PF_SmartRenderExtra *extra);

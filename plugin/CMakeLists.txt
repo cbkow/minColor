@@ -86,6 +86,7 @@ add_library(minColorCST MODULE
   src/OcioEngine.cpp
   src/SmartRender.cpp
   src/Ui.cpp
+  src/EffectEdit.cpp
   ${MINC_CORE_SOURCES}
   "${AE_SDK_EXAMPLES}/Util/AEFX_SuiteHelper.c"
   "${AE_SDK_EXAMPLES}/Util/Smart_Utils.cpp"
@@ -146,6 +147,12 @@ if(APPLE)
       COMMAND codesign --verify --deep --strict "$<TARGET_BUNDLE_DIR:${tgt}>"
       COMMENT "PiPL into bundle, then codesign (${tgt}, ${MINC_CODESIGN_IDENTITY})" VERBATIM)
   endfunction()
+
+  # badge menu (M2 step 5): native NSMenu popup + AppKit for the effect target
+  enable_language(OBJCXX)
+  target_sources(minColorCST PRIVATE src/UiMenuMac.mm)
+  set_source_files_properties(src/UiMenuMac.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
+  target_link_libraries(minColorCST PRIVATE "-framework AppKit")
 
   minc_mac_bundle(minColorCST src/MinColorCST_PiPL.r src/Info.plist.in
                   "EffectMain;EffectMainXform;EffectMainView;EffectMainRender;EffectMainLook")

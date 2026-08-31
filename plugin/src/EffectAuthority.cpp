@@ -44,3 +44,7 @@ void MincAuthorityRefresh(PF_InData *in_data) {
     if (!g_registered || !in_data || !in_data->pica_basicP) return;
     MincAuthorityRefreshBp(in_data->pica_basicP, g_aegpID);
 }
+
+/* the reserved badge-edit id (header comment): EffectEdit.cpp drives AEGP suites with it */
+AEGP_PluginID MincEffectAegpId(void)   { return g_aegpID; }
+bool          MincEffectRegistered(void) { return g_registered; }

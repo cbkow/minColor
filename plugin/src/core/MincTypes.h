@@ -115,3 +115,6 @@ int MincOcioApplyRows(const MincAuthoritySnapshot *auth, const MinColorArb *arb,
 int  MincOcioBegin(const MincAuthoritySnapshot *auth, const MinColorArb *arb, void **token);  /* per-frame */
 void MincOcioApplyToken(void *token, float *rgbaRows, int pixelCount);
 void MincOcioEnd(void *token);
+/* badge-menu fallback enumeration (effect binary only — OCIO lives there) */
+int MincOcioListSpaces(const MincAuthoritySnapshot *auth, char out[][MINC_SPACE_LEN], int maxN);
+int MincOcioListLooks(const MincAuthoritySnapshot *auth, char out[][MINC_SPACE_LEN], int maxN);

@@ -253,6 +253,11 @@ static int SyncOnce(SPBasicSuite *bp, AEGP_PluginID aegpId, bool christen) {
     return reminted;
 }
 
+bool MincParseGrammarVerb(MincVerb verb, const char *utf8, MinColorArb *out) {
+    return ParseGrammar(verb, utf8, out);            /* badge edit builds its payload with the
+                                                        same grammar the walk enforces */
+}
+
 void MincSyncFromNames(SPBasicSuite *bp, AEGP_PluginID aegpId, bool christen) {
     /* two bounded passes: within one walk a later duplicate's first CallGeneric clobbers the
        first claimant's registry entry before re-minting (serialization audit); whenever any

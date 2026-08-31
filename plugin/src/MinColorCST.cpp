@@ -209,7 +209,7 @@ static PF_Err EffectMainCommon(MincVerb verb, PF_Cmd cmd, PF_InData *in_data, PF
             case PF_Cmd_UPDATE_PARAMS_UI:
             case PF_Cmd_USER_CHANGED_PARAM:  MincAuthorityRefresh(in_data);         break;
             case PF_Cmd_EVENT:
-                err = MincHandleEvent(in_data, out_data, params, reinterpret_cast<PF_EventExtra*>(extra));
+                err = MincHandleEvent(verb, in_data, out_data, params, reinterpret_cast<PF_EventExtra*>(extra));
                 break;
             case PF_Cmd_SMART_PRE_RENDER:
                 err = MincSmartPreRender(in_data, out_data,
