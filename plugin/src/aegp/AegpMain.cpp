@@ -11,6 +11,7 @@
 #include "../ceremony/MincPicker.h"
 #include "../ceremony/MincStrip.h"
 #include "../ceremony/MincArchive.h"
+#include "../ceremony/MincMenusWrite.h"
 #include <cstdio>
 
 static AEGP_PluginID  g_id = 0;
@@ -136,6 +137,7 @@ static A_Err IdleHook(AEGP_GlobalRefcon, AEGP_IdleRefcon, A_long *max_sleepPL) {
                                                            store: re-derive every instance's state */
         if (MincAuthorityGet(&s) && s.generation != lastSyncedGen) {
             lastSyncedGen = s.generation;
+            MincWriteMenus(g_pica, g_id);       /* menus follow the pin — fresh BEFORE the walk */
             MincSyncFromNames(g_pica, g_id);
         }
     }

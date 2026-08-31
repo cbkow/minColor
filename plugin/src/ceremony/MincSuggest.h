@@ -17,6 +17,18 @@ struct MincSuggestCtx {
 
 MincSuggestCtx MincBuildSuggestCtx(const std::string &presetKey, const std::string &pinPath);
 
+/* ORDERED menu lists — the same menuLists (:57-73) algorithm that feeds the ctx maps, kept
+   in list form for the plugin-menus.json writer: per-preset arrays with top-level fallback,
+   render = dedup(view ∪ input) when absent minus viewOnly, intersected with the pinned
+   config's spaces when the pin is behind the preset. Defaults = familyDefaults port (:874-876,
+   platform video view + "Video Render"); looks = configLooks port (:1201) from the pin.     */
+struct MincMenuLists {
+    bool valid = false;
+    std::string preset, family, defView, defRender;
+    std::vector<std::string> input, view, render, looks;
+};
+MincMenuLists MincMenuListsFor(const std::string &presetKey, const std::string &pinPath);
+
 struct MincPick { std::string space; std::string why; };      /* space=="" means none */
 /* item facts the caller collects via AEGP */
 struct MincItemFacts {

@@ -57,6 +57,7 @@ find_package(OpenColorIO REQUIRED CONFIG)
 #     like MINC_LOG_BASENAME apply; statics are per-binary by design (see core/MincCore.h) ---
 set(MINC_CORE_SOURCES
   src/core/MincJson.cpp
+  src/core/MincMenus.cpp
   src/core/MincLog.cpp
   src/core/MincUtf16.cpp
   src/core/MincAuthority.cpp
@@ -162,6 +163,7 @@ if(APPLE)
     src/ceremony/MincStrip.cpp
     src/ceremony/MincArchive.cpp
     src/ceremony/MincTranslate.cpp
+    src/ceremony/MincMenusWrite.cpp
     src/ceremony/MincPicker.mm
   )
   add_library(minColorAEGP MODULE

@@ -1,0 +1,189 @@
+[menus] defaultRender=Video Render
+[menus] defaultView=macOS Video View
+[menus] family=Linear
+[menus] inputSpaces=63
+    sRGB
+    Rec.1886
+    Gamma 2.4 Encoded Rec.709
+    Display P3
+    Camera Rec.709
+    Linear Rec.709
+    Linear Rec.2020
+    ACEScg
+    ACES2065-1
+    ACEScc
+    ACEScct
+    ADX10
+    ADX16
+    ARRI LogC3 (EI800)
+    ARRI LogC4
+    AgX Log
+    Apple Log
+    Apple Log 2
+    BMDFilm WideGamut Gen5
+    CanonLog2 CinemaGamut D55
+    CanonLog3 CinemaGamut D55
+    D-Log D-Gamut
+    DaVinci Intermediate WideGamut
+    Filmic Log
+    Gamma 1.8 Encoded Rec.709
+    Gamma 2.2 Encoded AP1
+    Gamma 2.2 Encoded AdobeRGB
+    Gamma 2.2 Encoded Rec.709
+    Linear ARRI Wide Gamut 3
+    Linear ARRI Wide Gamut 4
+    Linear Adobe RGB
+    Linear Apple Wide Gamut
+    Linear BMD WideGamut Gen5
+    Linear CIE-XYZ D65
+    Linear CIE-XYZ E
+    Linear CinemaGamut D55
+    Linear D-Gamut
+    Linear DCI-P3 D65
+    Linear DaVinci WideGamut
+    Linear FilmLight E-Gamut
+    Linear P3 EDR
+    Linear REDWideGamutRGB
+    Linear S-Gamut3
+    Linear S-Gamut3.Cine
+    Linear V-Gamut
+    Linear Venice S-Gamut3
+    Linear Venice S-Gamut3.Cine
+    Linear sRGB EDR
+    Log3G10 REDWideGamutRGB
+    Non-Color
+    P3-D65 PQ
+    REDLogFilm REDWideGamutRGB
+    Rec.2020
+    Rec.2100-HLG
+    Rec.2100-PQ
+    Rec.709 Gamma 2.2
+    S-Log3 S-Gamut3
+    S-Log3 S-Gamut3.Cine
+    S-Log3 Venice S-Gamut3
+    S-Log3 Venice S-Gamut3.Cine
+    V-Log V-Gamut
+    sRGB Encoded AP1
+    sRGB Encoded P3-D65
+[menus] looks=27
+    Very High Contrast
+    High Contrast
+    Medium High Contrast
+    Medium Contrast
+    Medium Low Contrast
+    Low Contrast
+    Very Low Contrast
+    AgX - Punchy
+    AgX - Greyscale
+    AgX - Very High Contrast
+    AgX - High Contrast
+    AgX - Medium High Contrast
+    AgX - Base Contrast
+    AgX - Medium Low Contrast
+    AgX - Low Contrast
+    AgX - Very Low Contrast
+    False Color - Punchy
+    False Color - Greyscale
+    False Color - Very High Contrast
+    False Color - High Contrast
+    False Color - Medium High Contrast
+    False Color - Base Contrast
+    False Color - Medium Low Contrast
+    False Color - Low Contrast
+    False Color - Very Low Contrast
+    ACES 1.3 - Reference Gamut Compression
+    ACES 2.0 - Reference Gamut Compression
+[menus] preset=acescg
+[menus] renderSpaces=70
+    Desktop Render
+    Video Render
+    sRGB
+    Rec.1886
+    Display P3
+    ACES 1.3 sRGB
+    ACES 2.0 sRGB
+    AgX Base sRGB
+    Filmic sRGB
+    Khronos PBR Neutral sRGB
+    Linear P3 EDR
+    Linear sRGB EDR
+    P3-D65 PQ
+    Rec.2020
+    Rec.2100-HLG
+    Rec.2100-PQ
+    Rec.709 Gamma 2.2
+    Gamma 2.4 Encoded Rec.709
+    Camera Rec.709
+    Linear Rec.709
+    Linear Rec.2020
+    ACEScg
+    ACES2065-1
+    ACEScc
+    ACEScct
+    ADX10
+    ADX16
+    ARRI LogC3 (EI800)
+    ARRI LogC4
+    AgX Log
+    Apple Log
+    Apple Log 2
+    BMDFilm WideGamut Gen5
+    CanonLog2 CinemaGamut D55
+    CanonLog3 CinemaGamut D55
+    D-Log D-Gamut
+    DaVinci Intermediate WideGamut
+    Filmic Log
+    Gamma 1.8 Encoded Rec.709
+    Gamma 2.2 Encoded AP1
+    Gamma 2.2 Encoded AdobeRGB
+    Gamma 2.2 Encoded Rec.709
+    Linear ARRI Wide Gamut 3
+    Linear ARRI Wide Gamut 4
+    Linear Adobe RGB
+    Linear Apple Wide Gamut
+    Linear BMD WideGamut Gen5
+    Linear CIE-XYZ D65
+    Linear CIE-XYZ E
+    Linear CinemaGamut D55
+    Linear D-Gamut
+    Linear DCI-P3 D65
+    Linear DaVinci WideGamut
+    Linear FilmLight E-Gamut
+    Linear REDWideGamutRGB
+    Linear S-Gamut3
+    Linear S-Gamut3.Cine
+    Linear V-Gamut
+    Linear Venice S-Gamut3
+    Linear Venice S-Gamut3.Cine
+    Log3G10 REDWideGamutRGB
+    Non-Color
+    REDLogFilm REDWideGamutRGB
+    S-Log3 S-Gamut3
+    S-Log3 S-Gamut3.Cine
+    S-Log3 Venice S-Gamut3
+    S-Log3 Venice S-Gamut3.Cine
+    V-Log V-Gamut
+    sRGB Encoded AP1
+    sRGB Encoded P3-D65
+[menus] viewSpaces=20
+    macOS Desktop View
+    macOS Video View
+    Windows Desktop View
+    Windows Video View
+    sRGB
+    Rec.1886
+    Display P3
+    sRGB 1886 Sim
+    ACES 1.3 sRGB
+    ACES 2.0 sRGB
+    AgX Base sRGB
+    Filmic sRGB
+    Khronos PBR Neutral sRGB
+    Linear P3 EDR
+    Linear sRGB EDR
+    P3-D65 PQ
+    Rec.2020
+    Rec.2100-HLG
+    Rec.2100-PQ
+    Rec.709 Gamma 2.2
+[state] project: items=0 working='Linear/ACEScg' pin='config-acescg-1066cdbf.ocio' bpc=32 engine=-

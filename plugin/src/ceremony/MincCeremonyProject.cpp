@@ -5,6 +5,7 @@
 #include "MincEffectOps.h"
 #include "MincTranslate.h"
 #include "MincArchive.h"
+#include "MincMenusWrite.h"
 #include "MincJson.h"
 #include "../core/MincRifx.h"
 #include <cstdio>
@@ -337,6 +338,7 @@ std::string MincApplyPresetToCurrent(SPBasicSuite *bp, AEGP_PluginID id, const s
         return "{ \"error\": " + JStr("patch failed: " + perr) + " }\n";
     if (!Reopen(e, projPath)) return "{ \"error\": \"reopen failed\" }\n";
     MincAuthorityRefreshBp(bp, id);
+    MincWriteMenus(bp, id);                              /* menus follow the new pin immediately */
     return "{ \"working\": " + JStr(pr.workingSpaceLabel) + ", \"backup\": " + JStr(bpath) + " }\n";
 }
 
@@ -391,6 +393,7 @@ std::string MincMigrateProject(SPBasicSuite *bp, AEGP_PluginID id, const std::st
     /* reopen — every handle above is now dead; the env suites remain valid */
     if (!Reopen(e, projPath)) return "{ \"error\": \"reopen failed\" }\n";
     MincAuthorityRefreshBp(bp, id);
+    MincWriteMenus(bp, id);                              /* menus follow the new pin immediately */
 
     int bpc = 0;
     SetBitDepth(e, pr.family, &bpc);
@@ -487,6 +490,7 @@ std::string MincPackageForAnyAE(SPBasicSuite *bp, AEGP_PluginID id) {
         return "{ \"error\": " + JStr("patch failed: " + perr) + " }\n";
     if (!Reopen(e, projPath)) return "{ \"error\": \"reopen failed\" }\n";
     MincAuthorityRefreshBp(bp, id);
+    MincWriteMenus(bp, id);                              /* menus follow the sidecar pin */
 
     std::string ar = MincArchiveProject(bp, id);                     /* :494 */
     while (!ar.empty() && ar[ar.size() - 1] == '\n') ar.erase(ar.size() - 1);
