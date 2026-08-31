@@ -6,7 +6,6 @@
     fx 3 [MINC RENDER] 'minColor Render'
     fx 4 [MINC XFORM] 'minColor Transform'
     fx 5 [MINC VIEW] 'minColor: view Display P3'
-[christen] sync: instances=5 wrote=4 unparsed=1 reminted=0 placeholders=0 christened=3
 [christened] comp 'chr' layers=1
   layer 1 'subject' enabled=true guide=false adj=false
     fx 1 [MINC VIEW] 'minColor: view macOS Video View'

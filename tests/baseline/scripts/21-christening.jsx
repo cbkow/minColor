@@ -40,10 +40,10 @@
   // regenerate menus (Set Up writes the file; reopen invalidates handles)
   app.executeCommand(app.findMenuCommandId("minColor: Set Up Project"));
   rmSettings("walk-pending");
-  mark = MincBase.logMark();
   app.executeCommand(app.findMenuCommandId("minColor: Sync From Names"));
-  var l2 = MincBase.syncLinesSince(mark);
-  MincBase.log("[christen] " + l2[0]);
+  // no walk-line capture here: the reopen above fires SEQUENCE_SETUPs whose marker an idle
+  // tick can consume DURING executeCommand — christening may land before or during this sync
+  // (timing, not state). The comp dump below is the deterministic assertion.
   MincBase.dumpComp("christened", findComp());
   MincBase.finish(N);
 } catch (e) { MincBase.fail(N, e); } })();

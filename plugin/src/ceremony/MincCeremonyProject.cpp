@@ -294,12 +294,91 @@ static void RebuildEffects(PEnv &e, const MincSuggestCtx &ctx, bool hasLooks, Re
                             out->gradesLeft.push_back(label + " [" + nm + "]");
                             continue;
                         }
-                        /* native minColor-named CSTs (:434-482) don't occur in plugin-authored
-                           projects; if present, strip and report as foreign for M1 (deviation
-                           logged — panel would rebuild them natively). */
+                        /* native minColor-named CSTs (:434-482): retarget IN PLACE on the host
+                           layer — M1's strip-and-report deviation closed in M2 step 6. Popups
+                           are written BEFORE the reorder (§34: refs are position-bound).    */
                         if (mn == "ADBE OCIO Color Space Transform" && oursName) {
-                            out->foreign.push_back(label + " [" + nm + "] (native minColor CST — M1 native rebuild deferred)");
-                            continue;
+                            const std::string nmC = nm;              /* copies — fx[k] is rewritten below */
+                            std::string rest = nmC.substr(10);
+                            bool wl = MincLayerLocked(e.bp, ly);
+                            if (wl) MincSetLayerLocked(e.bp, ly, false);
+                            auto relock = [&] { if (wl) MincSetLayerLocked(e.bp, ly, true); };
+                            std::string kind;
+                            if      (rest.compare(0, 5, "view ") == 0)   kind = "view";
+                            else if (rest.compare(0, 7, "render ") == 0) kind = "render";
+                            if (!kind.empty()) {                     /* :440-452 */
+                                std::string space = rest.substr(kind.size() + 1);
+                                MincRemap rv = MincRemapSpace(kind, space, ctx);  /* always resolves (family default last resort) */
+                                if (rv.changed) out->remapped.push_back(label + ": " + rv.note);
+                                int idxV = k + 1;
+                                if (!MincRemoveEffectAt(e.bp, e.id, ly, idxV)) { out->failed.push_back(label + " \xe2\x80\x94 remove failed"); relock(); continue; }
+                                std::string newName = "minColor: " + kind + " " + rv.space;
+                                int endIdx = 0;
+                                AEGP_EffectRefH vfx = MincApplyByMatchWithName(e.bp, e.id, ly, "ADBE OCIO Color Space Transform", newName, &endIdx);
+                                std::string e1, e2;
+                                if (vfx && MincSetPopupByName(e.bp, e.id, vfx, 1, "default", &e1) && MincSetPopupByName(e.bp, e.id, vfx, 2, rv.space, &e2)) {
+                                    out->viewRender++;
+                                    out->rebuilt.push_back(label + " (" + rest + ")");
+                                    fx[k].name = newName;            /* replaced in place */
+                                } else out->failed.push_back(label + " \xe2\x80\x94 " + (vfx ? (e1.empty() ? e2 : e1) : "native apply failed"));
+                                if (vfx) {
+                                    { Acq<AEGP_EffectSuite5> ef4(e.bp, kAEGPEffectSuite, kAEGPEffectSuiteVersion5); if (ef4) ef4->AEGP_DisposeEffect(vfx); }
+                                    if (endIdx != idxV) MincMoveEffect(e.bp, e.id, ly, endIdx, idxV);
+                                } else { fx.erase(fx.begin() + k); --k; }
+                                relock(); continue;
+                            }
+                            if (rest.compare(0, 8, "contain ") == 0) {   /* :455-468 */
+                                std::string cs = rest.substr(8);
+                                MincRemap rc = MincRemapSpace("contain", cs, ctx);
+                                if (rc.space.empty()) {
+                                    if (MincRemoveEffectAt(e.bp, e.id, ly, k + 1)) {
+                                        out->failed.push_back(label + " \xe2\x80\x94 " + rc.note + " (removed; re-interpret)");
+                                        fx.erase(fx.begin() + k); --k;
+                                    } else out->failed.push_back(label + " \xe2\x80\x94 remove failed");
+                                    relock(); continue;
+                                }
+                                if (rc.changed) out->remapped.push_back(label + ": " + rc.note);
+                                int idxC = k + 1;
+                                if (!MincRemoveEffectAt(e.bp, e.id, ly, idxC)) { out->failed.push_back(label + " \xe2\x80\x94 remove failed"); relock(); continue; }
+                                std::string newName = "minColor: contain " + rc.space;
+                                int endIdx = 0;
+                                AEGP_EffectRefH cfx = MincApplyByMatchWithName(e.bp, e.id, ly, "ADBE OCIO Color Space Transform", newName, &endIdx);
+                                std::string e1, e2;
+                                if (cfx && MincSetPopupByName(e.bp, e.id, cfx, 1, rc.space, &e1) && MincSetPopupByName(e.bp, e.id, cfx, 2, "default", &e2)) {
+                                    out->rebuilt.push_back(label + " (" + rest + ")");
+                                    fx[k].name = newName;
+                                } else out->failed.push_back(label + " \xe2\x80\x94 " + (cfx ? (e1.empty() ? e2 : e1) : "native apply failed"));
+                                if (cfx) {
+                                    { Acq<AEGP_EffectSuite5> ef5(e.bp, kAEGPEffectSuite, kAEGPEffectSuiteVersion5); if (ef5) ef5->AEGP_DisposeEffect(cfx); }
+                                    if (endIdx != idxC) MincMoveEffect(e.bp, e.id, ly, endIdx, idxC);
+                                } else { fx.erase(fx.begin() + k); --k; }
+                                relock(); continue;
+                            }
+                            size_t ai = rest.find(" \xe2\x86\x92 working");    /* :470-478 */
+                            if (ai == std::string::npos || ai == 0) { relock(); continue; }   /* left in place, panel parity */
+                            std::string space2 = rest.substr(0, ai);
+                            MincRemap ri = MincRemapSpace("input", space2, ctx);
+                            if (ri.space.empty()) {
+                                if (MincRemoveEffectAt(e.bp, e.id, ly, k + 1)) {
+                                    (ri.identity ? out->remapped : out->failed).push_back(label + " \xe2\x80\x94 " + ri.note + (ri.identity ? "" : " (removed; re-interpret)"));
+                                    fx.erase(fx.begin() + k); --k;
+                                } else out->failed.push_back(label + " \xe2\x80\x94 remove failed");
+                                relock(); continue;
+                            }
+                            if (ri.changed) out->remapped.push_back(label + ": " + ri.note);
+                            int idxI = k + 1;
+                            if (!MincRemoveEffectAt(e.bp, e.id, ly, idxI)) { out->failed.push_back(label + " \xe2\x80\x94 remove failed"); relock(); continue; }
+                            std::string mname = "minColor: " + ri.space + " \xe2\x86\x92 working";
+                            if (MincApplyMincWithName(e.bp, e.id, ly, mname, idxI)) {   /* addInputTransform parity: MINC, plugin dialect */
+                                out->rebuilt.push_back(label + " (" + rest + ")");
+                                fx[k].match = MINC_MATCH_LEGACY;
+                                fx[k].name = mname;
+                                *touchedMinc = true;
+                            } else {
+                                out->failed.push_back(label + " \xe2\x80\x94 native apply failed");
+                                fx.erase(fx.begin() + k); --k;
+                            }
+                            relock(); continue;
                         }
                     }
                 }
