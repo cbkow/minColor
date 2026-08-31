@@ -168,3 +168,122 @@ MincTranslateReport MincTranslateToNative(SPBasicSuite *bp, AEGP_PluginID id) {
     if (uts) uts->AEGP_EndUndoGroup();
     return out;
 }
+
+MincTranslateReport MincTranslateToPlugin(SPBasicSuite *bp, AEGP_PluginID id) {
+    MincTranslateReport out;
+    AEGP_SuiteHandler suites(bp);
+    Acq<AEGP_ProjSuite6>  pjs(bp, kAEGPProjSuite,  kAEGPProjSuiteVersion6);
+    Acq<AEGP_ItemSuite9>  its(bp, kAEGPItemSuite,  kAEGPItemSuiteVersion9);
+    Acq<AEGP_CompSuite12> cps(bp, kAEGPCompSuite,  kAEGPCompSuiteVersion12);
+    Acq<AEGP_LayerSuite9> lys(bp, kAEGPLayerSuite, kAEGPLayerSuiteVersion9);
+    Acq<AEGP_UtilitySuite6> uts(bp, kAEGPUtilitySuite, kAEGPUtilitySuiteVersion6);
+    if (!pjs || !its || !cps || !lys) { out.failed.push_back("suite acquire failed"); return out; }
+    MincAuthorityRefreshBp(bp, id);
+    MincAuthoritySnapshot snap = {};
+    MincAuthorityGet(&snap);
+    std::string pin = snap.configPath;
+    std::string pinBase = pin.substr(pin.find_last_of('/') == std::string::npos ? 0 : pin.find_last_of('/') + 1);
+    MincSuggestCtx ctx = MincBuildSuggestCtx(MincPresetFromConfigBase(pinBase), pin);
+    bool hasLooks = THasLooks(pin);
+    if (uts) uts->AEGP_StartUndoGroup("minColor adopt");
+    AEGP_ProjectH projH = nullptr;
+    pjs->AEGP_GetProjectByIndex(0, &projH);
+    AEGP_ItemH itemH = nullptr;
+    its->AEGP_GetFirstProjItem(projH, &itemH);
+    while (itemH) {
+        AEGP_ItemType ty = AEGP_ItemType_NONE;
+        its->AEGP_GetItemType(itemH, &ty);
+        if (ty == AEGP_ItemType_COMP) {
+            AEGP_CompH compH = nullptr;
+            if (cps->AEGP_GetCompFromItem(itemH, &compH) == A_Err_NONE && compH) {
+                AEGP_MemHandle inh = nullptr;
+                char compName[512] = "";
+                if (its->AEGP_GetItemName(id, itemH, &inh) == A_Err_NONE)
+                    MincUtf16HandleToUtf8(suites, inh, compName, sizeof(compName));
+                A_long nL = 0;
+                lys->AEGP_GetCompNumLayers(compH, &nL);
+                for (A_long li = 0; li < nL; ++li) {
+                    AEGP_LayerH ly = nullptr;
+                    if (lys->AEGP_GetCompLayerByIndex(compH, li, &ly) != A_Err_NONE || !ly) continue;
+                    AEGP_MemHandle lnh = nullptr, lsh = nullptr;
+                    char lyName[512] = "";
+                    if (lys->AEGP_GetLayerName(id, ly, &lnh, &lsh) == A_Err_NONE) {
+                        MincUtf16HandleToUtf8(suites, lnh, lyName, sizeof(lyName));
+                        if (!lyName[0] && lsh) MincUtf16HandleToUtf8(suites, lsh, lyName, sizeof(lyName));
+                        else if (lsh) suites.MemorySuite1()->AEGP_FreeMemHandle(lsh);
+                    }
+                    std::vector<MincFxEntry> fx;
+                    MincEnumLayerEffects(bp, id, ly, &fx);
+                    for (int k = 0; k < (int)fx.size(); ++k) {
+                        const std::string nm = fx[k].name;
+                        if (nm.compare(0, 10, "minColor: ") != 0) continue;      /* :567 */
+                        bool isLook = (fx[k].match == "ADBE OCIO Look Transform");
+                        bool isCst  = (fx[k].match == "ADBE OCIO Color Space Transform");
+                        if (!isLook && !isCst) continue;                         /* native minColor-named only */
+                        std::string label = std::string(compName) + "/" + lyName + " [" + nm + "]";
+                        bool wl = MincLayerLocked(bp, ly);
+                        if (wl) MincSetLayerLocked(bp, ly, false);
+                        if (isLook) {                                            /* :572-581 */
+                            if (!hasLooks) {
+                                if (MincRemoveEffectAt(bp, id, ly, k + 1)) {
+                                    out.removed.push_back(label + " \xe2\x80\x94 looks do not exist in this preset");
+                                    fx.erase(fx.begin() + k); --k;
+                                } else out.failed.push_back(label + " \xe2\x80\x94 remove failed");
+                                if (wl) MincSetLayerLocked(bp, ly, true);
+                                continue;
+                            }
+                            int idx = k + 1;
+                            if (!MincRemoveEffectAt(bp, id, ly, idx)) { out.failed.push_back(label + " \xe2\x80\x94 remove failed"); if (wl) MincSetLayerLocked(bp, ly, true); continue; }
+                            int endIdx = 0;
+                            AEGP_EffectRefH lf = MincApplyByMatchWithName(bp, id, ly, MINC_MATCH_LOOK, nm, &endIdx);
+                            if (lf) {
+                                { Acq<AEGP_EffectSuite5> efs(bp, kAEGPEffectSuite, kAEGPEffectSuiteVersion5); if (efs) efs->AEGP_DisposeEffect(lf); }
+                                if (endIdx != idx) MincMoveEffect(bp, id, ly, endIdx, idx);
+                                out.converted.push_back(label);
+                                fx[k].match = MINC_MATCH_LOOK;
+                            } else { out.failed.push_back(label + " \xe2\x80\x94 variant apply failed"); fx.erase(fx.begin() + k); --k; }
+                            if (wl) MincSetLayerLocked(bp, ly, true);
+                            continue;
+                        }
+                        /* CST branch (:583-593): parse FIRST — the verb picks the variant */
+                        MincFxName pp = MincParseFxName(nm);
+                        MincRemap rp;
+                        bool haveRemap = pp.valid;
+                        if (haveRemap) rp = MincRemapSpace(pp.kind, pp.space, ctx);
+                        std::string newName = nm;                                /* name kept unless remapped */
+                        const char *targetMatch = MINC_MATCH_XFORM;              /* unparsed lives on XFORM */
+                        if (pp.valid) targetMatch = MincMatchForKind(pp.kind.c_str());
+                        if (haveRemap && rp.changed && !rp.space.empty()) {
+                            out.remapped.push_back(label + ": " + rp.note);
+                            newName = (pp.kind == "input")
+                                ? "minColor: " + rp.space + " \xe2\x86\x92 working"
+                                : "minColor: " + pp.kind + " " + rp.space;
+                        } else if (haveRemap && rp.space.empty()) {
+                            out.remapped.push_back(label + ": " + rp.note + " (name kept \xe2\x80\x94 re-interpret)");
+                        }
+                        int idx2 = k + 1;
+                        if (!MincRemoveEffectAt(bp, id, ly, idx2)) { out.failed.push_back(label + " \xe2\x80\x94 remove failed"); if (wl) MincSetLayerLocked(bp, ly, true); continue; }
+                        int endIdx2 = 0;
+                        AEGP_EffectRefH nf = MincApplyByMatchWithName(bp, id, ly, targetMatch, newName, &endIdx2);
+                        if (nf) {
+                            { Acq<AEGP_EffectSuite5> efs(bp, kAEGPEffectSuite, kAEGPEffectSuiteVersion5); if (efs) efs->AEGP_DisposeEffect(nf); }
+                            if (endIdx2 != idx2) MincMoveEffect(bp, id, ly, endIdx2, idx2);
+                            out.converted.push_back(label);
+                            fx[k].match = targetMatch;
+                            fx[k].name = newName;
+                        } else { out.failed.push_back(label + " \xe2\x80\x94 variant apply failed"); fx.erase(fx.begin() + k); --k; }
+                        if (wl) MincSetLayerLocked(bp, ly, true);
+                    }
+                }
+            }
+        }
+        AEGP_ItemH nextH = nullptr;
+        its->AEGP_GetNextProjItem(projH, itemH, &nextH);
+        itemH = nextH;
+    }
+    if (uts) uts->AEGP_EndUndoGroup();
+    MincSyncFromNames(bp, id);                               /* panel: syncPluginNames + stampEngine("plugin");
+                                                                the walk writes payloads; engine stamp = shell/XMP
+                                                                concern deferred to the contract flip */
+    return out;
+}

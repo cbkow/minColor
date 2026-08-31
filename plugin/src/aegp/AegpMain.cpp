@@ -14,6 +14,7 @@
 #include "../ceremony/MincMenusWrite.h"
 #include "../ceremony/MincArgs.h"
 #include "../ceremony/MincUtility.h"
+#include "../ceremony/MincTranslate.h"
 #include <cstdio>
 
 static AEGP_PluginID  g_id = 0;
@@ -30,6 +31,7 @@ static void CmdInterpret(void);
 static void CmdInterpretSel(void);
 static void CmdUtility(void);
 static void CmdApplyLook(void);
+static void CmdAdopt(void);
 static void CmdSetUp(void);
 static void CmdMigrate(void);
 static void CmdStripForeign(void);
@@ -45,6 +47,7 @@ static MincCommandDef g_commands[] = {
     { "minColor: Interpret Selected",  CmdInterpretSel, 0 },
     { "minColor: Utility Layers",      CmdUtility,     0 },
     { "minColor: Apply Look",          CmdApplyLook,   0 },
+    { "minColor: Adopt Effects",       CmdAdopt,       0 },
     { "minColor: Set Up Project",      CmdSetUp,       0 },
     { "minColor: Migrate Project",     CmdMigrate,     0 },
     { "minColor: Strip Foreign OCIO",  CmdStripForeign, 0 },
@@ -161,6 +164,19 @@ static void CmdApplyLook(void) {
     }
     ReportCeremony("apply-look", MincApplyLook(g_pica, g_id, look));
 }
+static void CmdAdopt(void) {
+    MincTranslateReport tr = MincTranslateToPlugin(g_pica, g_id);
+    char tn[16]; snprintf(tn, sizeof(tn), "%d", (int)tr.converted.size());
+    std::string json = std::string("{ \"converted\": ") + tn + ", \"failed\": [";
+    for (size_t i = 0; i < tr.failed.size(); ++i) { if (i) json += ", "; std::string e = "\""; for (char c : tr.failed[i]) { if (c == '"' || c == '\\') e += '\\'; e += c; } json += e + "\""; }
+    json += "], \"remapped\": [";
+    for (size_t i = 0; i < tr.remapped.size(); ++i) { if (i) json += ", "; std::string e = "\""; for (char c : tr.remapped[i]) { if (c == '"' || c == '\\') e += '\\'; e += c; } json += e + "\""; }
+    json += "], \"removed\": [";
+    for (size_t i = 0; i < tr.removed.size(); ++i) { if (i) json += ", "; std::string e = "\""; for (char c : tr.removed[i]) { if (c == '"' || c == '\\') e += '\\'; e += c; } json += e + "\""; }
+    json += "] }\n";
+    ReportCeremony("adopt", json);
+}
+
 static void CmdUtility(void) {
     std::string view, render;
     {   MincJsonPtr a = MincArgsConsume("minColor: Utility Layers");

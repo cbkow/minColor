@@ -30,6 +30,14 @@ static inline bool MincMatchVerb(const char *match, MincVerb *out) {
 static inline bool MincIsOurs(const char *match) { MincVerb v; return MincMatchVerb(match, &v); }
 /* does a display-name kind token agree with the match-name verb? (legacy: name is the
    authority, everything agrees). A contradiction is NEVER silently reinterpreted.        */
+/* kind token -> the variant that owns it (inverse of MincKindMatchesVerb; input + contain
+   live on the Transform effect) — the authored dialect from M3 on                        */
+static inline const char *MincMatchForKind(const char *kind) {
+    if (!strcmp(kind, "view"))   return MINC_MATCH_VIEW;
+    if (!strcmp(kind, "render")) return MINC_MATCH_RENDER;
+    if (!strcmp(kind, "look"))   return MINC_MATCH_LOOK;
+    return MINC_MATCH_XFORM;
+}
 static inline bool MincKindMatchesVerb(const char *kind, MincVerb v) {
     switch (v) {
         case MINC_VERB_LEGACY: return true;
