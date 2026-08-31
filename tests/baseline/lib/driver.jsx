@@ -10,7 +10,7 @@
     var scripts = ["01-doctor-unmanaged", "02-apply-preset", "03-interpret", "04-utility-layers",
                    "05-apply-look", "06-render-preset", "07-translate-roundtrip", "08-strip",
                    "09-doctor-repair", "10-migrate", "11-archive", "12-sync-from-names",
-                   "13-equiv-doctor", "14-equiv-interpret", "15-equiv-setup", "16-equiv-migrate", "17-equiv-strip"];
+                   "13-equiv-doctor", "14-equiv-interpret", "15-equiv-setup", "16-equiv-migrate", "17-equiv-strip", "18-equiv-archive"];
     for (var i = 0; i < scripts.length; i++) {
       try { $.evalFile(BASE + "/scripts/" + scripts[i] + ".jsx"); }
       catch (eS) {   // a scenario that dies before its own catch still gets a result file

@@ -10,6 +10,7 @@
 #include "../ceremony/MincCeremonyProject.h"
 #include "../ceremony/MincPicker.h"
 #include "../ceremony/MincStrip.h"
+#include "../ceremony/MincArchive.h"
 #include <cstdio>
 
 static AEGP_PluginID  g_id = 0;
@@ -27,6 +28,7 @@ static void CmdSetUp(void);
 static void CmdMigrate(void);
 static void CmdStripForeign(void);
 static void CmdStripAll(void);
+static void CmdArchive(void);
 
 static MincCommandDef g_commands[] = {
     { "minColor: Sync From Names",     CmdSync,        0 },
@@ -37,6 +39,7 @@ static MincCommandDef g_commands[] = {
     { "minColor: Migrate Project",     CmdMigrate,     0 },
     { "minColor: Strip Foreign OCIO",  CmdStripForeign, 0 },
     { "minColor: Strip ALL",           CmdStripAll,    0 },
+    { "minColor: Archive Project",     CmdArchive,     0 },
     /* M1 ceremonies append here step by step */
 };
 static const int g_nCommands = (int)(sizeof(g_commands) / sizeof(g_commands[0]));
@@ -118,6 +121,7 @@ static void CmdMigrate(void) {
 
 static void CmdStripForeign(void) { ReportCeremony("strip-foreign", MincStripForeignOcio(g_pica, g_id, false)); }
 static void CmdStripAll(void)     { ReportCeremony("strip-all",     MincStripForeignOcio(g_pica, g_id, true)); }
+static void CmdArchive(void)      { ReportCeremony("archive",       MincArchiveProject(g_pica, g_id)); }
 
 /* ---------------- hooks ---------------- */
 static A_Err IdleHook(AEGP_GlobalRefcon, AEGP_IdleRefcon, A_long *max_sleepPL) {
