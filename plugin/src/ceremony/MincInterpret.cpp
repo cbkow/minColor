@@ -43,6 +43,7 @@ struct IEnv {
     AEGP_FootageSuite5 *fts; AEGP_ProjSuite6 *pjs;
     MincSuggestCtx ctx;
     std::string pin;
+    std::string explicitSpace;                    /* selection mode: bypass the suggestion engine */
     std::map<int32_t, std::string> detected, harvest;
     MincInterpretReport *rep;
 };
@@ -172,7 +173,9 @@ static void DoLayer(IEnv &e, AEGP_CompH compH, AEGP_LayerH ly, const std::string
         return;
     }
     if (haveIdx > 0) { e.rep->skipped.push_back(label + " (already interpreted)"); return; }
-    MincPick pick = MincSuggestionFor(facts, e.detected, e.harvest, e.ctx);   /* :1003 */
+    MincPick pick;                                           /* :1003 — explicit space wins (panel parity) */
+    if (!e.explicitSpace.empty()) { pick.space = e.explicitSpace; pick.why = "explicit"; }
+    else pick = MincSuggestionFor(facts, e.detected, e.harvest, e.ctx);
     if (pick.space.empty()) {
         if (pick.why.find("identity") != std::string::npos) e.rep->identity.push_back(label + " (" + pick.why + ")");
         else e.rep->skipped.push_back(label + " (" + pick.why + ")");
@@ -290,5 +293,93 @@ MincInterpretReport MincInterpretTimeline(SPBasicSuite *bp, AEGP_PluginID id) {
     WalkComp(e, comp, seen);
     if (uts) uts->AEGP_EndUndoGroup();
     MincSyncFromNames(bp, id);                               /* == panel's syncPluginNames() at the end */
+    return rep;
+}
+
+/* interpretPass({mode:"selection"}, space) port (:1051-1054): the active comp's SELECTED
+   layers only; an explicit space bypasses the suggestion engine (why="explicit") and skips
+   the detected/harvest scan (panel parity: those maps are empty when space is given).      */
+MincInterpretReport MincInterpretSelection(SPBasicSuite *bp, AEGP_PluginID id, const std::string &space) {
+    MincInterpretReport rep;
+    AEGP_SuiteHandler suites(bp);
+    Acq<AEGP_ItemSuite9>    its(bp, kAEGPItemSuite,    kAEGPItemSuiteVersion9);
+    Acq<AEGP_CompSuite12>   cps(bp, kAEGPCompSuite,    kAEGPCompSuiteVersion12);
+    Acq<AEGP_LayerSuite9>   lys(bp, kAEGPLayerSuite,   kAEGPLayerSuiteVersion9);
+    Acq<AEGP_FootageSuite5> fts(bp, kAEGPFootageSuite, kAEGPFootageSuiteVersion5);
+    Acq<AEGP_ProjSuite6>    pjs(bp, kAEGPProjSuite,    kAEGPProjSuiteVersion6);
+    Acq<AEGP_UtilitySuite6> uts(bp, kAEGPUtilitySuite, kAEGPUtilitySuiteVersion6);
+    Acq<AEGP_CollectionSuite2> cls(bp, kAEGPCollectionSuite, kAEGPCollectionSuiteVersion2);
+    if (!its || !cps || !lys || !fts || !pjs || !cls) { rep.error = "suite acquire failed"; return rep; }
+    AEGP_ItemH active = nullptr;
+    its->AEGP_GetActiveItem(&active);
+    AEGP_ItemType aty = AEGP_ItemType_NONE;
+    if (active) its->AEGP_GetItemType(active, &aty);
+    if (!active || aty != AEGP_ItemType_COMP) { rep.error = "open a comp"; return rep; }   /* :1052 verbatim */
+    AEGP_CompH comp = nullptr;
+    cps->AEGP_GetCompFromItem(active, &comp);
+    if (!comp) { rep.error = "open a comp"; return rep; }
+    AEGP_Collection2H coll = nullptr;
+    if (cps->AEGP_GetNewCollectionFromCompSelection(id, comp, &coll) != A_Err_NONE || !coll) {
+        rep.error = "select layer(s)";                       /* :1053 verbatim */
+        return rep;
+    }
+    A_u_long nSel = 0;
+    cls->AEGP_GetCollectionNumItems(coll, &nSel);
+    std::vector<AEGP_LayerH> layers;
+    for (A_u_long i = 0; i < nSel; ++i) {
+        AEGP_CollectionItemV2 item;
+        memset(&item, 0, sizeof(item));
+        if (cls->AEGP_GetCollectionItemByIndex(coll, i, &item) != A_Err_NONE) continue;
+        if (item.type == AEGP_CollectionItemType_LAYER && item.u.layer.layerH)
+            layers.push_back(item.u.layer.layerH);
+    }
+    cls->AEGP_DisposeCollection(coll);
+    if (layers.empty()) { rep.error = "select layer(s)"; return rep; }
+
+    IEnv e;
+    e.bp = bp; e.id = id; e.suites = &suites;
+    e.its = its.p; e.cps = cps.p; e.lys = lys.p; e.fts = fts.p; e.pjs = pjs.p;
+    e.rep = &rep;
+    e.explicitSpace = space;
+    MincAuthorityRefreshBp(bp, id);
+    MincAuthoritySnapshot snap = {};
+    MincAuthorityGet(&snap);
+    e.pin = snap.configPath;
+    std::string pinBase = e.pin.substr(e.pin.find_last_of('/') == std::string::npos ? 0 : e.pin.find_last_of('/') + 1);
+    e.ctx = MincBuildSuggestCtx(MincPresetFromConfigBase(pinBase), e.pin);
+    if (space.empty()) {                                     /* suggestion path needs detected/harvest */
+        AEGP_ProjectH projH = nullptr;
+        pjs->AEGP_GetProjectByIndex(0, &projH);
+        char pbuf[2048] = "";
+        if (projH) {
+            AEGP_MemHandle ph = nullptr;
+            if (pjs->AEGP_GetProjectPath(projH, &ph) == A_Err_NONE)
+                MincUtf16HandleToUtf8(suites, ph, pbuf, sizeof(pbuf));
+        }
+        if (pbuf[0] && projH) {
+            std::string tmp = "/tmp/minColor-interpret-scan.aep";
+            A_UTF16Char t16[512];
+            MincU8ToU16(tmp.c_str(), t16, 512);
+            if (pjs->AEGP_SaveProjectToPath(projH, t16) == A_Err_NONE) {
+                MincAssignments a;
+                if (MincRifxReadAssignments(tmp.c_str(), &a))
+                    for (auto &kv : a.detected) e.detected[kv.first] = kv.second;
+                std::string harv = MincXmpReadElement(MincReadFileTail(tmp.c_str()), "harvest");
+                if (!harv.empty()) {
+                    MincJsonPtr hj = MincJsonParse(harv);
+                    MincJsonPtr hitems = hj ? hj->get("items") : nullptr;
+                    if (hitems && hitems->type == MincJsonValue::Object)
+                        for (auto &kv : hitems->obj)
+                            if (kv.second) e.harvest[(int32_t)atol(kv.first.c_str())] = kv.second->str("name");
+                }
+                unlink(tmp.c_str());
+            }
+        }
+    }
+    std::string compName = ItemName(e, active);
+    if (uts) uts->AEGP_StartUndoGroup("minColor interpret");
+    for (auto ly : layers) DoLayer(e, comp, ly, compName);
+    if (uts) uts->AEGP_EndUndoGroup();
+    MincSyncFromNames(bp, id);
     return rep;
 }

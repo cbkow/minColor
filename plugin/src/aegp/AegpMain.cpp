@@ -12,6 +12,7 @@
 #include "../ceremony/MincStrip.h"
 #include "../ceremony/MincArchive.h"
 #include "../ceremony/MincMenusWrite.h"
+#include "../ceremony/MincArgs.h"
 #include <cstdio>
 
 static AEGP_PluginID  g_id = 0;
@@ -25,6 +26,7 @@ static void CmdSync(void);
 static void CmdAbout(void);
 static void CmdDoctor(void);
 static void CmdInterpret(void);
+static void CmdInterpretSel(void);
 static void CmdSetUp(void);
 static void CmdMigrate(void);
 static void CmdStripForeign(void);
@@ -37,6 +39,7 @@ static MincCommandDef g_commands[] = {
     { "minColor: About",               CmdAbout,       0 },
     { "minColor: Doctor",              CmdDoctor,      0 },
     { "minColor: Interpret Timeline",  CmdInterpret,   0 },
+    { "minColor: Interpret Selected",  CmdInterpretSel, 0 },
     { "minColor: Set Up Project",      CmdSetUp,       0 },
     { "minColor: Migrate Project",     CmdMigrate,     0 },
     { "minColor: Strip Foreign OCIO",  CmdStripForeign, 0 },
@@ -92,6 +95,27 @@ static void CmdInterpret(void) {
     char msg[256];
     if (!r.error.empty()) snprintf(msg, sizeof(msg), "Interpret Timeline: %s", r.error.c_str());
     else snprintf(msg, sizeof(msg), "Interpret Timeline: %d added, %d skipped, %d flagged, %d failed",
+                  (int)r.added.size(), (int)r.skipped.size(), (int)r.flagged.size(), (int)r.failed.size());
+    AEGP_SuiteHandler suites(g_pica);
+    A_UTF16Char u16[300];
+    MincU8ToU16(msg, u16, 300);
+    suites.UtilitySuite6()->AEGP_ReportInfoUnicode(g_id, u16);
+}
+
+static void CmdInterpretSel(void) {
+    std::string space;
+    {   MincJsonPtr a = MincArgsConsume("minColor: Interpret Selected");
+        if (a) space = a->str("space");
+    }
+    MincInterpretReport r = MincInterpretSelection(g_pica, g_id, space);
+    MincWriteReport("interpret-selected", r.toJson());
+    MincLog("interpret-selected: added=%d skipped=%d flagged=%d failed=%d%s%s",
+            (int)r.added.size(), (int)r.skipped.size(), (int)r.flagged.size(), (int)r.failed.size(),
+            r.error.empty() ? "" : " error=", r.error.c_str());
+    if (MincQuietMode()) return;
+    char msg[256];
+    if (!r.error.empty()) snprintf(msg, sizeof(msg), "Interpret Selected: %s", r.error.c_str());
+    else snprintf(msg, sizeof(msg), "Interpret Selected: %d added, %d skipped, %d flagged, %d failed",
                   (int)r.added.size(), (int)r.skipped.size(), (int)r.flagged.size(), (int)r.failed.size());
     AEGP_SuiteHandler suites(g_pica);
     A_UTF16Char u16[300];

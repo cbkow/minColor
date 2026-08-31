@@ -12,3 +12,7 @@ struct MincInterpretReport {
 };
 
 MincInterpretReport MincInterpretTimeline(SPBasicSuite *bp, AEGP_PluginID id);
+/* selection mode (:1051-1054): active comp's selected layers; explicit space bypasses the
+   suggestion engine ("" = suggest). Shell args: {"command": "minColor: Interpret Selected",
+   "space": "..."}                                                                          */
+MincInterpretReport MincInterpretSelection(SPBasicSuite *bp, AEGP_PluginID id, const std::string &space);
