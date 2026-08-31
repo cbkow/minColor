@@ -9,9 +9,13 @@ static AEGP_PluginID  g_id = 0;
 static SPBasicSuite  *g_pica = nullptr;
 static AEGP_Command   g_syncCmd = 0;
 
+AEGP_InstalledEffectKey MincInstalledKey(SPBasicSuite *bp, AEGP_PluginID id);   /* ceremony/MincEffectOps.cpp */
+
 static A_Err IdleHook(AEGP_GlobalRefcon, AEGP_IdleRefcon, A_long *max_sleepPL) {
     static unsigned long lastSyncedGen = 0;
+    static bool keyScanned = false;
     if (g_pica && g_id) {
+        if (!keyScanned) { keyScanned = true; MincInstalledKey(g_pica, g_id); }   /* timed scan, once, post-startup */
         MincAuthorityRefreshBp(g_pica, g_id);
         MincAuthoritySnapshot s;                        /* project/preset changed -> names are the durable
                                                            store: re-derive every instance's state */

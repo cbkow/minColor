@@ -143,8 +143,13 @@ if(APPLE)
   # ============================== bundle 2: the ceremonies AEGP ==============================
   # AEgx package type, app Plug-ins folder, loads at AE launch. No OCIO — the admin-installed
   # bundle stays tiny; all colour math stays in the effect.
+  set(MINC_CEREMONY_SOURCES
+    src/ceremony/MincSettings.cpp
+    src/ceremony/MincEffectOps.cpp
+  )
   add_library(minColorAEGP MODULE
     src/aegp/AegpMain.cpp
+    ${MINC_CEREMONY_SOURCES}
     ${MINC_CORE_SOURCES}
   )
   add_dependencies(minColorAEGP buildstamp)
