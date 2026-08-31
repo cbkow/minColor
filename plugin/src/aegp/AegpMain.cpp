@@ -29,6 +29,7 @@ static void CmdDoctor(void);
 static void CmdInterpret(void);
 static void CmdInterpretSel(void);
 static void CmdUtility(void);
+static void CmdApplyLook(void);
 static void CmdSetUp(void);
 static void CmdMigrate(void);
 static void CmdStripForeign(void);
@@ -43,6 +44,7 @@ static MincCommandDef g_commands[] = {
     { "minColor: Interpret Timeline",  CmdInterpret,   0 },
     { "minColor: Interpret Selected",  CmdInterpretSel, 0 },
     { "minColor: Utility Layers",      CmdUtility,     0 },
+    { "minColor: Apply Look",          CmdApplyLook,   0 },
     { "minColor: Set Up Project",      CmdSetUp,       0 },
     { "minColor: Migrate Project",     CmdMigrate,     0 },
     { "minColor: Strip Foreign OCIO",  CmdStripForeign, 0 },
@@ -152,6 +154,13 @@ static void CmdStripForeign(void) { ReportCeremony("strip-foreign", MincStripFor
 static void CmdStripAll(void)     { ReportCeremony("strip-all",     MincStripForeignOcio(g_pica, g_id, true)); }
 static void CmdArchive(void)      { ReportCeremony("archive",       MincArchiveProject(g_pica, g_id)); }
 static void CmdPackage(void)      { ReportCeremony("package",       MincPackageForAnyAE(g_pica, g_id)); }
+static void CmdApplyLook(void) {
+    std::string look;
+    {   MincJsonPtr a = MincArgsConsume("minColor: Apply Look");
+        if (a) look = a->str("look");                 /* "" = remove */
+    }
+    ReportCeremony("apply-look", MincApplyLook(g_pica, g_id, look));
+}
 static void CmdUtility(void) {
     std::string view, render;
     {   MincJsonPtr a = MincArgsConsume("minColor: Utility Layers");

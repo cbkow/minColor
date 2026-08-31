@@ -22,3 +22,7 @@ struct MincUtilLayer {
     std::string fxName, lookName;
 };
 MincUtilLayer MincFindUtilityLayer(SPBasicSuite *bp, AEGP_PluginID id, AEGP_CompH comp, const char *kind);
+
+/* applyLook port (:1216-1236): set/replace/remove the MINC LOOK partner on EXISTING utility
+   layers, spaces and enabled states untouched. look "" = remove. JSON report or {"error"}. */
+std::string MincApplyLook(SPBasicSuite *bp, AEGP_PluginID id, const std::string &look);

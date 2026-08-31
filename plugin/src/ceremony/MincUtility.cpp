@@ -132,6 +132,55 @@ static UpResult Upsert(SPBasicSuite *bp, AEGP_PluginID id, AEGP_CompH comp, AEGP
     return r;
 }
 
+static std::string LookOnLayer(SPBasicSuite *bp, AEGP_PluginID id, MincUtilLayer &u, const std::string &look) {
+    if (look.empty()) {                                      /* remove */
+        if (u.lookIndex1 > 0) return MincRemoveEffectAt(bp, id, u.layer, u.lookIndex1) ? "removed" : "remove failed";
+        return "none";
+    }
+    std::string want = "minColor: look " + look;
+    if (u.lookIndex1 == 0) {                                 /* add: look-then-display = index 1 */
+        int end = 0;
+        AEGP_EffectRefH lf = MincApplyByMatchWithName(bp, id, u.layer, MINC_MATCH_LOOK, want, &end);
+        if (!lf) return "add failed";
+        { Acq<AEGP_EffectSuite5> efs(bp, kAEGPEffectSuite, kAEGPEffectSuiteVersion5); if (efs) efs->AEGP_DisposeEffect(lf); }
+        if (end != 1) MincMoveEffect(bp, id, u.layer, end, 1);
+        return "added";
+    }
+    if (u.lookName != want) {
+        if (!MincRenameEffectAt(bp, id, u.layer, u.lookIndex1, want)) return "rename failed";
+        if (u.lookIndex1 != 1) MincMoveEffect(bp, id, u.layer, u.lookIndex1, 1);
+        return "updated";
+    }
+    if (u.lookIndex1 != 1) { MincMoveEffect(bp, id, u.layer, u.lookIndex1, 1); return "reordered"; }
+    return "none";
+}
+
+std::string MincApplyLook(SPBasicSuite *bp, AEGP_PluginID id, const std::string &look) {
+    Acq<AEGP_ItemSuite9>  its(bp, kAEGPItemSuite,  kAEGPItemSuiteVersion9);
+    Acq<AEGP_CompSuite12> cps(bp, kAEGPCompSuite,  kAEGPCompSuiteVersion12);
+    Acq<AEGP_UtilitySuite6> uts(bp, kAEGPUtilitySuite, kAEGPUtilitySuiteVersion6);
+    if (!its || !cps) return "{ \"error\": \"suite acquire failed\" }\n";
+    AEGP_ItemH active = nullptr;
+    its->AEGP_GetActiveItem(&active);
+    AEGP_ItemType aty = AEGP_ItemType_NONE;
+    if (active) its->AEGP_GetItemType(active, &aty);
+    if (!active || aty != AEGP_ItemType_COMP) return "{ \"error\": \"open a comp\" }\n";   /* :1218 verbatim */
+    AEGP_CompH comp = nullptr;
+    cps->AEGP_GetCompFromItem(active, &comp);
+    if (!comp) return "{ \"error\": \"open a comp\" }\n";
+    std::string vAct = "absent", rAct = "absent";
+    if (uts) uts->AEGP_StartUndoGroup("minColor apply look");
+    MincUtilLayer ur = MincFindUtilityLayer(bp, id, comp, "render");
+    if (ur.found) rAct = LookOnLayer(bp, id, ur, look);
+    MincUtilLayer uv = MincFindUtilityLayer(bp, id, comp, "view");
+    if (uv.found) vAct = LookOnLayer(bp, id, uv, look);
+    if (uts) uts->AEGP_EndUndoGroup();
+    if (vAct == "absent" && rAct == "absent")
+        return "{ \"error\": \"no minColor view/render layers in this comp \xe2\x80\x94 add one first\" }\n";   /* :1234 verbatim */
+    MincSyncFromNames(bp, id);
+    return "{ \"view\": " + UJ(vAct) + ", \"render\": " + UJ(rAct) + " }\n";
+}
+
 std::string MincEnsureUtilityLayers(SPBasicSuite *bp, AEGP_PluginID id,
                                     const std::string &viewSpace, const std::string &renderSpace) {
     Acq<AEGP_ItemSuite9>  its(bp, kAEGPItemSuite,  kAEGPItemSuiteVersion9);
