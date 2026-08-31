@@ -5,9 +5,25 @@
    Location-independent: acts via AEGP suites + AEGP_EffectCallGeneric, which dispatches into
    the EFFECT binary's HandleGeneric/registry regardless of which bundle runs the walk.       */
 #include "MincCore.h"
+#include "MincMenus.h"
 #include <set>
 #include <cstring>
 #include <cstdio>
+
+/* christening gate: ONLY AE's untouched default display name — the effect name ("minColor
+   View") plus an optional " <digits>" copy suffix. A user-typed name is never overwritten. */
+static bool IsDefaultEffectName(MincVerb verb, const char *n) {
+    const char *base = (verb == MINC_VERB_VIEW) ? MINC_NAME_VIEW
+                     : (verb == MINC_VERB_RENDER) ? MINC_NAME_RENDER : nullptr;
+    if (!base) return false;
+    size_t bl = strlen(base);
+    if (strncmp(n, base, bl) != 0) return false;
+    const char *p = n + bl;
+    if (!*p) return true;
+    if (*p != ' ') return false;
+    for (++p; *p; ++p) if (*p < '0' || *p > '9') return false;
+    return *(n + bl + 1) != 0;
+}
 
 static bool ParseGrammar(MincVerb verb, const char *utf8, MinColorArb *out) {
     const char *PRE = "minColor: ";
@@ -60,7 +76,7 @@ static bool ParseGrammar(MincVerb verb, const char *utf8, MinColorArb *out) {
     return out->space[0] != 0;
 }
 
-static int SyncOnce(SPBasicSuite *bp, AEGP_PluginID aegpId) {
+static int SyncOnce(SPBasicSuite *bp, AEGP_PluginID aegpId, bool christen) {
     AEGP_SuiteHandler suites(bp);
     Acq<AEGP_ProjSuite6>          pjs(bp, kAEGPProjSuite,          kAEGPProjSuiteVersion6);
     Acq<AEGP_ItemSuite9>          its(bp, kAEGPItemSuite,          kAEGPItemSuiteVersion9);
@@ -80,7 +96,10 @@ static int SyncOnce(SPBasicSuite *bp, AEGP_PluginID aegpId) {
         for (const char *p = snap.configPath; *p; ++p) if (*p == '/' || *p == '\\') b = p + 1;
         if (b[0] && !strstr(b, "..") && strlen(b) < sizeof(passBase)) strncpy(passBase, b, sizeof(passBase) - 1);
     }
-    int seen = 0, wrote = 0, badname = 0, reminted = 0, placeholders = 0;
+    int seen = 0, wrote = 0, badname = 0, reminted = 0, placeholders = 0, christened = 0;
+    MincMenus menus;
+    bool haveMenus = christen && MincMenusGet(&menus);   /* no menus file -> no christening, ever */
+    Acq<AEGP_UtilitySuite6> uts(bp, kAEGPUtilitySuite, kAEGPUtilitySuiteVersion6);
     std::set<uint32_t> idsThisWalk;                 /* duplicate ids (cross-session mints) get re-minted here */
     AEGP_ProjectH projH = nullptr;
     if (pjs->AEGP_GetProjectByIndex(0, &projH) != A_Err_NONE || !projH) return 0;
@@ -149,7 +168,29 @@ static int SyncOnce(SPBasicSuite *bp, AEGP_PluginID aegpId) {
                                 if (sts->AEGP_GetStreamName(aegpId, fxRef, FALSE, &nameH) == A_Err_NONE)
                                     MincUtf16HandleToUtf8(suites, nameH, name8, sizeof(name8));
                                 MinColorArb want;
-                                if (ParseGrammar(fxVerb, name8, &want)) {
+                                bool parsed = ParseGrammar(fxVerb, name8, &want);
+                                if (!parsed && haveMenus &&
+                                    (fxVerb == MINC_VERB_VIEW || fxVerb == MINC_VERB_RENDER) &&
+                                    IsDefaultEffectName(fxVerb, name8)) {
+                                    /* christening: a fresh drop still wearing AE's default name gets the
+                                       family default — name-first, undoable, XFORM/LOOK never christened */
+                                    char cname[MINC_SPACE_LEN + 32];
+                                    snprintf(cname, sizeof(cname), "minColor: %s %s",
+                                             fxVerb == MINC_VERB_VIEW ? "view" : "render",
+                                             fxVerb == MINC_VERB_VIEW ? menus.defaultView : menus.defaultRender);
+                                    A_UTF16Char u16[MINC_SPACE_LEN + 32];
+                                    MincU8ToU16(cname, u16, MINC_SPACE_LEN + 32);
+                                    if (uts) uts->AEGP_StartUndoGroup("minColor: name new effect");
+                                    A_Err re = dss->AEGP_SetStreamName(fxRef, u16);
+                                    if (uts) uts->AEGP_EndUndoGroup();
+                                    if (re == A_Err_NONE) {
+                                        ++christened;
+                                        snprintf(name8, sizeof(name8), "%s", cname);
+                                        parsed = ParseGrammar(fxVerb, name8, &want);
+                                        MincLog("sync: christened '%s'", cname);
+                                    }
+                                }
+                                if (parsed) {
                                     /* write via the EFFECT's param stream (Projector-sample pattern):
                                        parade child index == effect index, verified by matchname */
                                     AEGP_EffectRefH effH = nullptr;
@@ -207,15 +248,15 @@ static int SyncOnce(SPBasicSuite *bp, AEGP_PluginID aegpId) {
         its->AEGP_GetNextProjItem(projH, itemH, &nextH);
         itemH = nextH;
     }
-    MincLog("sync: instances=%d wrote=%d unparsed=%d reminted=%d placeholders=%d",
-            seen, wrote, badname, reminted, placeholders);
+    MincLog("sync: instances=%d wrote=%d unparsed=%d reminted=%d placeholders=%d christened=%d",
+            seen, wrote, badname, reminted, placeholders, christened);
     return reminted;
 }
 
-void MincSyncFromNames(SPBasicSuite *bp, AEGP_PluginID aegpId) {
+void MincSyncFromNames(SPBasicSuite *bp, AEGP_PluginID aegpId, bool christen) {
     /* two bounded passes: within one walk a later duplicate's first CallGeneric clobbers the
        first claimant's registry entry before re-minting (serialization audit); whenever any
        id was re-minted, one repeat re-writes every instance under now-unique ids. Converges —
-       pass 2 mints nothing.                                                                */
-    if (SyncOnce(bp, aegpId) > 0) SyncOnce(bp, aegpId);
+       pass 2 mints nothing (and never christens).                                          */
+    if (SyncOnce(bp, aegpId, christen) > 0) SyncOnce(bp, aegpId, false);
 }

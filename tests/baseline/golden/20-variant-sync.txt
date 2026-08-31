@@ -1,4 +1,4 @@
-[walk] sync: instances=7 wrote=6 unparsed=1 reminted=0 placeholders=0
+[walk] sync: instances=7 wrote=6 unparsed=1 reminted=0 placeholders=0 christened=0
 [after-sync] comp 'vsync' layers=1
   layer 1 'subject' enabled=true guide=false adj=false
     fx 1 [MINC CST] 'minColor: Rec.709 → working'

@@ -14,7 +14,8 @@
   var mark = MincBase.logMark();
   app.executeCommand(app.findMenuCommandId("minColor: Sync From Names"));
   var lines = MincBase.syncLinesSince(mark);
-  for (var i = 0; i < lines.length; i++) MincBase.log("[walk] " + lines[i]);
+  for (var i = 0; i < lines.length && i < 2; i++) MincBase.log("[walk] " + lines[i]);   // the two real passes;
+                                                          // idle ticks pumped during executeCommand can append extras
   MincBase.dumpComp("after", comp);
   MincBase.finish(N);
 } catch (e) { MincBase.fail(N, e); } })();

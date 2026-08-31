@@ -15,6 +15,7 @@
 #include "AEGP_SuiteHandler.h"
 #include "MincTypes.h"
 #include "MincBuildStamp.h"
+#include "MincSignal.h"     /* cross-bundle walk marker (effect arms, AEGP consumes) */
 
 /* ---- MincLog.cpp — per-binary log file, basename via MINC_LOG_BASENAME compile def ---- */
 void        MincDebugLog(const char *fmt, ...);          /* compiled out unless MINC_DEBUG */
@@ -35,7 +36,9 @@ bool MincAuthorityGet(MincAuthoritySnapshot *out);       /* thread-safe copy */
 uint32_t MincMintInstanceId(void);
 
 /* ---- MincSyncWalk.cpp — names are the durable store; the walk re-derives every instance ---- */
-void MincSyncFromNames(SPBasicSuite *bp, AEGP_PluginID aegpId);
+/* christen=true additionally names default-named fresh VIEW/RENDER variants from the
+   plugin-menus.json defaults (never invents a space — no menus file, no christening) */
+void MincSyncFromNames(SPBasicSuite *bp, AEGP_PluginID aegpId, bool christen = false);
 
 /* tiny RAII suite acquire */
 template <typename SUITE>

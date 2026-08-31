@@ -19,7 +19,7 @@
   var mark = MincBase.logMark();
   app.executeCommand(app.findMenuCommandId("minColor: Sync From Names"));
   var lines = MincBase.syncLinesSince(mark);
-  for (var i = 0; i < lines.length; i++) MincBase.log("[walk] " + lines[i]);
+  MincBase.log("[walk] " + lines[0]);                     // first walk only (idle ticks can append extras)
   MincBase.dumpComp("after-sync", comp);
   MincBase.dumpProject("state");
   MincBase.finish(N);

@@ -50,7 +50,7 @@ static const int g_nCommands = (int)(sizeof(g_commands) / sizeof(g_commands[0]))
 static void CmdSync(void) {
     MincAuthorityRefreshBp(g_pica, g_id);               /* refresh FIRST — the sync payload carries
                                                            authority state (idle hook does this order) */
-    MincSyncFromNames(g_pica, g_id);
+    MincSyncFromNames(g_pica, g_id, true);              /* panel/user-invoked sync christens by intent */
 }
 
 static void CmdAbout(void) {
@@ -139,6 +139,12 @@ static A_Err IdleHook(AEGP_GlobalRefcon, AEGP_IdleRefcon, A_long *max_sleepPL) {
             lastSyncedGen = s.generation;
             MincWriteMenus(g_pica, g_id);       /* menus follow the pin — fresh BEFORE the walk */
             MincSyncFromNames(g_pica, g_id);
+        }
+        char reason[32] = "";
+        if (MincConsumeWalkMarker(reason, sizeof(reason))) {
+            /* effect-armed walk (delete-first: a drop landing mid-walk re-creates the marker
+               for the next tick). "christen" names fresh default-named VIEW/RENDER variants. */
+            MincSyncFromNames(g_pica, g_id, strncmp(reason, "christen", 8) == 0);
         }
     }
     if (max_sleepPL) *max_sleepPL = 60;                 /* ~1 s at 60 ticks */

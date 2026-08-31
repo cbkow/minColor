@@ -193,7 +193,14 @@ static PF_Err EffectMainCommon(MincVerb verb, PF_Cmd cmd, PF_InData *in_data, PF
                 err = MincHandleArbitrary(in_data, out_data, params, output,
                                           reinterpret_cast<PF_ArbParamsExtra*>(extra));
                 break;
-            case PF_Cmd_SEQUENCE_SETUP:      err = SequenceSetup(in_data, out_data);   MincAuthorityRefresh(in_data); break;
+            case PF_Cmd_SEQUENCE_SETUP:
+                /* FRESH instance (a drop, a paste): arm the AEGP's christening walk via the
+                   shared marker. RESETUP never arms — undo of a christening arrives as
+                   RESETUP, and the reverted default name must STAY reverted.              */
+                err = SequenceSetup(in_data, out_data);
+                MincTouchWalkMarker("christen");
+                MincAuthorityRefresh(in_data);
+                break;
             case PF_Cmd_SEQUENCE_RESETUP:    err = SequenceResetup(in_data, out_data); MincAuthorityRefresh(in_data); break;
             case PF_Cmd_SEQUENCE_FLATTEN:    MincDebugLog("seq: cmd FLATTEN"); err = SequenceResetup(in_data, out_data); break;
             case PF_Cmd_GET_FLATTENED_SEQUENCE_DATA: MincDebugLog("seq: cmd GET_FLATTENED"); err = SequenceResetup(in_data, out_data); break;

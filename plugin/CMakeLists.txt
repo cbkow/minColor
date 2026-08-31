@@ -58,6 +58,7 @@ find_package(OpenColorIO REQUIRED CONFIG)
 set(MINC_CORE_SOURCES
   src/core/MincJson.cpp
   src/core/MincMenus.cpp
+  src/core/MincSignal.cpp
   src/core/MincLog.cpp
   src/core/MincUtf16.cpp
   src/core/MincAuthority.cpp

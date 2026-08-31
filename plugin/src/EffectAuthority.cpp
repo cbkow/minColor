@@ -4,7 +4,10 @@
    - RegisterWithAEGP for its plugin id (render/badge refresh; M2's badge-edit CallGeneric),
    - a refresh-ONLY idle hook: render and the badge read this binary's authority snapshot on
      a ~1s cadence (SmartRender/Ui) — dropping it would leave them stale after a pin or
-     working-space change that produces no param events (M0 validation gap G1).             */
+     working-space change that produces no param events (M0 validation gap G1).
+   G1 carve-out (M2): SEQUENCE_SETUP touches the walk-pending marker FILE (MincSignal) so
+   the AEGP can christen fresh drops — a file touch is not a walk; the AEGP stays the only
+   walker.                                                                                  */
 #include "MinColorCST.h"
 
 static AEGP_PluginID  g_aegpID = 0;
