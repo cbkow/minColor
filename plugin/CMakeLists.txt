@@ -140,6 +140,10 @@ if(APPLE)
       COMMENT "Rez PiPL (${tgt})")
     add_custom_target(${tgt}_pipl DEPENDS "${_rsrc}")
     add_dependencies(${tgt} ${tgt}_pipl)
+    # PiPL-only edits must refresh the bundle: POST_BUILD (rsrc copy + codesign) only runs on
+    # relink, so make the rsrc a link dependency (found the hard way in M3 Probe P — a 4-PiPL
+    # build shipped a bundle still carrying the old 5-PiPL rsrc).
+    set_property(TARGET ${tgt} APPEND PROPERTY LINK_DEPENDS "${_rsrc}")
     add_custom_command(TARGET ${tgt} POST_BUILD
       COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_BUNDLE_DIR:${tgt}>/Contents/Resources"
       COMMAND ${CMAKE_COMMAND} -E copy "${_rsrc}" "$<TARGET_BUNDLE_DIR:${tgt}>/Contents/Resources/${tgt}.rsrc"
