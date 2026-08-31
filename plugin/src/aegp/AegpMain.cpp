@@ -1,21 +1,57 @@
 /* minColorAEGP — the ceremonies bundle. Kind{AEGP}/AEgx, lives in the APP's Plug-ins folder,
-   loads at AE LAUNCH (the effect's GLOBAL_SETUP is deferred until first instantiation and
-   MediaCore never loads AEGPs — probes D/F, RESULTS.md §30b/c). 2.0 M0 scope: exactly what the
-   1.x effect used to register — "minColor: Sync From Names" + the generation-watch auto-walk —
-   so the 0.9.2 panel sees identical behavior, just available from startup.                   */
+   loads at AE LAUNCH (probes D/F, RESULTS §30b/c). M1: ceremonies register here as a command
+   TABLE — added incrementally per plan step so the handshake file's commands[] never lies.
+   The 0.9.2 panel keeps working against "minColor: Sync From Names" unchanged.             */
 #include "MincCore.h"
+#include "../ceremony/MincSettings.h"
+#include "../ceremony/MincEffectOps.h"
+#include <cstdio>
 
 static AEGP_PluginID  g_id = 0;
 static SPBasicSuite  *g_pica = nullptr;
-static AEGP_Command   g_syncCmd = 0;
 
-AEGP_InstalledEffectKey MincInstalledKey(SPBasicSuite *bp, AEGP_PluginID id);   /* ceremony/MincEffectOps.cpp */
+/* ---------------- command table ---------------- */
+typedef void (*MincCmdHandler)(void);
+struct MincCommandDef { const char *label; MincCmdHandler handler; AEGP_Command cmd; };
 
+static void CmdSync(void);
+static void CmdAbout(void);
+
+static MincCommandDef g_commands[] = {
+    { "minColor: Sync From Names", CmdSync,  0 },
+    { "minColor: About",           CmdAbout, 0 },
+    /* M1 ceremonies append here step by step */
+};
+static const int g_nCommands = (int)(sizeof(g_commands) / sizeof(g_commands[0]));
+
+/* ---------------- handlers ---------------- */
+static void CmdSync(void) {
+    MincAuthorityRefreshBp(g_pica, g_id);               /* refresh FIRST — the sync payload carries
+                                                           authority state (idle hook does this order) */
+    MincSyncFromNames(g_pica, g_id);
+}
+
+static void CmdAbout(void) {
+    char txt[512];
+    snprintf(txt, sizeof(txt),
+             "minColor %s\nBuild %s\nEffect: MediaCore \xc2\xb7 Ceremonies: this AEGP\n"
+             "API handshake: settings/aegp-api.json",
+             MINC_VERSION_STR, MINC_BUILD_STAMP);
+    MincWriteReport("about", std::string("{ \"version\": \"") + MINC_VERSION_STR +
+                             "\", \"buildStamp\": \"" + MINC_BUILD_STAMP + "\" }\n");
+    if (MincQuietMode()) return;                         /* automation seam: no dialogs */
+    AEGP_SuiteHandler suites(g_pica);
+    A_UTF16Char u16[512];
+    MincU8ToU16(txt, u16, 512);
+    suites.UtilitySuite6()->AEGP_ReportInfoUnicode(g_id, u16);
+}
+
+/* ---------------- hooks ---------------- */
 static A_Err IdleHook(AEGP_GlobalRefcon, AEGP_IdleRefcon, A_long *max_sleepPL) {
     static unsigned long lastSyncedGen = 0;
     static bool keyScanned = false;
     if (g_pica && g_id) {
-        if (!keyScanned) { keyScanned = true; MincInstalledKey(g_pica, g_id); }   /* timed scan, once, post-startup */
+        if (!keyScanned) { keyScanned = true; MincInstalledKey(g_pica, g_id); }   /* timed scan, once (RESULTS §31) */
         MincAuthorityRefreshBp(g_pica, g_id);
         MincAuthoritySnapshot s;                        /* project/preset changed -> names are the durable
                                                            store: re-derive every instance's state */
@@ -30,20 +66,23 @@ static A_Err IdleHook(AEGP_GlobalRefcon, AEGP_IdleRefcon, A_long *max_sleepPL) {
 
 static A_Err CommandHook(AEGP_GlobalRefcon, AEGP_CommandRefcon, AEGP_Command command,
                          AEGP_HookPriority, A_Boolean, A_Boolean *handledPB) {
-    if (command == g_syncCmd && g_pica) {
-        MincAuthorityRefreshBp(g_pica, g_id);           /* refresh FIRST — the sync payload carries
-                                                           authority state (idle hook does this order) */
-        MincSyncFromNames(g_pica, g_id);
-        if (handledPB) *handledPB = TRUE;
+    if (!g_pica) return A_Err_NONE;
+    for (int i = 0; i < g_nCommands; ++i) {
+        if (g_commands[i].cmd && command == g_commands[i].cmd) {
+            try { g_commands[i].handler(); }
+            catch (...) { MincLog("command '%s': exception", g_commands[i].label); }
+            if (handledPB) *handledPB = TRUE;
+            break;
+        }
     }
     return A_Err_NONE;
 }
 
 static A_Err UpdateMenuHook(AEGP_GlobalRefcon, AEGP_UpdateMenuRefcon, AEGP_WindowType) {
-    if (g_pica && g_syncCmd) {
-        Acq<AEGP_CommandSuite1> cs(g_pica, kAEGPCommandSuite, kAEGPCommandSuiteVersion1);
-        if (cs) cs->AEGP_EnableCommand(g_syncCmd);
-    }
+    if (!g_pica) return A_Err_NONE;
+    Acq<AEGP_CommandSuite1> cs(g_pica, kAEGPCommandSuite, kAEGPCommandSuiteVersion1);
+    if (cs) for (int i = 0; i < g_nCommands; ++i)
+        if (g_commands[i].cmd) cs->AEGP_EnableCommand(g_commands[i].cmd);
     return A_Err_NONE;
 }
 
@@ -60,12 +99,22 @@ extern "C" DllExport A_Err MincAegpEntry(struct SPBasicSuite *pica_basicP, A_lon
         AEGP_SuiteHandler suites(pica_basicP);
         A_Err e2 = suites.RegisterSuite5()->AEGP_RegisterIdleHook(g_id, IdleHook, NULL);
         Acq<AEGP_CommandSuite1> cs(pica_basicP, kAEGPCommandSuite, kAEGPCommandSuiteVersion1);
-        if (cs && cs->AEGP_GetUniqueCommand(&g_syncCmd) == A_Err_NONE && g_syncCmd) {
-            cs->AEGP_InsertMenuCommand(g_syncCmd, "minColor: Sync From Names", AEGP_Menu_EDIT, AEGP_MENU_INSERT_AT_BOTTOM);
-            A_Err e3 = suites.RegisterSuite5()->AEGP_RegisterCommandHook(g_id, AEGP_HP_BeforeAE, g_syncCmd, CommandHook, NULL);
+        int registered = 0;
+        if (cs) {
+            for (int i = 0; i < g_nCommands; ++i) {
+                if (cs->AEGP_GetUniqueCommand(&g_commands[i].cmd) != A_Err_NONE || !g_commands[i].cmd) continue;
+                cs->AEGP_InsertMenuCommand(g_commands[i].cmd, g_commands[i].label, AEGP_Menu_EDIT, AEGP_MENU_INSERT_AT_BOTTOM);
+                ++registered;
+            }
+            A_Err e3 = suites.RegisterSuite5()->AEGP_RegisterCommandHook(g_id, AEGP_HP_BeforeAE, AEGP_Command_ALL, CommandHook, NULL);
             A_Err e4 = suites.RegisterSuite5()->AEGP_RegisterUpdateMenuHook(g_id, UpdateMenuHook, NULL);
-            MincLog("sync command=%d idle=%d hook=%d menuhook=%d", (int)g_syncCmd, (int)e2, (int)e3, (int)e4);
-        } else { MincLog("sync command registration FAILED"); out = A_Err_GENERIC; }
+            MincLog("commands registered=%d idle=%d hook=%d menuhook=%d", registered, (int)e2, (int)e3, (int)e4);
+        }
+        if (registered > 0) {
+            const char *labels[16];
+            for (int i = 0; i < g_nCommands && i < 16; ++i) labels[i] = g_commands[i].label;
+            MincWriteHandshake(labels, g_nCommands);     /* AFTER registration — never lies */
+        } else { MincLog("command registration FAILED"); out = A_Err_GENERIC; }
     } catch (...) { MincLog("AegpEntry: exception"); out = A_Err_GENERIC; }
     return out;
 }
