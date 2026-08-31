@@ -2,11 +2,21 @@
    face). Quiet mode never reaches AppKit: the answer comes from quiet-answers.json.       */
 #import <AppKit/AppKit.h>
 #include "MincPicker.h"
+#include "MincCore.h"
+#include "MincArgs.h"
 #include "MincSettings.h"
 #include "MincPresets.h"
 #include "MincJson.h"
 
-bool MincPickPreset(std::string *keyOut) {
+bool MincPickPreset(const char *commandLabel, std::string *keyOut) {
+    {   /* shell-args first: the shell's dropdown already made the choice */
+        MincJsonPtr a = MincArgsConsume(commandLabel);
+        if (a) {
+            std::string k = a->str("preset");
+            if (!k.empty() && MincPresetMeta(k).valid) { *keyOut = k; return true; }
+            MincLog("picker: shell-args preset invalid ('%s') — falling through", k.c_str());
+        }
+    }
     if (MincQuietMode()) {
         MincJsonPtr qa = MincJsonParseFile(MincSettingsDir() + "/quiet-answers.json");
         if (!qa) return false;

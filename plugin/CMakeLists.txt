@@ -176,6 +176,7 @@ if(APPLE)
     src/ceremony/MincArchive.cpp
     src/ceremony/MincTranslate.cpp
     src/ceremony/MincMenusWrite.cpp
+    src/ceremony/MincArgs.cpp
     src/ceremony/MincPicker.mm
   )
   add_library(minColorAEGP MODULE

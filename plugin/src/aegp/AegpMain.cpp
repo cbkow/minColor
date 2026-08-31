@@ -112,12 +112,12 @@ static void ReportCeremony(const char *name, const std::string &json) {
 
 static void CmdSetUp(void) {
     std::string key;
-    if (!MincPickPreset(&key)) { MincLog("setup: no preset picked"); return; }
+    if (!MincPickPreset("minColor: Set Up Project", &key)) { MincLog("setup: no preset picked"); return; }
     ReportCeremony("setup", MincApplyPresetToCurrent(g_pica, g_id, key));
 }
 static void CmdMigrate(void) {
     std::string key;
-    if (!MincPickPreset(&key)) { MincLog("migrate: no preset picked"); return; }
+    if (!MincPickPreset("minColor: Migrate Project", &key)) { MincLog("migrate: no preset picked"); return; }
     ReportCeremony("migrate", MincMigrateProject(g_pica, g_id, key));
 }
 
