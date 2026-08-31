@@ -37,10 +37,13 @@ cat > "$WRAP" << EOF
 \$.evalFile("$BASE/lib/driver.jsx");
 EOF
 
-osascript -e "tell application \"$AE_APP\" to DoScript \"try{\\\$.evalFile(\\\"$WRAP\\\")}catch(e){var f=new File(\\\"$OUT/DONE.txt\\\");f.open(\\\"w\\\");f.write(\\\"OUTER ERROR: \\\"+e.toString());f.close();}\"" &
+# NB quoting: bash \$ -> literal $ for AppleScript (AppleScript itself must see $.evalFile,
+# never \$ — \$ is an invalid AppleScript escape and the launch fails silently)
+osascript -e "tell application \"$AE_APP\" to DoScript \"try{\$.evalFile(\\\"$WRAP\\\")}catch(e){var f=new File(\\\"$OUT/DONE.txt\\\");f.open(\\\"w\\\");f.write(\\\"OUTER ERROR: \\\"+e.toString());f.close();}\"" &
+OSA_PID=$!
 for i in $(seq 1 600); do [ -f "$OUT/DONE.txt" ] && break; sleep 2; done
-[ -f "$OUT/DONE.txt" ] || { echo "TIMEOUT: no DONE marker"; exit 1; }
-wait || true
+[ -f "$OUT/DONE.txt" ] || { echo "TIMEOUT: no DONE marker"; kill $OSA_PID 2>/dev/null || true; exit 1; }
+wait $OSA_PID 2>/dev/null || true
 ae_quit
 
 # restore settings
