@@ -9,7 +9,8 @@
   dist-panel/plugin-windows/     prebuilt .aex (five effects incl. legacy) + configs
   dist-panel/windows-panel/      the 0.9.2 panel, inlined from private/attic — Windows has
                                  no AEGP until M4, so the legacy panel keeps shipping there
-  dist-panel/minColor-data/      shared payload: configs + settings seeds
+  dist-panel/minColor-data/      the 0.9.x panel payload (configs + settings seeds) — the
+                                 Windows panel still needs it; the 2.0 mac shell does not
 
 Run packaging/macos/build-pkg.sh afterwards for the mac .pkg (or copy by hand).
 """
@@ -58,8 +59,9 @@ def main():
         "1) EFFECT — plugin-macOS/minColor -> /Library/Application Support/Adobe/Common/Plug-ins/7.0/MediaCore/\n"
         "2) CEREMONIES — plugin-macOS/minColorAEGP.plugin -> /Applications/Adobe After Effects <version>/Plug-ins/\n"
         "   (every AE version you use; this folder needs an administrator)\n"
-        "3) PANEL — minColor.jsx and minColor-data/ ->\n"
-        "   ~/Library/Preferences/Adobe/After Effects/<version>/Scripts/ScriptUI Panels/\n\n"
+        "3) PANEL — minColor.jsx ->\n"
+        "   ~/Library/Preferences/Adobe/After Effects/<version>/Scripts/ScriptUI Panels/\n"
+        "   (delete any minColor-data/ folder there from earlier versions — 2.0 doesn't use it)\n\n"
         "Windows (0.9.x panel until the 2.0 engine arrives there):\n\n"
         "1) PANEL — windows-panel/minColor.jsx and minColor-data/ ->\n"
         "   %APPDATA%\\Adobe\\After Effects\\<version>\\Scripts\\ScriptUI Panels\\\n"

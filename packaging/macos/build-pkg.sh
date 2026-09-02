@@ -27,7 +27,7 @@ mkdir -p "$SH/panel" "$SH/configs" "$SH/settings-seed" "$SH/engine"
 # the ceremonies AEGP goes into each AE version's own Plug-ins folder — per-version paths, so it
 # stages under the shared store and postinstall fans it out to every installed AE
 ditto "$AEGP" "$SH/engine/minColorAEGP.plugin"
-cp "$DIST/minColor.jsx" "$SH/panel/"; ditto "$DIST/minColor-data" "$SH/panel/minColor-data"
+cp "$DIST/minColor.jsx" "$SH/panel/"   # 2.0 shell only — minColor-data was the 0.9.x payload
 ditto "$ROOT/config/dist" "$SH/configs"
 cp "$ROOT/config/extension-defaults.json" "$ROOT/config/render-presets.json" "$SH/settings-seed/"
 # ---- component pkg ----

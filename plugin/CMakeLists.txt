@@ -11,7 +11,7 @@ endif()
 
 # --- 2.0: one version + build stamp for BOTH bundles (skew between them is impossible by
 #     construction; the M0 exit check greps the identical stamp from both binaries) ---
-set(MINC_VERSION "2.0.0-beta.1")
+set(MINC_VERSION "2.0.0")
 set(MINC_GEN_DIR "${CMAKE_CURRENT_BINARY_DIR}/gen")
 file(MAKE_DIRECTORY "${MINC_GEN_DIR}")
 add_custom_target(buildstamp ALL

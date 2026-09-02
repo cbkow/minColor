@@ -15,9 +15,12 @@ for PREFS in "$HOME_DIR/Library/Preferences/Adobe/After Effects/"*/; do
   [ "$major" -ge 25 ] 2>/dev/null || { echo "skip AE $ver (< 25)"; continue; }
   DEST="$PREFS/Scripts/ScriptUI Panels"
   mkdir -p "$DEST"
+  # clean up the 0.9.x panel before writing the 2.0 shell: same filename, but the old
+  # minColor-data payload folder is dead weight the shell never reads
+  rm -f "$DEST/minColor.jsx"
+  rm -rf "$DEST/minColor-data"
   cp -f "$PANEL_SRC/minColor.jsx" "$DEST/"
-  ditto "$PANEL_SRC/minColor-data" "$DEST/minColor-data"
-  chown -R "$USER_NAME" "$DEST/minColor.jsx" "$DEST/minColor-data"
+  chown -R "$USER_NAME" "$DEST/minColor.jsx"
   echo "panel -> $DEST"; installed=$((installed+1))
 done
 [ "$installed" -gt 0 ] || echo "WARNING: no After Effects >= 2025 preference folder found for $USER_NAME (launch AE once, then reinstall)"
