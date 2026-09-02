@@ -21,6 +21,18 @@ for PREFS in "$HOME_DIR/Library/Preferences/Adobe/After Effects/"*/; do
   echo "panel -> $DEST"; installed=$((installed+1))
 done
 [ "$installed" -gt 0 ] || echo "WARNING: no After Effects >= 2025 preference folder found for $USER_NAME (launch AE once, then reinstall)"
+# ceremonies AEGP: into every installed AE >= 2025 app Plug-ins folder (we run as root)
+aegp=0
+for APP in "/Applications/Adobe After Effects "*/; do
+  [ -d "$APP" ] || continue
+  yr="$(basename "$APP" | grep -o '[0-9]\{4\}$')"
+  [ -n "$yr" ] && [ "$yr" -ge 2025 ] 2>/dev/null || { echo "skip $(basename "$APP") (< 2025)"; continue; }
+  mkdir -p "$APP/Plug-ins"
+  rm -rf "$APP/Plug-ins/minColorAEGP.plugin"
+  ditto "$SHARED/engine/minColorAEGP.plugin" "$APP/Plug-ins/minColorAEGP.plugin"
+  echo "AEGP -> $APP/Plug-ins"; aegp=$((aegp+1))
+done
+[ "$aegp" -gt 0 ] || echo "WARNING: no Adobe After Effects >= 2025 app found in /Applications"
 # settings: seed only what is missing (user choices survive every update)
 mkdir -p "$SHARED/settings"
 for f in "$SHARED/settings-seed/"*; do [ -e "$SHARED/settings/$(basename "$f")" ] || cp "$f" "$SHARED/settings/"; done

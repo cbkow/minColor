@@ -2,7 +2,7 @@
 <installer-gui-script minSpecVersion="2">
   <title>minColor @VERSION@</title>
   <options customize="never" require-scripts="true" hostArchitectures="arm64,x86_64"/>
-  <welcome><![CDATA[minColor @VERSION@ installs the minColor CST plug-in and config store into Adobe's shared MediaCore folder, the minColor panel into every After Effects 2025 or later on this Mac (for the current user), and seeds the shared settings. Existing configs are kept (append-only) and your settings are never overwritten.]]></welcome>
+  <welcome><![CDATA[minColor @VERSION@ installs the minColor effects and config store into Adobe's shared MediaCore folder, the minColor ceremonies plug-in into every After Effects 2025 or later on this Mac, the minColor panel for the current user, and seeds the shared settings. Existing configs are kept (append-only) and your settings are never overwritten.]]></welcome>
   <installation-check script="checks()"/>
   <script><![CDATA[
     function checks() {

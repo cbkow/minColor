@@ -1,65 +1,76 @@
 # Using minColor
 
-Open **Window → minColor.jsx** and dock it. The panel has four sections and a status line.
+minColor 2.0 lives in three places that are really one thing:
+
+- **Effects on your layers** — the interface you'll touch most. Every minColor effect shows a
+  status badge; clicking the badge opens a menu to change that effect's color space in place.
+- **Menu commands** — every ceremony (Set Up, Migrate, Interpret, Strip, Archive, Package,
+  Repair…) is a native After Effects menu command, scriptable and shortcut-able.
+- **The panel** (Window → minColor.jsx) — a thin dashboard over those commands: a Doctor status
+  line, the ceremonies as buttons, and dropdowns fed by your project's config.
+
+The panel needs the plug-ins: if the engine isn't installed (or is older than the panel), the
+panel says so and stays out of the way.
 
 ## Status
 
-![mC_002.png](../images/mC_002.png)
-
-The status line at the top. Green shows the preset, working space, and where the config is pinned.
-Yellow with a **Repair** button means the config path went missing (usually a project that came
-from another machine) — click it. Yellow "update available" means the project is pinned to an older
+The Doctor line at the top of the panel. Green shows the preset, working space, and where the
+config is pinned. Yellow with a repair action means the config path went missing (usually a
+project that came from another machine) — the panel heals it in place, and **minColor: Repair**
+does the same from the menu. Yellow "update available" means the project is pinned to an older
 config of its preset; Migrate to the same preset updates it. Red spells out what to fix by hand.
 
-![mC_003.png](../images/mC_003.png)
+## Set Up and Migrate
 
-The gear opens **Project…** with provenance, **Archive** (freeze dependencies next to the project)
-and **Package for any AE** (translate everything to Adobe-native effects so the project opens
-without minColor).
-
-## Setup Project
-
-![mC_004.png](../images/mC_004.png)
-
-**Set Up / Migrate Project…** — choose a preset, then **New Project** or **Migrate Current**.
+**Set Up Project** / **Migrate Project** — choose a preset:
 
 - Linear presets (`ACEScg, ACES2065-1, Linear Rec.709, Linear Rec.2020`) for CG, VFX and HDR work.
 - **SDR** (`Rec.709 Gamma 2.2`) for an OCIO workflow similar to Adobe color space.
-  
-![mC_005.png](../images/mC_005.png)
 
-Migrate strips footage-level color assignments (keeping them as suggestions), sets the working
-space and config, rebuilds minColor effects for the new preset, and gives the open comp its view
-and render layers — one save, backup and reopen.
+Migrate remaps existing minColor effects to the new preset (removing ones that become
+identity), sets the working space and config, and gives the open comp its view and render
+layers — one save, backup and reopen. Projects made with minColor 1.x migrate the same way:
+their old effects are rebuilt as the current ones, names and positions kept.
 
-## Interpret Footage
+## Interpret
 
-![mC_006.png](../images/mC_006.png)
+**Interpret Timeline** walks the active comp and every precomp under it, interpreting each
+footage layer. Suggestions come from your extension table first (the panel's **Matches…**
+edits it), then from what the project used before, then from file metadata; plain video
+containers fall back to a Rec.709 read. Each layer gets a `minColor: <space> → working` effect.
 
-Select layers, pick a color space under *Selected as*, click **Apply**. Each layer gets a
-`minColor: <space> → working` effect.
+**Interpret Selected** does the same for just the selected layers — pick a specific space in
+the panel to override the suggestion.
 
-## Interpret Timeline
-
-**Interpret timeline** walks the active comp and its precomps, interpreting every footage layer.
-Suggestions come from your extension table first (**Matches…** edits it), then from what the
-project used before, then from file metadata. It finishes by placing the view and render layers
-on the comp.
-
-![mC_007.png](../images/mC_007.png)
-
-**Strip foreign OCIO** removes OCIO effects that aren't minColor's; **Strip ALL** removes every
+**Strip Foreign OCIO** removes OCIO effects that aren't minColor's; **Strip ALL** removes every
 OCIO effect. Both are undoable.
 
 ## Adjustment Layers
 
-![mC_008.png](../images/mC_008.png)
-*View* is a guide layer for the viewport only. *Render* is what your output goes through. Pick and
-**Apply**; only one of the two is on at a time, and the panel remembers your choices.
+**Utility Layers** builds the pair on the active comp. *View* is a guide layer for the viewport
+only. *Render* is what your output goes through; only one of the two is on at a time. The
+layers always match the comp — size, pixel aspect, the lot — even after you resize the comp.
 
 - `macOS Desktop View` / `Windows Desktop View` — what the working values look like on that
   platform's screen.
 - `macOS Video View` / `Windows Video View` — how a Rec.709 video delivery will look.
 - `Desktop Render` (sRGB) / `Video Render` (Rec.1886) — the two deliveries.
 
-*Look* (linear presets) applies an OCIO look, such as ACES gamut compression, on both layers.
+**Apply Look** (linear presets) applies an OCIO look, such as ACES gamut compression, on both
+layers. **Apply Render Preset** sets view, render and look in one click from your saved recipes
+(`settings/render-presets.json`).
+
+## Names are the truth
+
+Every minColor effect's display name says what it does — `minColor: ARRI LogC4 → working`,
+`minColor: view macOS Video View`. Rename one (or click its badge and pick from the menu) and
+the plugin follows. **Sync From Names** re-reads every name on demand; the plug-in also does it
+automatically as you work.
+
+## Archive and Package
+
+**Archive Project** freezes the project's config and LUTs next to the project file with a note
+of the versions used. **Package for Any AE** converts every effect to Adobe-native OCIO effects
+so the project opens on any After Effects 2025+ without minColor installed — package a version
+increment, not your working copy. **Adopt Effects** is the reverse: it brings minColor-named
+Adobe effects back home as minColor effects.

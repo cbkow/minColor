@@ -29,13 +29,18 @@ A zip is also attached to each release for manual installation; its `README.txt`
 
 ## The Basics
 
-1. **Set Up or Migrate an existing project** by selecting a working color space. If you pick ACEScg, the default media color space will be ACEScg.
-2. **Interpret the Timeline** is the most useful part of this plugin. It walks through the timeline and matches all files to color spaces based on presets. Edit these presets with the **Matches** button. Click `Add/Update` to save the setting before exiting the submenu.
+Since 2.0, minColor is plugin-first on macOS: every operation is a native After Effects menu
+command, the effects on your layers are the interface (click an effect's badge to change its
+color space in place), and the panel is a thin dashboard over both. Windows currently ships the
+0.9.x panel and engine until the 2.0 engine lands there.
+
+1. **Set Up or Migrate an existing project** by selecting a working color space. If you pick ACEScg, the default media color space will be ACEScg. Projects made with minColor 1.x migrate cleanly — old effects are rebuilt as current ones, names and positions kept.
+2. **Interpret Timeline** is the most useful part of this plugin. It walks the active comp and every precomp under it, matching all files to color spaces based on presets. Edit these presets with the **Matches** button.
 ![mC_009.png](images/mC_009.png)
 
-3. Use **Interpret Footage** to manually change a layer's color space or...
+3. Use **Interpret Selected** to manually set chosen layers' color spaces, or click any minColor effect's badge to change it in place, or...
 4. Use the **native AE OCIO effects**. The loaded configs will be recognized.
-5. Set your **View** Adjustment layer to what you want to see when working. Set your **Render** Adjustment layer to what you want to output when rendering. Use the Apply buttons to toggle between the two.
+5. Set your **View** Adjustment layer to what you want to see when working. Set your **Render** Adjustment layer to what you want to output when rendering. Only one of the two renders at a time, and **Render Presets** set view, render and look in one click.
 
 ---
 

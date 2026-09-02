@@ -9,9 +9,10 @@
 set -e
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 DIST="$ROOT/dist-panel"; OUT="$ROOT/dist-panel"
-VER="$(grep -o 'var VERSION = "[^"]*"' "$ROOT/src/minColor.jsxinc" | sed 's/.*"\(.*\)"/\1/')"
+VER="$(grep -o 'set(MINC_VERSION "[^"]*"' "$ROOT/plugin/CMakeLists.txt" | sed 's/.*"\(.*\)"/\1/')"   # the plugin IS the product version (2.0)
 PLUGIN="$ROOT/plugin/build/minColorCST.plugin"
-[ -d "$PLUGIN" ] || { echo "build the plug-in first"; exit 1; }
+AEGP="$ROOT/plugin/build/minColorAEGP.plugin"
+[ -d "$PLUGIN" ] && [ -d "$AEGP" ] || { echo "build both plug-ins first"; exit 1; }
 [ -f "$DIST/minColor.jsx" ] || { echo "run build/build.py first"; exit 1; }
 xcrun stapler validate "$PLUGIN" >/dev/null 2>&1 || echo "WARNING: plug-in is not notarized/stapled (run plugin/scripts/notarize.sh) — the pkg will still build"
 STAGE="$(mktemp -d)"; trap 'rm -rf "$STAGE"' EXIT
@@ -22,7 +23,10 @@ ditto "$PLUGIN" "$MC/minColorCST.plugin"
 ditto "$ROOT/config/dist" "$MC/configs"
 # panel + settings seed staged under the shared store; postinstall fans the panel out per AE version
 SH="$STAGE/root/Users/Shared/minColor"
-mkdir -p "$SH/panel" "$SH/configs" "$SH/settings-seed"
+mkdir -p "$SH/panel" "$SH/configs" "$SH/settings-seed" "$SH/engine"
+# the ceremonies AEGP goes into each AE version's own Plug-ins folder — per-version paths, so it
+# stages under the shared store and postinstall fans it out to every installed AE
+ditto "$AEGP" "$SH/engine/minColorAEGP.plugin"
 cp "$DIST/minColor.jsx" "$SH/panel/"; ditto "$DIST/minColor-data" "$SH/panel/minColor-data"
 ditto "$ROOT/config/dist" "$SH/configs"
 cp "$ROOT/config/extension-defaults.json" "$ROOT/config/render-presets.json" "$SH/settings-seed/"
