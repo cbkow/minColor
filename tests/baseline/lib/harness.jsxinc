@@ -81,9 +81,14 @@ var MincBase = (function () {
     var f = new File(BASE + "/fixtures/" + name);
     return app.project.importFile(new ImportOptions(f));
   }
-  function freshProject() { app.newProject(); }
+  function freshProject() {
+    app.newProject();
+    try { app.project.bitsPerChannel = 32; } catch (eB) {}   // fresh projects inherit AE's sticky
+  }                                                          // depth (a 16-bpc session leaked into
+                                                             // goldens once) — normalize explicitly
   function savedProject(nameNoExt) {                    // per-run scratch dir keeps sidecars isolated
     app.newProject();
+    try { app.project.bitsPerChannel = 32; } catch (eB2) {}
     var dir = new Folder(OUTDIR + "/scratch-" + nameNoExt); if (!dir.exists) dir.create();
     var f = new File(dir.fsName + "/" + nameNoExt + ".aep");
     app.project.save(f);
@@ -91,6 +96,7 @@ var MincBase = (function () {
   }
   function savedProjectNamed(dirTag, base) {            // M1 equiv: same FILE basename on both legs
     app.newProject();                                   // (backup filenames embed it — scrub-identical)
+    try { app.project.bitsPerChannel = 32; } catch (eB3) {}
     var dir = new Folder(OUTDIR + "/scratch-" + dirTag); if (!dir.exists) dir.create();
     var f = new File(dir.fsName + "/" + base + ".aep");
     app.project.save(f);

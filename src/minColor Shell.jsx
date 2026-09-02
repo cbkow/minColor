@@ -241,7 +241,12 @@
   bProj.alignment = ["right", "center"];
 
   var currentPreset = null, currentPin = null;
-  function doctorNow() { return runCmd("minColor: Doctor", {}, "doctor"); }
+  function doctorNow(passive) {
+    /* passive (heartbeat) ticks yield when an UNCONSUMED shell-args file exists — another
+       writer (a click mid-flight, the test suite) owns the seam right now               */
+    if (passive && (new File(SETTINGS + "/shell-args.json")).exists) return null;
+    return runCmd("minColor: Doctor", {}, "doctor");
+  }
   function liveHeal(d) {                              // the panel's auto-heal, engine-computed target
     var oldPin = app.project.ocioConfigurationFile || "(empty)";
     app.project.colorManagementSystem = 1;            // (CMS enum: OCIO)
@@ -260,10 +265,10 @@
     }
     return after || d;
   }
-  function refreshDoctor() {
+  function refreshDoctor(passive) {
     try {
-      var d = doctorNow();
-      if (!d) { docText.text = "no doctor report"; return; }
+      var d = doctorNow(passive);
+      if (!d) { if (!passive) docText.text = "no doctor report"; return; }
       if (d.status === "yellow" && d.repairTarget) { try { d = liveHeal(d); } catch (eAR) {} }
       var pk = d.preset || null, pin = d.pin || null;
       if (pk !== currentPreset || pin !== currentPin) { try { repopulateMenus(); currentPreset = pk; currentPin = pin; } catch (eRp) {} }
@@ -598,9 +603,12 @@
   status.alignment = ["fill", "center"];
   status.helpTip = "minColor engine " + (ENGINE.version || "?") + " \u00b7 " + (ENGINE.buildStamp || "?");
 
-  refreshDoctor();
+  docText.text = "checking\u2026";
+  /* NO refreshDoctor here: a docked panel initializes during AE STARTUP, and an
+     executeCommand fired there wedges the launch (spin of record, 2026-09-01). The first
+     check rides the heartbeat below; the lamp shows "checking..." for its first 5 s.     */
   try { if ($.global.__minColorTask) app.cancelTask($.global.__minColorTask); } catch (eC) {}
-  $.global.__minColorTick = function () { try { if (win.visible) refreshDoctor(); } catch (eK) {} };
+  $.global.__minColorTick = function () { try { if (win.visible) refreshDoctor(true); } catch (eK) {} };
   try { $.global.__minColorTask = app.scheduleTask("if ($.global.__minColorTick) $.global.__minColorTick();", 5000, true); } catch (eS) {}
   win.layout.layout(true); fitRows();
   win.onResizing = win.onResize = function () { this.layout.resize(); fitRows(); };

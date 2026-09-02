@@ -47,8 +47,12 @@ static const KV LEG_LINEAR[] = {
     {"Windows Desktop View Only", "Windows Desktop View"}, {"Windows Video View Only", "Windows Video View"},
 };
 static const KV LEG_DISPLAY[] = {
-    {"sRGB IEC61966-2.1", "sRGB"}, {"Standard", "working"}, {"Gamma 2.4 Encoded Rec.709", "working"},
-    {"Camera Rec.709", "working"}, {"Rec.1886", "working"},
+    /* REVISED 2026-09-01 (Chris): 709 VIDEO is BT.1886/G2.4, NOT the working space — sdr22
+       works in G2.2. The 08-29 "SDR is SDR" working-sentinels removed 709-video transforms
+       on migrate; they now retarget to Rec.1886 (sdr configs' canonical 709-video input;
+       the G2.4-Encoded name is inactive there).                                          */
+    {"sRGB IEC61966-2.1", "sRGB"}, {"Standard", "Rec.1886"}, {"Gamma 2.4 Encoded Rec.709", "Rec.1886"},
+    {"Camera Rec.709", "Rec.1886"},
     {"UnionMacOS", "macOS Desktop View"}, {"macOS View Only", "macOS Desktop View"}, {"macOS Desktop View Only", "macOS Desktop View"},
     {"UnionMacOS 1886 Sim", "macOS Video View"}, {"macOS View Only (1886 Sim)", "macOS Video View"}, {"macOS Video View Only", "macOS Video View"},
     {"Windows Desktop View Only", "Windows Desktop View"}, {"Windows Video View Only", "Windows Video View"},
@@ -165,7 +169,13 @@ MincSuggestCtx MincBuildSuggestCtx(const std::string &presetKey, const std::stri
     ctx.preset = presetKey;
     ctx.family = MincFamilyFor(presetKey);
     ctx.defView = "macOS Video View"; ctx.defRender = "Video Render";
-    ctx.video709 = (ctx.family == "Display") ? "working" : "Gamma 2.4 Encoded Rec.709";
+    /* 709 VIDEO target (REVISED 2026-09-01, Chris): Display family maps to Rec.1886 — the
+       BT.1886/G2.4 encoding — NOT "working" (sdr22 works in G2.2). Identity only when a
+       preset's working space genuinely IS that space.                                    */
+    if (ctx.family == "Display") {
+        std::string w = MincPresetMeta(presetKey).working;
+        ctx.video709 = (w == "Rec.1886" || w == "Rec.709 Gamma 2.4") ? "working" : "Rec.1886";
+    } else ctx.video709 = "Gamma 2.4 Encoded Rec.709";
     MincMenuLists m = MincMenuListsFor(presetKey, pinPath);
     if (!m.valid) return ctx;
     for (auto &v : m.input) { ctx.validInput[v] = true; ctx.validAll[v] = true; }
@@ -213,16 +223,24 @@ MincPick MincSuggestionFor(const MincItemFacts &item,
                            const std::map<int32_t, std::string> &harvestNames,
                            const MincSuggestCtx &ctx) {
     MincPick out;
+    std::string containerFallback;                           /* "video709" sentinel: fallback-priority */
     if (!item.fileName.empty()) {                            /* extension rule outranks (:907-912) */
         std::string e = Ext(item.fileName);
         auto it = e.empty() ? ctx.extMap.end() : ctx.extMap.find(e);
         if (it != ctx.extMap.end()) {
             const std::string &ed = it->second;
-            if (ed == "working") { out.why = "extension rule: identity"; return out; }
-            std::string en = NormalizeSpace(ed, ctx.validInput, ctx.family);
-            if (en == "working") { out.why = "extension rule: identity"; return out; }
-            if (!en.empty()) { out.space = en; out.why = "extension rule"; return out; }
-            out.why = "extension rule '" + ed + "' not in config \xe2\x80\x94 skipped"; return out;
+            if (ed == "video709") {
+                /* container rule (2026-09-01, Chris): a container says nothing about encoding,
+                   so this rule DEFERS — detection/harvest keep winning; it fires only when
+                   they found nothing (untagged video finally gets the family 709 default). */
+                containerFallback = ctx.video709;
+            } else {
+                if (ed == "working") { out.why = "extension rule: identity"; return out; }
+                std::string en = NormalizeSpace(ed, ctx.validInput, ctx.family);
+                if (en == "working") { out.why = "extension rule: identity"; return out; }
+                if (!en.empty()) { out.space = en; out.why = "extension rule"; return out; }
+                out.why = "extension rule '" + ed + "' not in config \xe2\x80\x94 skipped"; return out;
+            }
         }
     }
     auto h = harvestNames.find(item.id);
@@ -238,6 +256,13 @@ MincPick MincSuggestionFor(const MincItemFacts &item,
                                      ctx.validInput, ctx.family);
     if (det == "working") { out.why = "detected metadata: identity (video is working-native here)"; return out; }
     if (!det.empty()) { out.space = det; out.why = "detected metadata"; return out; }
+    if (!containerFallback.empty()) {                        /* nothing tagged, nothing remembered */
+        if (containerFallback == "working") { out.why = "container fallback: identity"; return out; }
+        std::string cf = NormalizeSpace(containerFallback, ctx.validInput, ctx.family);
+        if (cf == "working") { out.why = "container fallback: identity"; return out; }
+        if (!cf.empty()) { out.space = cf; out.why = "container fallback (untagged video \xe2\x86\x92 " + cf + ")"; return out; }
+        out.why = "container fallback '" + containerFallback + "' not in config \xe2\x80\x94 skipped"; return out;
+    }
     out.why = "no suggestion \xe2\x80\x94 skipped";
     return out;
 }
