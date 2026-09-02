@@ -12,7 +12,7 @@
    Migrate resurrects them as variants. Windows keeps legacy until the M4 AEGP brings the
    ceremonies there. All effects share GlobalSetup, so the OutFlags hexes are identical.
    Entry point strings must match the exported symbols byte-for-byte (extern "C").
-   Variants are mac-only until M4 proves the Windows PiPLtool multi-resource path.          */
+   Variants build on BOTH platforms (the M3 Windows session proves the PiPLtool multi-resource path).          */
 
 #ifdef AE_OS_WIN
 resource 'PiPL' (16000) {
@@ -34,15 +34,17 @@ resource 'PiPL' (16000) {
 };
 #endif  /* legacy is Windows-only from M3 step 8 */
 
-#ifndef AE_OS_WIN
-
 resource 'PiPL' (16001) {
     {
         Kind { AEEffect },
         Name { MINC_NAME_XFORM },
         Category { MINC_CATEGORY },
+#ifdef AE_OS_WIN
+        CodeWin64X86 { MINC_ENTRY_XFORM },
+#else
         CodeMacARM64 { MINC_ENTRY_XFORM },
         CodeMacIntel64 { MINC_ENTRY_XFORM },
+#endif
         AE_PiPL_Version { 2, 0 },
         AE_Effect_Spec_Version { PF_PLUG_IN_VERSION, PF_PLUG_IN_SUBVERS },
         AE_Effect_Version { MINC_PIPL_VERSION_HEX },
@@ -60,8 +62,12 @@ resource 'PiPL' (16002) {
         Kind { AEEffect },
         Name { MINC_NAME_VIEW },
         Category { MINC_CATEGORY },
+#ifdef AE_OS_WIN
+        CodeWin64X86 { MINC_ENTRY_VIEW },
+#else
         CodeMacARM64 { MINC_ENTRY_VIEW },
         CodeMacIntel64 { MINC_ENTRY_VIEW },
+#endif
         AE_PiPL_Version { 2, 0 },
         AE_Effect_Spec_Version { PF_PLUG_IN_VERSION, PF_PLUG_IN_SUBVERS },
         AE_Effect_Version { MINC_PIPL_VERSION_HEX },
@@ -79,8 +85,12 @@ resource 'PiPL' (16003) {
         Kind { AEEffect },
         Name { MINC_NAME_RENDER },
         Category { MINC_CATEGORY },
+#ifdef AE_OS_WIN
+        CodeWin64X86 { MINC_ENTRY_RENDER },
+#else
         CodeMacARM64 { MINC_ENTRY_RENDER },
         CodeMacIntel64 { MINC_ENTRY_RENDER },
+#endif
         AE_PiPL_Version { 2, 0 },
         AE_Effect_Spec_Version { PF_PLUG_IN_VERSION, PF_PLUG_IN_SUBVERS },
         AE_Effect_Version { MINC_PIPL_VERSION_HEX },
@@ -98,8 +108,12 @@ resource 'PiPL' (16004) {
         Kind { AEEffect },
         Name { MINC_NAME_LOOK },
         Category { MINC_CATEGORY },
+#ifdef AE_OS_WIN
+        CodeWin64X86 { MINC_ENTRY_LOOK },
+#else
         CodeMacARM64 { MINC_ENTRY_LOOK },
         CodeMacIntel64 { MINC_ENTRY_LOOK },
+#endif
         AE_PiPL_Version { 2, 0 },
         AE_Effect_Spec_Version { PF_PLUG_IN_VERSION, PF_PLUG_IN_SUBVERS },
         AE_Effect_Version { MINC_PIPL_VERSION_HEX },
@@ -111,5 +125,3 @@ resource 'PiPL' (16004) {
         AE_Effect_Support_URL { "https://github.com/" }
     }
 };
-
-#endif  /* variants mac-only until M4 */
