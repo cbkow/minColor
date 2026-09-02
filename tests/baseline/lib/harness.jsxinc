@@ -1,0 +1,186 @@
+// minColor baseline harness — a SHELL SIMULATOR (M3 contract flip). Scenarios drive the
+// native AEGP commands exactly as the thin shell does: shell-args.json → executeCommand →
+// reports/<c>-last.json. The 0.9.2 panel library is no longer loaded anywhere — the suite's
+// contract is the plugin command surface itself.
+// ES3. Loaded by scripts via $.evalFile after the driver sets $.global.__mincBase/__mincOut.
+var MincBase = (function () {
+  var BASE = $.global.__mincBase;                       // tests/baseline, set by the driver
+  var OUTDIR = $.global.__mincOut;                      // out/<run>/ — set by the driver
+  var SETTINGS = "/Users/Shared/minColor/settings";
+  var CONFIGS = "/Users/Shared/minColor/configs";       // installed payload (presets.json lives here)
+
+  var lines = [];
+  function log(s) { lines.push(String(s)); }
+  function readJson(path) {                            // our own generated files only
+    var f = new File(path); if (!f.open("r")) return null;
+    var s = f.read(); f.close();
+    try { return eval("(" + s + ")"); } catch (e) { return null; }
+  }
+
+  // ---- the shell seam: args in, command fired, report out ----
+  function writeArgs(json) {                           // raw JSON string incl. "command" key
+    var f = new File(SETTINGS + "/shell-args.json");
+    f.encoding = "UTF-8"; f.lineFeed = "Unix";
+    if (f.open("w")) { f.write(json + "\n"); f.close(); }
+  }
+  function writeAnswers(preset) {                      // quiet-mode picker answer (M4 retires this)
+    var f = new File(SETTINGS + "/quiet-answers.json");
+    f.encoding = "UTF-8"; f.lineFeed = "Unix";
+    if (f.open("w")) { f.write('{ "preset": "' + preset + '" }\n'); f.close(); }
+  }
+  function runCmd(label, argsJson, reportName) {       // argsJson/reportName optional (null ok)
+    if (argsJson) writeArgs(argsJson);
+    var id = app.findMenuCommandId(label);
+    if (!id) { log("NATIVE COMMAND UNAVAILABLE: " + label); return null; }
+    app.executeCommand(id);
+    if (!reportName) return null;
+    var r = readJson(SETTINGS + "/reports/" + reportName + "-last.json");
+    if (!r) log("NATIVE REPORT MISSING: " + reportName);
+    return r;
+  }
+  function setUpProject(presetKey) {                   // the everywhere-fixture: quiet Set Up
+    writeAnswers(presetKey);
+    return runCmd("minColor: Set Up Project", null, "setup");
+  }
+
+  // ---- library absorptions (the two reads the flip keeps script-side) ----
+  function readEngine() {                              // XMP dialect stamp (panel parity regex)
+    try { var m = app.project.xmpPacket.match(/<minColor:engine>([^<]*)<\/minColor:engine>/); return m ? m[1] : null; } catch (e) { return null; }
+  }
+  function seedStickyPref(presetKey) {                 // fresh-project determinism: AE inherits its
+    var pj = readJson(CONFIGS + "/presets.json");      // last-project sticky prefs — seed them
+    var pr = pj && pj.presets ? pj.presets[presetKey] : null;
+    if (!pr) throw new Error("unknown preset " + presetKey);
+    var SEC = "After Effects Sticky Prefs", KEY = "AE Last Project Settings";
+    var orig = app.preferences.getPrefAsString(SEC, KEY, PREFType.PREF_Type_MACHINE_INDEPENDENT);
+    var neu = orig.replace(/(<PwCs bdata="01"\/>\s*<string>)\{[^<]*\}(<\/string>)/, "$1" + pr.pwcsJSON + "$2");
+    neu = neu.replace(/(<pcms bdata="01"\/>\s*<string>)[^<]*(<\/string>)/,
+      '$1{"colorManagementSystem":1,"ocioConfigurationFile":"' + (CONFIGS + "/" + pr.config) + '"}$2');
+    if (neu === orig && orig.indexOf(pr.pwcsJSON) < 0) throw new Error("sticky pref shape not recognized — AE build change? aborting");
+    app.preferences.savePrefAsString(SEC, KEY, neu, PREFType.PREF_Type_MACHINE_INDEPENDENT);
+    app.preferences.saveToDisk();
+  }
+
+  // ---- normalization: everything volatile is scrubbed BEFORE writing ----
+  function scrub(s) {
+    s = String(s);
+    s = s.replace(/\/[^\s"']*\//g, function (m) {        // absolute path -> basename of its tail
+      var parts = m.split("/"); return "<dir>/";
+    });
+    s = s.replace(/\d{4}-\d{2}-\d{2}[T ]?[\d:.\-]*/g, "DATE");
+    s = s.replace(/\d{8}-\d{6}/g, "STAMP");              // backup timestamps
+    s = s.replace(/"panel":"[^"]*"/g, '"panel":"VER"');
+    s = s.replace(/"plugin":"[^"]*"/g, '"plugin":"VER"');
+    s = s.replace(/"ocioEngine":"[^"]*"/g, '"ocioEngine":"VER"');
+    s = s.replace(/"date":"[^"]*"/g, '"date":"DATE"');
+    return s;
+  }
+  function baseName(p) { if (!p) return "(none)"; var s = String(p).replace(/\\/g, "/"); return s.substring(s.lastIndexOf("/") + 1); }
+
+  function dumpProject(tag) {
+    var p = app.project;
+    var pin = ""; try { pin = p.ocioConfigurationFile || ""; } catch (e) {}
+    var ws = ""; try { ws = p.workingSpace || ""; } catch (e2) {}
+    log("[" + tag + "] project: items=" + p.numItems + " working='" + ws + "' pin='" + baseName(pin) +
+        "' bpc=" + p.bitsPerChannel + " engine=" + (readEngine() || "-"));
+  }
+  function dumpComp(tag, comp) {
+    log("[" + tag + "] comp '" + comp.name + "' layers=" + comp.numLayers);
+    for (var i = 1; i <= comp.numLayers; i++) {
+      var ly = comp.layer(i);
+      log("  layer " + i + " '" + ly.name + "' enabled=" + ly.enabled + " guide=" + ly.guideLayer +
+          " adj=" + ly.adjustmentLayer);
+      var fxp = null; try { fxp = ly.property("ADBE Effect Parade"); } catch (eF) {}
+      if (fxp) for (var k = 1; k <= fxp.numProperties; k++)
+        log("    fx " + k + " [" + fxp.property(k).matchName + "] '" + scrub(fxp.property(k).name) + "'");
+    }
+  }
+  function dumpReport(tag, r) {
+    var keys = [], k; for (k in r) if (r[k] !== null && typeof r[k] !== "function") keys.push(k);
+    keys.sort();
+    for (var i = 0; i < keys.length; i++) {
+      var v = r[keys[i]];
+      if (v && typeof v.length === "number" && typeof v !== "string") {
+        log("[" + tag + "] " + keys[i] + "=" + v.length);
+        for (var j = 0; j < v.length; j++) log("    " + scrub(v[j]));
+      } else log("[" + tag + "] " + keys[i] + "=" + scrub(v));
+    }
+  }
+
+  // ---- fixtures / throwaway projects ----
+  function importFixture(name) {
+    var f = new File(BASE + "/fixtures/" + name);
+    return app.project.importFile(new ImportOptions(f));
+  }
+  function closeNoSave() {                              // app.newProject() on a DIRTY unsaved project
+    try { app.project.close(CloseOptions.DO_NOT_SAVE_CHANGES); } catch (eC) {}
+  }                                                     // wedges: the suppressed close-confirm auto-
+                                                        // answers Save -> modal Save As panel (found
+                                                        // 2026-09-02, sticky-bpc-dependent flake)
+  function freshProject() {
+    closeNoSave();
+    app.newProject();
+    try { app.project.bitsPerChannel = 32; } catch (eB) {}   // fresh projects inherit AE's sticky
+  }                                                          // depth (a 16-bpc session leaked into
+                                                             // goldens once) — normalize explicitly
+  function savedProject(nameNoExt) {                    // per-run scratch dir keeps sidecars isolated
+    closeNoSave();
+    app.newProject();
+    try { app.project.bitsPerChannel = 32; } catch (eB2) {}
+    var dir = new Folder(OUTDIR + "/scratch-" + nameNoExt); if (!dir.exists) dir.create();
+    var f = new File(dir.fsName + "/" + nameNoExt + ".aep");
+    app.project.save(f);
+    return f;
+  }
+  function savedProjectNamed(dirTag, base) {            // same FILE basename across variants
+    closeNoSave();                                      // (backup filenames embed it — scrub-identical)
+    app.newProject();
+    try { app.project.bitsPerChannel = 32; } catch (eB3) {}
+    var dir = new Folder(OUTDIR + "/scratch-" + dirTag); if (!dir.exists) dir.create();
+    var f = new File(dir.fsName + "/" + base + ".aep");
+    app.project.save(f);
+    return f;
+  }
+  function openFixtureCopy(name, dirTag) {              // baked .aep fixtures: NEVER mutate the
+    closeNoSave();                                      // original — ceremonies save/patch in place
+    var dir = new Folder(OUTDIR + "/scratch-" + dirTag); if (!dir.exists) dir.create();
+    var src = new File(BASE + "/fixtures/" + name);
+    var dst = new File(dir.fsName + "/" + name);
+    src.copy(dst.fsName);
+    app.open(dst);
+    return dst;
+  }
+  // ---- AEGP log tail (M2): the walk's counters are log-only; scenarios mark the log
+  //      before a sync command and dump the appended "sync:" lines (verification-only read).
+  var AEGP_LOG = "/tmp/minColorAEGP.log";
+  function logMark() { var f = new File(AEGP_LOG); return f.exists ? f.length : 0; }
+  function syncLinesSince(mark) {
+    var f = new File(AEGP_LOG);
+    if (!f.exists || !f.open("r")) return ["(no aegp log)"];
+    f.encoding = "BINARY";
+    f.seek(mark, 0);
+    var s = f.read(); f.close();
+    var out = [], ls = s.split("\n");
+    for (var i = 0; i < ls.length; i++) if (ls[i].indexOf("sync: instances=") === 0) out.push(ls[i]);
+    return out.length ? out : ["(no sync lines)"];
+  }
+
+  function finish(scriptName) {
+    var f = new File(OUTDIR + "/" + scriptName + ".txt");
+    f.encoding = "UTF-8";
+    f.lineFeed = "Unix";                                // mac default is CR — unreadable diffs
+    if (f.open("w")) { f.write(lines.join("\n") + "\n"); f.close(); }
+    lines = [];
+  }
+  function fail(scriptName, e) {
+    log("SCRIPT ERROR line " + e.line + ": " + e.toString());
+    finish(scriptName);
+  }
+  return { log: log, scrub: scrub, dumpProject: dumpProject, dumpComp: dumpComp,
+           dumpReport: dumpReport, importFixture: importFixture, freshProject: freshProject,
+           savedProject: savedProject, finish: finish, fail: fail, readJson: readJson,
+           savedProjectNamed: savedProjectNamed, logMark: logMark, syncLinesSince: syncLinesSince,
+           openFixtureCopy: openFixtureCopy,
+           SETTINGS: SETTINGS, writeArgs: writeArgs, writeAnswers: writeAnswers,
+           runCmd: runCmd, setUpProject: setUpProject, seedStickyPref: seedStickyPref };
+})();

@@ -1,0 +1,283 @@
+/* minColorAEGP — the ceremonies bundle. Kind{AEGP}/AEgx, lives in the APP's Plug-ins folder,
+   loads at AE LAUNCH (probes D/F, RESULTS §30b/c). M1: ceremonies register here as a command
+   TABLE — added incrementally per plan step so the handshake file's commands[] never lies.
+   The 0.9.2 panel keeps working against "minColor: Sync From Names" unchanged.             */
+#include "MincCore.h"
+#include "../ceremony/MincSettings.h"
+#include "../ceremony/MincEffectOps.h"
+#include "../ceremony/MincDoctor.h"
+#include "../ceremony/MincInterpret.h"
+#include "../ceremony/MincCeremonyProject.h"
+#include "../ceremony/MincPicker.h"
+#include "../ceremony/MincStrip.h"
+#include "../ceremony/MincArchive.h"
+#include "../ceremony/MincMenusWrite.h"
+#include "../ceremony/MincArgs.h"
+#include "../ceremony/MincUtility.h"
+#include "../ceremony/MincTranslate.h"
+#include <cstdio>
+
+static AEGP_PluginID  g_id = 0;
+static SPBasicSuite  *g_pica = nullptr;
+
+/* ---------------- command table ---------------- */
+typedef void (*MincCmdHandler)(void);
+struct MincCommandDef { const char *label; MincCmdHandler handler; AEGP_Command cmd; };
+
+static void CmdSync(void);
+static void CmdAbout(void);
+static void CmdDoctor(void);
+static void CmdInterpret(void);
+static void CmdInterpretSel(void);
+static void CmdUtility(void);
+static void CmdApplyLook(void);
+static void CmdAdopt(void);
+static void CmdRepair(void);
+static void CmdRenderPreset(void);
+static void CmdSetUp(void);
+static void CmdMigrate(void);
+static void CmdStripForeign(void);
+static void CmdStripAll(void);
+static void CmdArchive(void);
+static void CmdPackage(void);
+
+static MincCommandDef g_commands[] = {
+    { "minColor: Sync From Names",     CmdSync,        0 },
+    { "minColor: About",               CmdAbout,       0 },
+    { "minColor: Doctor",              CmdDoctor,      0 },
+    { "minColor: Interpret Timeline",  CmdInterpret,   0 },
+    { "minColor: Interpret Selected",  CmdInterpretSel, 0 },
+    { "minColor: Utility Layers",      CmdUtility,     0 },
+    { "minColor: Apply Look",          CmdApplyLook,   0 },
+    { "minColor: Adopt Effects",       CmdAdopt,       0 },
+    { "minColor: Repair",              CmdRepair,      0 },
+    { "minColor: Apply Render Preset", CmdRenderPreset, 0 },
+    { "minColor: Set Up Project",      CmdSetUp,       0 },
+    { "minColor: Migrate Project",     CmdMigrate,     0 },
+    { "minColor: Strip Foreign OCIO",  CmdStripForeign, 0 },
+    { "minColor: Strip ALL",           CmdStripAll,    0 },
+    { "minColor: Archive Project",     CmdArchive,     0 },
+    { "minColor: Package for Any AE",  CmdPackage,     0 },
+};
+static const int g_nCommands = (int)(sizeof(g_commands) / sizeof(g_commands[0]));
+
+/* ---------------- handlers ---------------- */
+static void CmdSync(void) {
+    MincAuthorityRefreshBp(g_pica, g_id);               /* refresh FIRST — the sync payload carries
+                                                           authority state (idle hook does this order) */
+    MincSyncFromNames(g_pica, g_id, true);              /* panel/user-invoked sync christens by intent */
+}
+
+static void CmdAbout(void) {
+    MincArgsConsume("minColor: About");
+    char txt[512];
+    snprintf(txt, sizeof(txt),
+             "minColor %s\nBuild %s\nEffect: MediaCore \xc2\xb7 Ceremonies: this AEGP\n"
+             "API handshake: settings/aegp-api.json",
+             MINC_VERSION_STR, MINC_BUILD_STAMP);
+    MincWriteReport("about", std::string("{ \"version\": \"") + MINC_VERSION_STR +
+                             "\", \"buildStamp\": \"" + MINC_BUILD_STAMP + "\" }\n");
+    if (MincQuietMode() || MincArgsTakeSilent()) return;                         /* automation seam: no dialogs */
+    AEGP_SuiteHandler suites(g_pica);
+    A_UTF16Char u16[512];
+    MincU8ToU16(txt, u16, 512);
+    suites.UtilitySuite6()->AEGP_ReportInfoUnicode(g_id, u16);
+}
+
+static void CmdDoctor(void) {
+    MincArgsConsume("minColor: Doctor");
+    MincAuthorityRefreshBp(g_pica, g_id);
+    MincDoctorResult d = MincDoctorDiagnose(g_pica, g_id);
+    MincWriteReport("doctor", d.toJson());
+    MincLog("doctor: %s — %s", d.status.c_str(), d.text.c_str());
+    if (MincQuietMode() || MincArgsTakeSilent()) return;
+    std::string msg = d.status + " \xe2\x80\x94 " + d.text;
+    AEGP_SuiteHandler suites(g_pica);
+    A_UTF16Char u16[600];
+    MincU8ToU16(msg.c_str(), u16, 600);
+    suites.UtilitySuite6()->AEGP_ReportInfoUnicode(g_id, u16);
+}
+
+static void CmdInterpret(void) {
+    MincArgsConsume("minColor: Interpret Timeline");
+    MincInterpretReport r = MincInterpretTimeline(g_pica, g_id);
+    MincWriteReport("interpret", r.toJson());
+    MincLog("interpret: added=%d skipped=%d flagged=%d failed=%d identity=%d contained=%d%s%s",
+            (int)r.added.size(), (int)r.skipped.size(), (int)r.flagged.size(),
+            (int)r.failed.size(), (int)r.identity.size(), (int)r.contained.size(),
+            r.error.empty() ? "" : " error=", r.error.c_str());
+    if (MincQuietMode() || MincArgsTakeSilent()) return;
+    char msg[256];
+    if (!r.error.empty()) snprintf(msg, sizeof(msg), "Interpret Timeline: %s", r.error.c_str());
+    else snprintf(msg, sizeof(msg), "Interpret Timeline: %d added, %d skipped, %d flagged, %d failed",
+                  (int)r.added.size(), (int)r.skipped.size(), (int)r.flagged.size(), (int)r.failed.size());
+    AEGP_SuiteHandler suites(g_pica);
+    A_UTF16Char u16[300];
+    MincU8ToU16(msg, u16, 300);
+    suites.UtilitySuite6()->AEGP_ReportInfoUnicode(g_id, u16);
+}
+
+static void CmdInterpretSel(void) {
+    std::string space;
+    {   MincJsonPtr a = MincArgsConsume("minColor: Interpret Selected");
+        if (a) space = a->str("space");
+    }
+    MincInterpretReport r = MincInterpretSelection(g_pica, g_id, space);
+    MincWriteReport("interpret-selected", r.toJson());
+    MincLog("interpret-selected: added=%d skipped=%d flagged=%d failed=%d%s%s",
+            (int)r.added.size(), (int)r.skipped.size(), (int)r.flagged.size(), (int)r.failed.size(),
+            r.error.empty() ? "" : " error=", r.error.c_str());
+    if (MincQuietMode() || MincArgsTakeSilent()) return;
+    char msg[256];
+    if (!r.error.empty()) snprintf(msg, sizeof(msg), "Interpret Selected: %s", r.error.c_str());
+    else snprintf(msg, sizeof(msg), "Interpret Selected: %d added, %d skipped, %d flagged, %d failed",
+                  (int)r.added.size(), (int)r.skipped.size(), (int)r.flagged.size(), (int)r.failed.size());
+    AEGP_SuiteHandler suites(g_pica);
+    A_UTF16Char u16[300];
+    MincU8ToU16(msg, u16, 300);
+    suites.UtilitySuite6()->AEGP_ReportInfoUnicode(g_id, u16);
+}
+
+static void ReportCeremony(const char *name, const std::string &json) {
+    MincWriteReport(name, json);
+    MincLog("%s: %s", name, json.substr(0, 200).c_str());
+    if (MincQuietMode() || MincArgsTakeSilent()) return;
+    std::string msg = std::string(name) + (json.find("\"error\"") != std::string::npos ? ": FAILED — see report" : ": done");
+    AEGP_SuiteHandler suites(g_pica);
+    A_UTF16Char u16[300];
+    MincU8ToU16(msg.c_str(), u16, 300);
+    suites.UtilitySuite6()->AEGP_ReportInfoUnicode(g_id, u16);
+}
+
+static void CmdSetUp(void) {
+    std::string key;
+    if (!MincPickPreset("minColor: Set Up Project", &key)) { MincLog("setup: no preset picked"); return; }
+    ReportCeremony("setup", MincApplyPresetToCurrent(g_pica, g_id, key));
+}
+static void CmdMigrate(void) {
+    std::string key;
+    if (!MincPickPreset("minColor: Migrate Project", &key)) { MincLog("migrate: no preset picked"); return; }
+    ReportCeremony("migrate", MincMigrateProject(g_pica, g_id, key));
+}
+
+static void CmdStripForeign(void) { MincArgsConsume("minColor: Strip Foreign OCIO"); ReportCeremony("strip-foreign", MincStripForeignOcio(g_pica, g_id, false)); }
+static void CmdStripAll(void)     { MincArgsConsume("minColor: Strip ALL"); ReportCeremony("strip-all",     MincStripForeignOcio(g_pica, g_id, true)); }
+static void CmdArchive(void)      { MincArgsConsume("minColor: Archive Project"); ReportCeremony("archive",       MincArchiveProject(g_pica, g_id)); }
+static void CmdPackage(void)      { MincArgsConsume("minColor: Package for Any AE"); ReportCeremony("package",       MincPackageForAnyAE(g_pica, g_id)); }
+static void CmdRepair(void)       { MincArgsConsume("minColor: Repair"); ReportCeremony("repair",        MincRepairProject(g_pica, g_id)); }
+static void CmdRenderPreset(void) {
+    std::string name;
+    {   MincJsonPtr a = MincArgsConsume("minColor: Apply Render Preset");
+        if (a) name = a->str("name");
+    }
+    ReportCeremony("render-preset", MincApplyRenderPreset(g_pica, g_id, name));
+}
+static void CmdApplyLook(void) {
+    std::string look;
+    {   MincJsonPtr a = MincArgsConsume("minColor: Apply Look");
+        if (a) look = a->str("look");                 /* "" = remove */
+    }
+    ReportCeremony("apply-look", MincApplyLook(g_pica, g_id, look));
+}
+static void CmdAdopt(void) {
+    MincArgsConsume("minColor: Adopt Effects");
+    MincTranslateReport tr = MincTranslateToPlugin(g_pica, g_id);
+    char tn[16]; snprintf(tn, sizeof(tn), "%d", (int)tr.converted.size());
+    std::string json = std::string("{ \"converted\": ") + tn + ", \"failed\": [";
+    for (size_t i = 0; i < tr.failed.size(); ++i) { if (i) json += ", "; std::string e = "\""; for (char c : tr.failed[i]) { if (c == '"' || c == '\\') e += '\\'; e += c; } json += e + "\""; }
+    json += "], \"remapped\": [";
+    for (size_t i = 0; i < tr.remapped.size(); ++i) { if (i) json += ", "; std::string e = "\""; for (char c : tr.remapped[i]) { if (c == '"' || c == '\\') e += '\\'; e += c; } json += e + "\""; }
+    json += "], \"removed\": [";
+    for (size_t i = 0; i < tr.removed.size(); ++i) { if (i) json += ", "; std::string e = "\""; for (char c : tr.removed[i]) { if (c == '"' || c == '\\') e += '\\'; e += c; } json += e + "\""; }
+    json += "] }\n";
+    ReportCeremony("adopt", json);
+}
+
+static void CmdUtility(void) {
+    std::string view, render;
+    {   MincJsonPtr a = MincArgsConsume("minColor: Utility Layers");
+        if (a) { view = a->str("view"); render = a->str("render"); }
+    }
+    ReportCeremony("utility-layers", MincEnsureUtilityLayers(g_pica, g_id, view, render));
+}
+
+/* ---------------- hooks ---------------- */
+static A_Err IdleHook(AEGP_GlobalRefcon, AEGP_IdleRefcon, A_long *max_sleepPL) {
+    static unsigned long lastSyncedGen = 0;
+    static bool keyScanned = false;
+    if (g_pica && g_id) {
+        if (!keyScanned) { keyScanned = true; MincInstalledKey(g_pica, g_id); }   /* timed scan, once (RESULTS §31) */
+        MincAuthorityRefreshBp(g_pica, g_id);
+        MincAuthoritySnapshot s;                        /* project/preset changed -> names are the durable
+                                                           store: re-derive every instance's state */
+        if (MincAuthorityGet(&s) && s.generation != lastSyncedGen) {
+            lastSyncedGen = s.generation;
+            MincWriteMenus(g_pica, g_id);       /* menus follow the pin — fresh BEFORE the walk */
+            MincSyncFromNames(g_pica, g_id);
+        }
+        char reason[32] = "";
+        if (MincConsumeWalkMarker(reason, sizeof(reason))) {
+            /* effect-armed walk (delete-first: a drop landing mid-walk re-creates the marker
+               for the next tick). "christen" names fresh default-named VIEW/RENDER variants. */
+            MincSyncFromNames(g_pica, g_id, strncmp(reason, "christen", 8) == 0);
+        }
+    }
+    if (max_sleepPL) *max_sleepPL = 60;                 /* ~1 s at 60 ticks */
+    return A_Err_NONE;
+}
+
+static A_Err CommandHook(AEGP_GlobalRefcon, AEGP_CommandRefcon, AEGP_Command command,
+                         AEGP_HookPriority, A_Boolean, A_Boolean *handledPB) {
+    if (!g_pica) return A_Err_NONE;
+    for (int i = 0; i < g_nCommands; ++i) {
+        if (g_commands[i].cmd && command == g_commands[i].cmd) {
+            MincArgsResetSilent();               /* silent never leaks across dispatches */
+            try { g_commands[i].handler(); }
+            catch (...) { MincLog("command '%s': exception", g_commands[i].label); }
+            if (handledPB) *handledPB = TRUE;
+            break;
+        }
+    }
+    return A_Err_NONE;
+}
+
+static A_Err UpdateMenuHook(AEGP_GlobalRefcon, AEGP_UpdateMenuRefcon, AEGP_WindowType) {
+    if (!g_pica) return A_Err_NONE;
+    Acq<AEGP_CommandSuite1> cs(g_pica, kAEGPCommandSuite, kAEGPCommandSuiteVersion1);
+    if (cs) for (int i = 0; i < g_nCommands; ++i)
+        if (g_commands[i].cmd) cs->AEGP_EnableCommand(g_commands[i].cmd);
+    return A_Err_NONE;
+}
+
+extern "C" DllExport A_Err MincAegpEntry(struct SPBasicSuite *pica_basicP, A_long major, A_long minor,
+                                         AEGP_PluginID aegp_plugin_id, AEGP_GlobalRefcon *global_refconP) {
+    g_pica = pica_basicP;
+    g_id = aegp_plugin_id;
+    if (global_refconP) *global_refconP = nullptr;
+    MincSetMainThread();
+    MincLog("boot: minColorAEGP entry at launch — host %ld.%ld id=%d (%s)",
+            (long)major, (long)minor, (int)aegp_plugin_id, MINC_BUILD_STAMP);
+    A_Err out = A_Err_NONE;
+    try {
+        AEGP_SuiteHandler suites(pica_basicP);
+        A_Err e2 = suites.RegisterSuite5()->AEGP_RegisterIdleHook(g_id, IdleHook, NULL);
+        Acq<AEGP_CommandSuite1> cs(pica_basicP, kAEGPCommandSuite, kAEGPCommandSuiteVersion1);
+        int registered = 0;
+        if (cs) {
+            for (int i = 0; i < g_nCommands; ++i) {
+                if (cs->AEGP_GetUniqueCommand(&g_commands[i].cmd) != A_Err_NONE || !g_commands[i].cmd) continue;
+                cs->AEGP_InsertMenuCommand(g_commands[i].cmd, g_commands[i].label, AEGP_Menu_EDIT, AEGP_MENU_INSERT_AT_BOTTOM);
+                ++registered;
+            }
+            A_Err e3 = suites.RegisterSuite5()->AEGP_RegisterCommandHook(g_id, AEGP_HP_BeforeAE, AEGP_Command_ALL, CommandHook, NULL);
+            A_Err e4 = suites.RegisterSuite5()->AEGP_RegisterUpdateMenuHook(g_id, UpdateMenuHook, NULL);
+            MincLog("commands registered=%d idle=%d hook=%d menuhook=%d", registered, (int)e2, (int)e3, (int)e4);
+        }
+        if (registered > 0) {
+            const char *labels[16];
+            for (int i = 0; i < g_nCommands && i < 16; ++i) labels[i] = g_commands[i].label;
+            MincWriteHandshake(labels, g_nCommands);     /* AFTER registration — never lies */
+        } else { MincLog("command registration FAILED"); out = A_Err_GENERIC; }
+    } catch (...) { MincLog("AegpEntry: exception"); out = A_Err_GENERIC; }
+    return out;
+}

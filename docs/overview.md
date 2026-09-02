@@ -8,23 +8,34 @@ Every config is set up so After Effects imports footage without converting it: t
 rule, the `default` role and the working space all agree. Color spaces are assigned on the
 timeline instead, one effect per layer, named for what they do:
 
-| effect name | what it does |
-|---|---|
-| `minColor: ARRI LogC4 → working` | interprets a footage layer |
-| `minColor: view macOS Video View` | the comp's View guide layer (viewport only) |
-| `minColor: render Video Render` | the comp's Render layer (what gets output) |
-| `minColor: look <name>` | an OCIO look, applied before the transform |
+| effect | example name | what it does |
+|---|---|---|
+| minColor Transform | `minColor: ARRI LogC4 → working` | interprets a footage layer |
+| minColor View | `minColor: view macOS Video View` | the comp's View guide layer (viewport only) |
+| minColor Render | `minColor: render Video Render` | the comp's Render layer (what gets output) |
+| minColor Look | `minColor: look <name>` | an OCIO look, applied before the transform |
 
-The names are the truth. Rename an effect and the plugin follows.
+The names are the truth. Rename an effect — or click its badge and pick from the menu — and the
+plugin follows. Which effect it is (its match name) says what it's *for*; the display name says
+which space it uses.
 
-## The plugin
+## The plug-ins
 
-`minColor CST` stores only a color space name and a direction. When it renders it asks After
-Effects for the project's OCIO config and working space, then runs the transform with its own
-built-in OCIO 2.5.2. It also remembers the config it was last synced with (the "passport"), so if
-a project arrives on a machine where the config path doesn't exist, it still renders the same —
-in the app and in aerender. Adobe's own OCIO Color Space Transform gives identical pixels;
-**Package for any AE** swaps every effect over to it.
+Two bundles, one build, one version:
+
+- **minColorCST.plugin** (MediaCore) carries the effects. Each stores only a color space name
+  and a direction; when it renders it asks After Effects for the project's OCIO config and
+  working space, then runs the transform with its own built-in OCIO 2.5.2. It also remembers
+  the config it was last synced with (the "passport"), so a project that arrives on a machine
+  where the config path doesn't exist still renders the same — in the app and in aerender.
+  Adobe's own OCIO Color Space Transform gives identical pixels; **Package for Any AE** swaps
+  every effect over to it.
+- **minColorAEGP.plugin** (each After Effects' own Plug-ins folder) carries the ceremonies as
+  menu commands, watches the project to keep effect names and settings in sync, and writes the
+  handshake file the panel checks at startup (`settings/aegp-api.json`).
+
+Projects made with minColor 1.x open fine: their `MINC CST` effects appear as placeholders and
+**Migrate Project** rebuilds each one as the current effect with the same name and position.
 
 ## The configs
 
@@ -42,13 +53,14 @@ are sRGB and Rec. 1886 outputs.
 
 | | macOS | Windows |
 |---|---|---|
-| Plugin + configs | `/Library/Application Support/Adobe/Common/Plug-ins/7.0/MediaCore/minColor/` | `C:\Program Files\Adobe\Common\Plug-ins\7.0\MediaCore\minColor\` |
-| Panel | `~/Library/Preferences/Adobe/After Effects/<ver>/Scripts/ScriptUI Panels/` | `<After Effects>\Support Files\Scripts\ScriptUI Panels\` |
+| Effects + configs | `/Library/Application Support/Adobe/Common/Plug-ins/7.0/MediaCore/minColor/` | `C:\Program Files\Adobe\Common\Plug-ins\7.0\MediaCore\minColor\` |
+| Ceremonies (mac) | `/Applications/Adobe After Effects <ver>/Plug-ins/minColorAEGP.plugin` | — until the 2.0 engine lands on Windows |
+| Panel | `~/Library/Preferences/Adobe/After Effects/<ver>/Scripts/ScriptUI Panels/` | `%APPDATA%\Adobe\After Effects\<ver>\Scripts\ScriptUI Panels\` |
 | Your settings | `/Users/Shared/minColor/settings/` | `C:\ProgramData\minColor\settings\` |
 
 ## Archive and Package
 
 **Archive** copies the project's config and LUTs next to the project file, with a note of the
-versions used. **Package for any AE** does that and converts every effect to Adobe-native, so the
+versions used. **Package for Any AE** does that and converts every effect to Adobe-native, so the
 project opens on any After Effects 2025+ without minColor installed. Package a version increment,
 not your working copy.

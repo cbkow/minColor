@@ -1,1 +1,26 @@
-{ "_comment": "Extension -> suggested source colourspace for the interpret pass. Edited via the minColor panel. 'working' means identity/no effect. Unlisted extensions are skipped and reported, never guessed.", "defaults": {  "ai": "sRGB",  "bmp": "sRGB",  "cin": "working",  "dpx": "working",  "exr": "working",  "gif": "sRGB",  "hdr": "working",  "jpeg": "sRGB",  "jpg": "sRGB",  "png": "sRGB",  "psd": "sRGB",  "svg": "sRGB",  "tga": "sRGB",  "tif": "sRGB",  "tiff": "sRGB",  "webp": "sRGB" }}
+{
+ "_comment": "Extension -> suggested source colourspace for the interpret pass. Edited via the minColor shell. 'working' means identity/no effect. 'video709' is the CONTAINER sentinel: it resolves to the family's 709-video space (Linear: Gamma 2.4 Encoded Rec.709, Display: Rec.1886) and fires only when detection/harvest found nothing - tagged media always wins. Other unlisted extensions are skipped and reported, never guessed.",
+ "defaults": {
+  "ai": "sRGB",
+  "avi": "video709",
+  "bmp": "sRGB",
+  "cin": "working",
+  "dpx": "working",
+  "exr": "working",
+  "gif": "sRGB",
+  "hdr": "working",
+  "jpeg": "sRGB",
+  "jpg": "sRGB",
+  "m4v": "video709",
+  "mov": "video709",
+  "mp4": "video709",
+  "mxf": "video709",
+  "png": "sRGB",
+  "psd": "sRGB",
+  "svg": "sRGB",
+  "tga": "sRGB",
+  "tif": "sRGB",
+  "tiff": "sRGB",
+  "webp": "sRGB"
+ }
+}

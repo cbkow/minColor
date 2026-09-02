@@ -1,0 +1,22 @@
+[native-dialect] comp 'adopt' layers=3
+  layer 1 'minColor VIEW (guide)' enabled=true guide=true adj=true
+    fx 1 [ADBE OCIO Look Transform] 'minColor: look Medium Contrast'
+    fx 2 [ADBE OCIO Color Space Transform] 'minColor: view macOS Video View'
+  layer 2 'minColor RENDER' enabled=false guide=false adj=true
+    fx 1 [ADBE OCIO Look Transform] 'minColor: look Medium Contrast'
+    fx 2 [ADBE OCIO Color Space Transform] 'minColor: render Video Render'
+  layer 3 'subject' enabled=true guide=false adj=false
+    fx 1 [ADBE OCIO Color Space Transform] 'minColor: sRGB → working'
+[adopt] converted=5
+[adopt] failed=0
+[adopt] remapped=0
+[adopt] removed=0
+[adopted] comp 'adopt' layers=3
+  layer 1 'minColor VIEW (guide)' enabled=true guide=true adj=true
+    fx 1 [MINC LOOK] 'minColor: look Medium Contrast'
+    fx 2 [MINC VIEW] 'minColor: view macOS Video View'
+  layer 2 'minColor RENDER' enabled=false guide=false adj=true
+    fx 1 [MINC LOOK] 'minColor: look Medium Contrast'
+    fx 2 [MINC RENDER] 'minColor: render Video Render'
+  layer 3 'subject' enabled=true guide=false adj=false
+    fx 1 [MINC XFORM] 'minColor: sRGB → working'

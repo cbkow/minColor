@@ -1,0 +1,35 @@
+[sdr22-interpret] added=2
+    sem/ramp_untagged.mov ← Rec.1886 [detected metadata]
+    sem/ramp_prores_nclc111.mov ← Rec.1886 [detected metadata]
+[sdr22-interpret] contained=0
+[sdr22-interpret] failed=0
+[sdr22-interpret] flagged=0
+[sdr22-interpret] identity=0
+[sdr22-interpret] skipped=0
+[sdr22-after] comp 'sem' layers=2
+  layer 1 'ramp_untagged.mov' enabled=true guide=false adj=false
+    fx 1 [MINC XFORM] 'minColor: Rec.1886 → working'
+  layer 2 'ramp_prores_nclc111.mov' enabled=true guide=false adj=false
+    fx 1 [MINC XFORM] 'minColor: Rec.1886 → working'
+[migrate] backup=<dir>/sem32mig_premigrate_STAMP.aep
+[migrate] backups=[object Object]
+[migrate] bitsPerChannel=16
+[migrate] effectsFailed=0
+[migrate] effectsForeign=0
+[migrate] effectsRebuilt=0
+[migrate] effectsRemapped=1
+    mig/subject: 'Gamma 2.4 Encoded Rec.709' → 'Rec.1886'
+[migrate] effectsRemoved=0
+[migrate] gradesLeft=0
+[migrate] harvested=0
+[migrate] orphanLayers=0
+[migrate] pinLocus=central
+[migrate] preset=sdr22
+[migrate] residual=0
+[migrate] stripped=0
+[migrate] strippedPipeline=0
+[migrate] viewRenderRetargeted=0
+[migrate] working=Display/Rec.709 Gamma 2.2
+[migrated] comp 'mig' layers=1
+  layer 1 'subject' enabled=true guide=false adj=false
+    fx 1 [MINC XFORM] 'minColor: Rec.1886 → working'

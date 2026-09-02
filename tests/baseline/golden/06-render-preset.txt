@@ -1,0 +1,12 @@
+[preset] look=Medium Contrast
+[preset] preset=Graded Video
+[preset] render=Video Render
+[preset] view=macOS Video View
+[after] comp 'rp' layers=3
+  layer 1 'minColor VIEW (guide)' enabled=true guide=true adj=true
+    fx 1 [MINC LOOK] 'minColor: look Medium Contrast'
+    fx 2 [MINC VIEW] 'minColor: view macOS Video View'
+  layer 2 'minColor RENDER' enabled=false guide=false adj=true
+    fx 1 [MINC LOOK] 'minColor: look Medium Contrast'
+    fx 2 [MINC RENDER] 'minColor: render Video Render'
+  layer 3 'subject' enabled=true guide=false adj=false

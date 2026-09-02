@@ -1,0 +1,15 @@
+[no-menus] sync: instances=5 wrote=1 unparsed=4 reminted=0 placeholders=0 christened=0
+[no-menus] comp 'chr' layers=1
+  layer 1 'subject' enabled=true guide=false adj=false
+    fx 1 [MINC VIEW] 'minColor View'
+    fx 2 [MINC VIEW] 'minColor View 2'
+    fx 3 [MINC RENDER] 'minColor Render'
+    fx 4 [MINC XFORM] 'minColor Transform'
+    fx 5 [MINC VIEW] 'minColor: view Display P3'
+[christened] comp 'chr' layers=1
+  layer 1 'subject' enabled=true guide=false adj=false
+    fx 1 [MINC VIEW] 'minColor: view macOS Video View'
+    fx 2 [MINC VIEW] 'minColor: view macOS Video View'
+    fx 3 [MINC RENDER] 'minColor: render Video Render'
+    fx 4 [MINC XFORM] 'minColor Transform'
+    fx 5 [MINC VIEW] 'minColor: view Display P3'

@@ -1,11 +1,22 @@
 #include "MinColorCST.h"
 
-static PF_Err About(PF_InData *in_data, PF_OutData *out_data) {
+static const char *VerbEffectName(MincVerb verb) {
+    switch (verb) {
+        case MINC_VERB_XFORM:  return MINC_NAME_XFORM;
+        case MINC_VERB_VIEW:   return MINC_NAME_VIEW;
+        case MINC_VERB_RENDER: return MINC_NAME_RENDER;
+        case MINC_VERB_LOOK:   return MINC_NAME_LOOK;
+        default:               return MINC_NAME_LEGACY;
+    }
+}
+
+static PF_Err About(MincVerb verb, PF_InData *in_data, PF_OutData *out_data) {
     AEGP_SuiteHandler suites(in_data->pica_basicP);
     suites.ANSICallbacksSuite1()->sprintf(out_data->return_msg,
-        "%s v%d.%d — late-binding OCIO colorspace transform (minColor stage two).\n"
+        "%s v%d.%d — late-binding OCIO colorspace transform.\n"
+        "The match name carries the verb; the effect name carries the space.\n"
         "Destination is always the project's CURRENT working space.",
-        MINC_NAME, MINC_MAJOR_VERSION, MINC_MINOR_VERSION);
+        VerbEffectName(verb), MINC_MAJOR_VERSION, MINC_MINOR_VERSION);
     return PF_Err_NONE;
 }
 
@@ -66,23 +77,8 @@ static PF_Err ParamsSetup(PF_InData *in_data, PF_OutData *out_data) {
 }
 
 /* ---- sequence data: one flat MinColorArb per instance — the render-time source of truth.
-        Written ONLY via PF_Cmd_COMPLETELY_GENERAL (our AEGP sync hands us the parsed name). ---- */
-#include <atomic>
-#include <random>
-#include <ctime>
-uint32_t MincMintInstanceId(void) {
-    static std::atomic<uint32_t> ctr{0};
-    if (ctr.load() == 0) {                                           /* lazy per-session seed */
-        uint32_t seed = 0;
-        try { std::random_device rd; seed = rd(); } catch (...) {}
-        seed ^= (uint32_t)time(nullptr) * 2654435761u;
-        if (seed == 0) seed = 0x9E3779B9u;
-        uint32_t z = 0; ctr.compare_exchange_strong(z, seed);
-    }
-    uint32_t id = ctr.fetch_add(1);
-    if (id == 0) id = ctr.fetch_add(1);
-    return id;
-}
+        Written ONLY via PF_Cmd_COMPLETELY_GENERAL (the AEGP sync hands us the parsed name).
+        MincMintInstanceId lives in core (the walk mints from either binary).             ---- */
 static PF_Err SeqNew(PF_InData *in_data, PF_OutData *out_data, const MincSeqData *initial) {
     AEGP_SuiteHandler suites(in_data->pica_basicP);
     PF_Handle h = suites.HandleSuite1()->host_new_handle(sizeof(MincSeqData));
@@ -183,19 +179,28 @@ static PF_Err HandleGeneric(PF_InData *in_data, PF_OutData *out_data, PF_ParamDe
     return PF_Err_NONE;
 }
 
-extern "C" DllExport PF_Err EffectMain(PF_Cmd cmd, PF_InData *in_data, PF_OutData *out_data,
-                                       PF_ParamDef *params[], PF_LayerDef *output, void *extra) {
+/* one implementation, five registered effects: the wrapper passes the verb statically.
+   The verb is About-only until M2 step 2 (verb authority lands in the walk).            */
+static PF_Err EffectMainCommon(MincVerb verb, PF_Cmd cmd, PF_InData *in_data, PF_OutData *out_data,
+                               PF_ParamDef *params[], PF_LayerDef *output, void *extra) {
     PF_Err err = PF_Err_NONE;
     try {
         switch (cmd) {
-            case PF_Cmd_ABOUT:               err = About(in_data, out_data);        break;
+            case PF_Cmd_ABOUT:               err = About(verb, in_data, out_data);  break;
             case PF_Cmd_GLOBAL_SETUP:        err = GlobalSetup(in_data, out_data);  break;
             case PF_Cmd_PARAMS_SETUP:        err = ParamsSetup(in_data, out_data);  break;
             case PF_Cmd_ARBITRARY_CALLBACK:
                 err = MincHandleArbitrary(in_data, out_data, params, output,
                                           reinterpret_cast<PF_ArbParamsExtra*>(extra));
                 break;
-            case PF_Cmd_SEQUENCE_SETUP:      err = SequenceSetup(in_data, out_data);   MincAuthorityRefresh(in_data); break;
+            case PF_Cmd_SEQUENCE_SETUP:
+                /* FRESH instance (a drop, a paste): arm the AEGP's christening walk via the
+                   shared marker. RESETUP never arms — undo of a christening arrives as
+                   RESETUP, and the reverted default name must STAY reverted.              */
+                err = SequenceSetup(in_data, out_data);
+                MincTouchWalkMarker("christen");
+                MincAuthorityRefresh(in_data);
+                break;
             case PF_Cmd_SEQUENCE_RESETUP:    err = SequenceResetup(in_data, out_data); MincAuthorityRefresh(in_data); break;
             case PF_Cmd_SEQUENCE_FLATTEN:    MincDebugLog("seq: cmd FLATTEN"); err = SequenceResetup(in_data, out_data); break;
             case PF_Cmd_GET_FLATTENED_SEQUENCE_DATA: MincDebugLog("seq: cmd GET_FLATTENED"); err = SequenceResetup(in_data, out_data); break;
@@ -204,7 +209,7 @@ extern "C" DllExport PF_Err EffectMain(PF_Cmd cmd, PF_InData *in_data, PF_OutDat
             case PF_Cmd_UPDATE_PARAMS_UI:
             case PF_Cmd_USER_CHANGED_PARAM:  MincAuthorityRefresh(in_data);         break;
             case PF_Cmd_EVENT:
-                err = MincHandleEvent(in_data, out_data, params, reinterpret_cast<PF_EventExtra*>(extra));
+                err = MincHandleEvent(verb, in_data, out_data, params, reinterpret_cast<PF_EventExtra*>(extra));
                 break;
             case PF_Cmd_SMART_PRE_RENDER:
                 err = MincSmartPreRender(in_data, out_data,
@@ -218,4 +223,29 @@ extern "C" DllExport PF_Err EffectMain(PF_Cmd cmd, PF_InData *in_data, PF_OutDat
         }
     } catch (...) { err = PF_Err_INTERNAL_STRUCT_DAMAGED; }   /* nothing throws across PF */
     return err;
+}
+
+#ifdef AE_OS_WIN
+/* legacy "MINC CST" entry — Windows-only from M3 step 8 (mac dropped PiPL 16000;
+   1.x instances there are benign placeholders that Migrate resurrects as variants) */
+extern "C" DllExport PF_Err EffectMain(PF_Cmd cmd, PF_InData *in_data, PF_OutData *out_data,
+                                       PF_ParamDef *params[], PF_LayerDef *output, void *extra) {
+    return EffectMainCommon(MINC_VERB_LEGACY, cmd, in_data, out_data, params, output, extra);
+}
+#endif
+extern "C" DllExport PF_Err EffectMainXform(PF_Cmd cmd, PF_InData *in_data, PF_OutData *out_data,
+                                            PF_ParamDef *params[], PF_LayerDef *output, void *extra) {
+    return EffectMainCommon(MINC_VERB_XFORM, cmd, in_data, out_data, params, output, extra);
+}
+extern "C" DllExport PF_Err EffectMainView(PF_Cmd cmd, PF_InData *in_data, PF_OutData *out_data,
+                                           PF_ParamDef *params[], PF_LayerDef *output, void *extra) {
+    return EffectMainCommon(MINC_VERB_VIEW, cmd, in_data, out_data, params, output, extra);
+}
+extern "C" DllExport PF_Err EffectMainRender(PF_Cmd cmd, PF_InData *in_data, PF_OutData *out_data,
+                                             PF_ParamDef *params[], PF_LayerDef *output, void *extra) {
+    return EffectMainCommon(MINC_VERB_RENDER, cmd, in_data, out_data, params, output, extra);
+}
+extern "C" DllExport PF_Err EffectMainLook(PF_Cmd cmd, PF_InData *in_data, PF_OutData *out_data,
+                                           PF_ParamDef *params[], PF_LayerDef *output, void *extra) {
+    return EffectMainCommon(MINC_VERB_LOOK, cmd, in_data, out_data, params, output, extra);
 }

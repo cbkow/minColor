@@ -1,6 +1,7 @@
 /* Config + processor caches and row application. All OCIO 2.5 usage is confined here. */
 #include "MincTypes.h"
 #include <OpenColorIO/OpenColorIO.h>
+#include <cstdio>
 #include <shared_mutex>
 #include <map>
 #include <string>
@@ -114,6 +115,36 @@ void MincOcioApplyToken(void *token, float *rgbaRows, int pixelCount) {
     OCIO::PackedImageDesc desc(rgbaRows, pixelCount, 1, 4);            /* RGBA float rows */
     (*reinterpret_cast<OCIO::ConstCPUProcessorRcPtr*>(token))->apply(desc);   /* thread-safe, stateless */
 }
+/* badge-menu fallback: enumerate the EFFECTIVE config when plugin-menus.json is absent.
+   Unfiltered (no per-preset curation without the panel's file) — assertSpaceInPin semantics
+   still hold because everything offered exists in the config that will render it. */
+int MincOcioListSpaces(const MincAuthoritySnapshot *auth, char out[][MINC_SPACE_LEN], int maxN) {
+    if (!auth->ocioOn || !auth->configPath[0]) return 0;
+    try {
+        OCIO::ConstConfigRcPtr cfg = GetConfig(auth->configPath);
+        if (!cfg) return 0;
+        int n = 0, total = cfg->getNumColorSpaces();
+        for (int i = 0; i < total && n < maxN; ++i) {
+            const char *nm = cfg->getColorSpaceNameByIndex(i);
+            if (nm && nm[0]) { snprintf(out[n], MINC_SPACE_LEN, "%s", nm); ++n; }
+        }
+        return n;
+    } catch (...) { return 0; }
+}
+int MincOcioListLooks(const MincAuthoritySnapshot *auth, char out[][MINC_SPACE_LEN], int maxN) {
+    if (!auth->ocioOn || !auth->configPath[0]) return 0;
+    try {
+        OCIO::ConstConfigRcPtr cfg = GetConfig(auth->configPath);
+        if (!cfg) return 0;
+        int n = 0, total = cfg->getNumLooks();
+        for (int i = 0; i < total && n < maxN; ++i) {
+            const char *nm = cfg->getLookNameByIndex(i);
+            if (nm && nm[0]) { snprintf(out[n], MINC_SPACE_LEN, "%s", nm); ++n; }
+        }
+        return n;
+    } catch (...) { return 0; }
+}
+
 void MincOcioEnd(void *token) {
     delete reinterpret_cast<OCIO::ConstCPUProcessorRcPtr*>(token);
 }
