@@ -119,6 +119,6 @@ std::string MincArchiveProject(SPBasicSuite *bp, AEGP_PluginID id) {
     std::string pf = sd + "/provenance.json";
     MincWriteTextFile(pf, prov);
 
-    return "{ \"sidecar\": " + AJStr(cfgTarget) + ", \"provenance\": " + AJStr(pf) +
-           ", \"golden\": \"skipped (native golden render deferred to M2)\" }\n";
+    /* no "golden" field: the panel's golden render retired with the panel (M2 decision) */
+    return "{ \"sidecar\": " + AJStr(cfgTarget) + ", \"provenance\": " + AJStr(pf) + " }\n";
 }

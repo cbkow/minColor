@@ -71,7 +71,9 @@ if [ -d "$SETTINGS_BAK" ]; then rm -rf "$SETTINGS"; cp -R "$SETTINGS_BAK" "$SETT
 grep -q "^done" "$OUT/DONE.txt" || { echo "driver failed:"; cat "$OUT/DONE.txt"; exit 1; }
 rm -rf "$OUT"/scratch-* "$WRAP"
 
-# M1 equivalence scenarios are self-verifying: every *-equiv-* output must carry the verdict
+# M1 equivalence scenarios (13-19) RETIRED at the M3 contract flip: the 0.9.2 panel is no
+# longer the reference — scenarios 01-12 drive the native commands directly, so this loop
+# matching nothing is deliberate (kept for any future *-equiv-* self-verifying scenario).
 for eq in "$OUT"/*-equiv-*.txt; do
   [ -e "$eq" ] || continue
   grep -q "EQUIVALENT: YES" "$eq" || { echo "EQUIVALENCE RED: $(basename "$eq")"; grep -v "^$" "$eq" | tail -20; exit 1; }

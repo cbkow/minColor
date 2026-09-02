@@ -5,7 +5,7 @@
 // reopen makes counts install-dependent via backups? no — kept literal; sidecar adds no items).
 (function () { var N = "23-variant-strip-translate"; try {
   MincBase.savedProjectNamed("var23", "vst23");
-  MincBase.MinColor.applyPresetToCurrent("acescg");
+  MincBase.setUpProject("acescg");
   var comp = app.project.items.addComp("vst", 640, 360, 1, 3, 24);
   var ly = comp.layers.addSolid([0.5, 0.5, 0.5], "subject", 640, 360, 1);
   comp.openInViewer();

@@ -1,4 +1,3 @@
-[archive] golden=reference_acescg_00000.psd
 [archive] provenance=<dir>/provenance.json
 [archive] sidecar=<dir>/config-acescg-1066cdbf.ocio
-[state] project: items=4 working='Linear/ACEScg' pin='config-acescg-1066cdbf.ocio' bpc=32 engine=-
+[state] project: items=3 working='Linear/ACEScg' pin='config-acescg-1066cdbf.ocio' bpc=32 engine=-

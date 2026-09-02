@@ -3,7 +3,7 @@
 // (never reinterpreted), bare "minColor: <space>" names parse on variants.
 (function () { var N = "20-variant-sync"; try {
   MincBase.savedProject("vsync20");
-  MincBase.MinColor.applyPresetToCurrent("acescg");
+  MincBase.setUpProject("acescg");
   var comp = app.project.items.addComp("vsync", 640, 360, 1, 3, 24);
   var ly = comp.layers.addSolid([0.5, 0.5, 0.5], "subject", 640, 360, 1);
   comp.openInViewer();

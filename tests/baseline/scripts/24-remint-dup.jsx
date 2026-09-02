@@ -2,7 +2,7 @@
 // the walk re-mints on pass 1 and the bounded second pass converges (reminted=0).
 (function () { var N = "24-remint-dup"; try {
   MincBase.savedProject("remint24");
-  MincBase.MinColor.applyPresetToCurrent("acescg");
+  MincBase.setUpProject("acescg");
   var comp = app.project.items.addComp("remint", 640, 360, 1, 3, 24);
   var ly = comp.layers.addSolid([0.5, 0.5, 0.5], "subject", 640, 360, 1);
   comp.openInViewer();

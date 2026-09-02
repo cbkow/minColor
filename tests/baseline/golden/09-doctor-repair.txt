@@ -4,6 +4,8 @@
 [doctor-before] preset=acescg
 [doctor-before] status=green
 [doctor-before] text=acescg · Linear/ACEScg · central
+[repair] action=none
+[repair] status=green
 [doctor-after] canRepair=false
 [doctor-after] family=Linear
 [doctor-after] pin=config-acescg-1066cdbf.ocio

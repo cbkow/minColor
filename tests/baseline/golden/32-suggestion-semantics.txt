@@ -32,4 +32,4 @@
 [migrate] working=Display/Rec.709 Gamma 2.2
 [migrated] comp 'mig' layers=1
   layer 1 'subject' enabled=true guide=false adj=false
-    fx 1 [MINC CST] 'minColor: Rec.1886 → working'
+    fx 1 [MINC XFORM] 'minColor: Rec.1886 → working'

@@ -37,11 +37,14 @@
   MincBase.dumpComp("sdr22-after", comp);
   // phase 2: 709-video transform migrated INTO sdr22 -> remapped to Rec.1886, not removed
   MincBase.savedProjectNamed("sem32b", "sem32mig");
-  MincBase.MinColor.applyPresetToCurrent("acescg");
+  writeAnswers("acescg");
+  app.executeCommand(app.findMenuCommandId("minColor: Set Up Project"));
   var c2 = app.project.items.addComp("mig", 640, 360, 1, 3, 24);
   var ly2 = c2.layers.addSolid([0.5, 0.5, 0.5], "subject", 640, 360, 1);
   c2.openInViewer();
-  MincBase.MinColor.addInputTransform(ly2, "Gamma 2.4 Encoded Rec.709");
+  var fx2 = ly2.property("ADBE Effect Parade").addProperty("MINC XFORM");
+  fx2.name = "minColor: Gamma 2.4 Encoded Rec.709 → working";
+  app.executeCommand(app.findMenuCommandId("minColor: Sync From Names"));
   app.project.save();
   writeAnswers("sdr22");
   app.executeCommand(app.findMenuCommandId("minColor: Migrate Project"));

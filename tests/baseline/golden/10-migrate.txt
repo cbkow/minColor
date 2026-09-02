@@ -16,11 +16,11 @@
 [migrate] strippedPipeline=0
 [migrate] viewRenderRetargeted=0
 [migrate] working=Linear/Linear Rec.709
-[state] project: items=5 working='Linear/Linear Rec.709' pin='config-lin709-6f8ad009.ocio' bpc=32 engine=plugin
+[state] project: items=5 working='Linear/Linear Rec.709' pin='config-lin709-6f8ad009.ocio' bpc=32 engine=-
 [after] comp 'mig' layers=3
   layer 1 'minColor VIEW (guide)' enabled=true guide=true adj=true
-    fx 1 [MINC CST] 'minColor: view macOS Video View'
+    fx 1 [MINC VIEW] 'minColor: view macOS Video View'
   layer 2 'minColor RENDER' enabled=false guide=false adj=true
-    fx 1 [MINC CST] 'minColor: render Video Render'
+    fx 1 [MINC RENDER] 'minColor: render Video Render'
   layer 3 'ramp_srgb_iccp.png' enabled=true guide=false adj=false
     fx 1 [MINC CST] 'minColor: sRGB → working'
