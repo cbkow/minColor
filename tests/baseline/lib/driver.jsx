@@ -4,6 +4,20 @@
 (function () {
   var BASE = $.global.__mincBase, OUT = $.global.__mincOut;
   var marker = new File(OUT + "/DONE.txt");
+  // AE's sticky "last project settings" (working space, OCIO pin, bit depth) leak OUT of
+  // the suite: seedStickyPref rewrites them and every scenario project updates them, so the
+  // USER's next fresh project would inherit minColor's OCIO setup — competing with their
+  // Adobe-color-managed defaults (found live 2026-09-02). Capture now, restore at the end.
+  var STICKY_SEC = "After Effects Sticky Prefs", STICKY_KEY = "AE Last Project Settings";
+  var stickyOrig = null;
+  try { stickyOrig = app.preferences.getPrefAsString(STICKY_SEC, STICKY_KEY, PREFType.PREF_Type_MACHINE_INDEPENDENT); } catch (eSP) {}
+  function stickyRestore() {
+    if (stickyOrig === null) return;
+    try {
+      app.preferences.savePrefAsString(STICKY_SEC, STICKY_KEY, stickyOrig, PREFType.PREF_Type_MACHINE_INDEPENDENT);
+      app.preferences.saveToDisk();
+    } catch (eSR) {}
+  }
   try {
     app.beginSuppressDialogs();
     $.evalFile(BASE + "/lib/harness.jsxinc");
@@ -25,9 +39,11 @@
       }
     }
     try { app.project.close(CloseOptions.DO_NOT_SAVE_CHANGES); } catch (eC) {}
+    stickyRestore();                                   /* the user's fresh-project defaults survive */
     app.endSuppressDialogs(false);
     if (marker.open("w")) { marker.write("done\n"); marker.close(); }
   } catch (e) {
+    stickyRestore();
     if (marker.open("w")) { marker.write("DRIVER FATAL: " + e.toString() + "\n"); marker.close(); }
   }
 })();
