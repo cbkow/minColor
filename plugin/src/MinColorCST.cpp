@@ -225,10 +225,14 @@ static PF_Err EffectMainCommon(MincVerb verb, PF_Cmd cmd, PF_InData *in_data, PF
     return err;
 }
 
+#ifdef AE_OS_WIN
+/* legacy "MINC CST" entry — Windows-only from M3 step 8 (mac dropped PiPL 16000;
+   1.x instances there are benign placeholders that Migrate resurrects as variants) */
 extern "C" DllExport PF_Err EffectMain(PF_Cmd cmd, PF_InData *in_data, PF_OutData *out_data,
                                        PF_ParamDef *params[], PF_LayerDef *output, void *extra) {
     return EffectMainCommon(MINC_VERB_LEGACY, cmd, in_data, out_data, params, output, extra);
 }
+#endif
 extern "C" DllExport PF_Err EffectMainXform(PF_Cmd cmd, PF_InData *in_data, PF_OutData *out_data,
                                             PF_ParamDef *params[], PF_LayerDef *output, void *extra) {
     return EffectMainCommon(MINC_VERB_XFORM, cmd, in_data, out_data, params, output, extra);

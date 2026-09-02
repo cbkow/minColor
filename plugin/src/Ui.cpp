@@ -117,7 +117,8 @@ PF_Err MincHandleEvent(MincVerb verb, PF_InData *in_data, PF_OutData *out_data, 
         }
     }
     if (extra->e_type == PF_Event_DO_CLICK && extra->effect_win.area == PF_EA_CONTROL &&
-        verb != MINC_VERB_LEGACY)                            /* legacy badge stays display-only (M2) */
+        verb != MINC_VERB_LEGACY)                            /* legacy badge display-only — Windows-only
+                                                                code from M3 step 8 (mac has no legacy) */
         return HandleBadgeClick(verb, in_data, out_data, extra);
     if (extra->e_type != PF_Event_DRAW || extra->effect_win.area != PF_EA_CONTROL) return err;
 

@@ -82,12 +82,14 @@ static void SWalk(SEnv &e, AEGP_CompH compH, std::set<int32_t> &seen) {
         MincEnumLayerEffects(e.bp, e.id, ly, &fx);
         for (int k = 0; k < (int)fx.size(); ++k) {
             const std::string &mn = fx[k].match, &nm = fx[k].name;
-            bool isMinc = MincIsOurs(mn.c_str());       /* all five: legacy + the four variants */
+            bool isLegacy = (mn == MINC_MATCH_LEGACY);  /* M3 step 8: legacy is no longer live — */
+            bool isMincLive = MincIsOurs(mn.c_str()) && !isLegacy;   /* ours = the four variants  */
             bool isPipeline = (mn == "ADBE OCIO Display Transform" || mn == "ADBE OCIO Look Transform" ||
-                               mn == "ADBE OCIO Color Space Transform" || isMinc);
+                               mn == "ADBE OCIO Color Space Transform" || isMincLive || isLegacy);
             bool isGrade = (mn == "ADBE OCIO CDL Transform" || mn == "ADBE OCIO FILE Transform");
             bool doomed = e.all ? (isPipeline || isGrade)
-                                : (isPipeline && !isMinc && nm.compare(0, 10, "minColor: ") != 0);
+                                : isLegacy ||               /* a placeholder is dead weight in BOTH modes */
+                                  (isPipeline && !isMincLive && nm.compare(0, 10, "minColor: ") != 0);
             if (doomed) {
                 bool wl = MincLayerLocked(e.bp, ly);
                 if (wl) MincSetLayerLocked(e.bp, ly, false);

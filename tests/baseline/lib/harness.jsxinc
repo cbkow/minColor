@@ -141,6 +141,15 @@ var MincBase = (function () {
     app.project.save(f);
     return f;
   }
+  function openFixtureCopy(name, dirTag) {              // baked .aep fixtures: NEVER mutate the
+    closeNoSave();                                      // original — ceremonies save/patch in place
+    var dir = new Folder(OUTDIR + "/scratch-" + dirTag); if (!dir.exists) dir.create();
+    var src = new File(BASE + "/fixtures/" + name);
+    var dst = new File(dir.fsName + "/" + name);
+    src.copy(dst.fsName);
+    app.open(dst);
+    return dst;
+  }
   // ---- AEGP log tail (M2): the walk's counters are log-only; scenarios mark the log
   //      before a sync command and dump the appended "sync:" lines (verification-only read).
   var AEGP_LOG = "/tmp/minColorAEGP.log";
@@ -171,6 +180,7 @@ var MincBase = (function () {
            dumpReport: dumpReport, importFixture: importFixture, freshProject: freshProject,
            savedProject: savedProject, finish: finish, fail: fail, readJson: readJson,
            savedProjectNamed: savedProjectNamed, logMark: logMark, syncLinesSince: syncLinesSince,
+           openFixtureCopy: openFixtureCopy,
            SETTINGS: SETTINGS, writeArgs: writeArgs, writeAnswers: writeAnswers,
            runCmd: runCmd, setUpProject: setUpProject, seedStickyPref: seedStickyPref };
 })();

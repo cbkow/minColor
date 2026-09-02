@@ -2,8 +2,8 @@
 [walk] sync: instances=4 wrote=4 unparsed=0 reminted=0 placeholders=0 christened=0
 [after] comp 'remint' layers=2
   layer 1 'subject' enabled=true guide=false adj=false
-    fx 1 [MINC CST] 'minColor: sRGB → working'
+    fx 1 [MINC XFORM] 'minColor: sRGB → working'
     fx 2 [MINC XFORM] 'minColor: contain Display P3'
   layer 2 'subject' enabled=true guide=false adj=false
-    fx 1 [MINC CST] 'minColor: sRGB → working'
+    fx 1 [MINC XFORM] 'minColor: sRGB → working'
     fx 2 [MINC XFORM] 'minColor: contain Display P3'

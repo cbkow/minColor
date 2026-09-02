@@ -73,6 +73,17 @@ static UpResult Upsert(SPBasicSuite *bp, AEGP_PluginID id, AEGP_CompH comp, AEGP
         MincEnumLayerEffects(bp, id, sol, &fx);
         if (ex.fxIndex1 >= 1 && ex.fxIndex1 <= (int)fx.size()) {
             const std::string &mn = fx[ex.fxIndex1 - 1].match;
+            if (mn == MINC_MATCH_LEGACY) {                   /* M3 step 8: a placeholder transform is
+                                                                dead — resurrect as the owning variant */
+                int idxL = ex.fxIndex1;
+                if (!MincRemoveEffectAt(bp, id, sol, idxL)) { r.error = "legacy transform remove failed"; return r; }
+                int endIdx = 0;
+                AEGP_EffectRefH rfx = MincApplyByMatchWithName(bp, id, sol,
+                                          isView ? MINC_MATCH_VIEW : MINC_MATCH_RENDER, newName, &endIdx);
+                if (!rfx) { r.error = "variant apply failed"; return r; }
+                { Acq<AEGP_EffectSuite5> ef5(bp, kAEGPEffectSuite, kAEGPEffectSuiteVersion5); if (ef5) ef5->AEGP_DisposeEffect(rfx); }
+                if (endIdx != idxL) MincMoveEffect(bp, id, sol, endIdx, idxL);
+            } else {
             MincRenameEffectAt(bp, id, sol, ex.fxIndex1, newName);
             if (mn == "ADBE OCIO Color Space Transform") {   /* panel's native fallback: retarget popups */
                 Acq<AEGP_EffectSuite5> efs(bp, kAEGPEffectSuite, kAEGPEffectSuiteVersion5);
@@ -83,6 +94,7 @@ static UpResult Upsert(SPBasicSuite *bp, AEGP_PluginID id, AEGP_CompH comp, AEGP
                     MincSetPopupByName(bp, id, effH, 2, space, &e2);
                     efs->AEGP_DisposeEffect(effH);
                 }
+            }
             }
         }
     } else {

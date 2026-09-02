@@ -224,12 +224,12 @@ AEGP_InstalledEffectKey MincInstalledKey(SPBasicSuite *bp, AEGP_PluginID id) {
     while (efs->AEGP_GetNextInstalledEffect(k, &next) == A_Err_NONE && next != AEGP_InstalledEffectKey_NONE) {
         ++n;
         A_char mn[64] = "";
-        if (efs->AEGP_GetEffectMatchName(next, mn) == A_Err_NONE && !strcmp(mn, MINC_MATCH_LEGACY)) cached = next;   /* authoring stays legacy (P4) */
+        if (efs->AEGP_GetEffectMatchName(next, mn) == A_Err_NONE && !strcmp(mn, MINC_MATCH_XFORM)) cached = next;   /* M3 step 8: legacy unregistered on mac — scan the live XFORM */
         k = next;
     }
     double dt = MincNowMs() - t0;
     /* the iterate-vs-keyed-lookup answer, on the record (plan: M1 step 2) */
-    MincLog("effect-key scan: %d installed effects in %.2f ms; MINC CST key=%d", n, dt, (int)cached);
+    MincLog("effect-key scan: %d installed effects in %.2f ms; MINC XFORM key=%d", n, dt, (int)cached);
     (void)id;
     return cached;
 }

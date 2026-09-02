@@ -11,7 +11,8 @@
   comp.openInViewer();
   var fxp = ly.property("ADBE Effect Parade");
   function add(match, name) { var fx = fxp.addProperty(match); fx.name = name; }
-  add("MINC CST",    "minColor: Rec.709 → working");
+  // (legacy "MINC CST" row retired with mac registration in M3 step 8; the translate
+  //  not-in-config skip it exercised is covered by the verb contradiction below)
   add("MINC XFORM",  "minColor: sRGB → working");
   add("MINC VIEW",   "minColor: view macOS Video View");
   add("MINC LOOK",   "minColor: look Some Look");                 // preset has no looks -> removed

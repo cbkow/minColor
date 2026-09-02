@@ -158,8 +158,9 @@ if(APPLE)
   set_source_files_properties(src/UiMenuMac.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
   target_link_libraries(minColorCST PRIVATE "-framework AppKit")
 
+  # no EffectMain: legacy "MINC CST" registration retired on mac (M3 step 8)
   minc_mac_bundle(minColorCST src/MinColorCST_PiPL.r src/Info.plist.in
-                  "EffectMain;EffectMainXform;EffectMainView;EffectMainRender;EffectMainLook")
+                  "EffectMainXform;EffectMainView;EffectMainRender;EffectMainLook")
 
   # ============================== bundle 2: the ceremonies AEGP ==============================
   # AEgx package type, app Plug-ins folder, loads at AE launch. No OCIO — the admin-installed

@@ -62,10 +62,13 @@ PF_Err MincHandleEvent(MincVerb verb, PF_InData *in_data, PF_OutData *out_data, 
 PF_Err MincSmartPreRender(PF_InData *in_data, PF_OutData *out_data, PF_PreRenderExtra *extra);
 PF_Err MincSmartRender(PF_InData *in_data, PF_OutData *out_data, PF_SmartRenderExtra *extra);
 
-/* five registered effects, one shared implementation — the entry wrapper passes the verb
-   statically (MincVerb is in-process only; AE's stored match name is the durable form) */
+/* registered effects, one shared implementation — the entry wrapper passes the verb
+   statically (MincVerb is in-process only; AE's stored match name is the durable form).
+   EffectMain (legacy) is Windows-only from M3 step 8 — mac retired PiPL 16000. */
+#ifdef AE_OS_WIN
 extern "C" DllExport PF_Err EffectMain      (PF_Cmd cmd, PF_InData *in_data, PF_OutData *out_data,
                                              PF_ParamDef *params[], PF_LayerDef *output, void *extra);
+#endif
 extern "C" DllExport PF_Err EffectMainXform (PF_Cmd cmd, PF_InData *in_data, PF_OutData *out_data,
                                              PF_ParamDef *params[], PF_LayerDef *output, void *extra);
 extern "C" DllExport PF_Err EffectMainView  (PF_Cmd cmd, PF_InData *in_data, PF_OutData *out_data,

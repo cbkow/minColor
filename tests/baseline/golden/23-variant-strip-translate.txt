@@ -6,11 +6,10 @@
     vst/subject [foreign display]
 [after-strip-foreign] comp 'vst' layers=1
   layer 1 'subject' enabled=true guide=false adj=false
-    fx 1 [MINC CST] 'minColor: Rec.709 → working'
-    fx 2 [MINC XFORM] 'minColor: sRGB → working'
-    fx 3 [MINC VIEW] 'minColor: view macOS Video View'
-    fx 4 [MINC LOOK] 'minColor: look Some Look'
-    fx 5 [MINC VIEW] 'minColor: render Video Render'
+    fx 1 [MINC XFORM] 'minColor: sRGB → working'
+    fx 2 [MINC VIEW] 'minColor: view macOS Video View'
+    fx 3 [MINC LOOK] 'minColor: look Some Look'
+    fx 4 [MINC VIEW] 'minColor: render Video Render'
 [package] archive=[object Object]
 [package] failed=1
     vst/subject [minColor: look Some Look] — 'Some Look' not found among 27 entries
@@ -19,17 +18,15 @@
 [package] translated=2
 [after-package] comp 'vst' layers=1
   layer 1 'subject' enabled=true guide=false adj=false
-    fx 1 [MINC CST] 'minColor: Rec.709 → working'
-    fx 2 [ADBE OCIO Color Space Transform] 'minColor: sRGB → working'
-    fx 3 [ADBE OCIO Color Space Transform] 'minColor: view macOS Video View'
-    fx 4 [ADBE OCIO Look Transform] 'minColor: look Some Look'
-    fx 5 [MINC VIEW] 'minColor: render Video Render'
+    fx 1 [ADBE OCIO Color Space Transform] 'minColor: sRGB → working'
+    fx 2 [ADBE OCIO Color Space Transform] 'minColor: view macOS Video View'
+    fx 3 [ADBE OCIO Look Transform] 'minColor: look Some Look'
+    fx 4 [MINC VIEW] 'minColor: render Video Render'
 [strip-all] contained=0
 [strip-all] failed=0
 [strip-all] gradesLeft=0
 [strip-all] layersRemoved=0
-[strip-all] stripped=5
-    vst/subject [minColor: Rec.709 → working]
+[strip-all] stripped=4
     vst/subject [minColor: sRGB → working]
     vst/subject [minColor: view macOS Video View]
     vst/subject [minColor: look Some Look]

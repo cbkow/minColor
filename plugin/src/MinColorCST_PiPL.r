@@ -6,23 +6,21 @@
     #include <AE_General.r>
 #endif
 
-/* Five effects, one binary (2.0): legacy "MINC CST" (all verbs, name grammar — registered
-   through M2, retires in M3) plus four variants whose MATCH NAME carries the verb and whose
-   display name carries the space. All five share GlobalSetup, so the OutFlags hexes are
-   identical. Entry point strings must match the exported symbols byte-for-byte (extern "C").
+/* The four variants whose MATCH NAME carries the verb and whose display name carries the
+   space, plus — WINDOWS ONLY — legacy "MINC CST" (name-grammar verbs). Mac retired legacy
+   registration in M3 step 8: 1.x instances open as benign placeholders (RESULTS §35) and
+   Migrate resurrects them as variants. Windows keeps legacy until the M4 AEGP brings the
+   ceremonies there. All effects share GlobalSetup, so the OutFlags hexes are identical.
+   Entry point strings must match the exported symbols byte-for-byte (extern "C").
    Variants are mac-only until M4 proves the Windows PiPLtool multi-resource path.          */
 
+#ifdef AE_OS_WIN
 resource 'PiPL' (16000) {
     {
         Kind { AEEffect },
         Name { MINC_NAME_LEGACY },
         Category { MINC_CATEGORY },
-#ifdef AE_OS_WIN
         CodeWin64X86 { MINC_ENTRY_LEGACY },
-#else
-        CodeMacARM64 { MINC_ENTRY_LEGACY },
-        CodeMacIntel64 { MINC_ENTRY_LEGACY },
-#endif
         AE_PiPL_Version { 2, 0 },
         AE_Effect_Spec_Version { PF_PLUG_IN_VERSION, PF_PLUG_IN_SUBVERS },
         AE_Effect_Version { MINC_PIPL_VERSION_HEX },
@@ -34,6 +32,7 @@ resource 'PiPL' (16000) {
         AE_Effect_Support_URL { "https://github.com/" }
     }
 };
+#endif  /* legacy is Windows-only from M3 step 8 */
 
 #ifndef AE_OS_WIN
 

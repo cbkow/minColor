@@ -254,13 +254,49 @@ static void RebuildEffects(PEnv &e, const MincSuggestCtx &ctx, bool hasLooks, Re
                             if (!pm.valid) continue;
                             /* variant whose name-verb contradicts the match name: unparsed — leave, never reinterpret */
                             if (!MincKindMatchesVerb(pm.kind.c_str(), mv)) continue;
+                            bool legacy = (mv == MINC_VERB_LEGACY);
+                            /* legacy resurrection (M3 step 8): a MINC CST instance is a PLACEHOLDER
+                               wherever the legacy effect no longer registers (mac from 2.0) — remove
+                               it and re-author the variant that owns its kind, same name grammar,
+                               same slot. The post-reopen walk writes the popups from the name.      */
+                            auto resurrect = [&](const std::string &kind, const std::string &space) {
+                                const std::string nmC = nm;
+                                int idxL = k + 1;
+                                bool wl = MincLayerLocked(e.bp, ly);
+                                if (wl) MincSetLayerLocked(e.bp, ly, false);
+                                if (!MincRemoveEffectAt(e.bp, e.id, ly, idxL)) {
+                                    out->failed.push_back(label + " \xe2\x80\x94 remove failed");
+                                    if (wl) MincSetLayerLocked(e.bp, ly, true);
+                                    return;
+                                }
+                                std::string newName = (kind == "input")
+                                    ? "minColor: " + space + " \xe2\x86\x92 working"
+                                    : "minColor: " + kind + " " + space;
+                                const char *mfk = MincMatchForKind(kind.c_str());
+                                int endIdx = 0;
+                                AEGP_EffectRefH rfx = MincApplyByMatchWithName(e.bp, e.id, ly, mfk, newName, &endIdx);
+                                if (rfx) {
+                                    { Acq<AEGP_EffectSuite5> ef5(e.bp, kAEGPEffectSuite, kAEGPEffectSuiteVersion5); if (ef5) ef5->AEGP_DisposeEffect(rfx); }
+                                    if (endIdx != idxL) MincMoveEffect(e.bp, e.id, ly, endIdx, idxL);
+                                    out->rebuilt.push_back(label + " [" + nmC + "] legacy \xe2\x86\x92 variant");
+                                    fx[k].match = mfk;
+                                    fx[k].name = newName;
+                                    *touchedMinc = true;
+                                } else {
+                                    out->failed.push_back(label + " \xe2\x80\x94 legacy rebuild failed (removed; re-interpret)");
+                                    fx.erase(fx.begin() + k); --k;
+                                }
+                                if (wl) MincSetLayerLocked(e.bp, ly, true);
+                            };
                             if (pm.kind == "look") {
                                 if (!hasLooks) {
                                     if (MincRemoveEffectAt(e.bp, e.id, ly, k + 1)) {
                                         out->removed.push_back(label + " [" + nm + "] \xe2\x80\x94 looks do not exist in this preset");
                                         fx.erase(fx.begin() + k); --k;
                                     } else out->failed.push_back(label + " \xe2\x80\x94 remove failed");
+                                    continue;
                                 }
+                                if (legacy) resurrect("look", pm.space);      /* looks carry their space as-is */
                                 continue;
                             }
                             MincRemap rm = MincRemapSpace(pm.kind, pm.space, ctx);
@@ -269,6 +305,11 @@ static void RebuildEffects(PEnv &e, const MincSuggestCtx &ctx, bool hasLooks, Re
                                     (rm.identity ? out->remapped : out->failed).push_back(label + " \xe2\x80\x94 " + rm.note + (rm.identity ? "" : " (removed; re-interpret)"));
                                     fx.erase(fx.begin() + k); --k;
                                 } else out->failed.push_back(label + " \xe2\x80\x94 remove failed");
+                                continue;
+                            }
+                            if (legacy) {                                     /* changed or not: the placeholder dies */
+                                if (rm.changed) out->remapped.push_back(label + ": " + rm.note);
+                                resurrect(pm.kind, rm.space);
                                 continue;
                             }
                             if (rm.changed) {

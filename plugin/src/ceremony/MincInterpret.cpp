@@ -141,9 +141,10 @@ static void DoLayer(IEnv &e, AEGP_CompH compH, AEGP_LayerH ly, const std::string
         if (r0.changed) {
             bool wl0 = MincLayerLocked(e.bp, ly);
             if (wl0) MincSetLayerLocked(e.bp, ly, false);
-            if (!r0.space.empty() && (fx[haveIdx - 1].match == MINC_MATCH_LEGACY ||
-                                      fx[haveIdx - 1].match == MINC_MATCH_XFORM)) {
-                /* rename-in-place: the arrow grammar is valid on legacy AND XFORM */
+            if (!r0.space.empty() && fx[haveIdx - 1].match == MINC_MATCH_XFORM) {
+                /* rename-in-place is XFORM-only (M3 step 8): renaming a legacy PLACEHOLDER
+                   would leave a dead effect wearing a live name — legacy falls through to
+                   remove + re-author below (interpret's resurrection)                     */
                 MincRenameEffectAt(e.bp, e.id, ly, haveIdx, "minColor: " + r0.space + " \xe2\x86\x92 working");
                 if (wl0) MincSetLayerLocked(e.bp, ly, true);
                 e.rep->flagged.push_back(label + " \xe2\x80\x94 renamed " + r0.note);

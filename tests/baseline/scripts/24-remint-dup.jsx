@@ -7,7 +7,7 @@
   var ly = comp.layers.addSolid([0.5, 0.5, 0.5], "subject", 640, 360, 1);
   comp.openInViewer();
   var fxp = ly.property("ADBE Effect Parade");
-  var a = fxp.addProperty("MINC CST");   a.name = "minColor: sRGB → working";
+  var a = fxp.addProperty("MINC XFORM"); a.name = "minColor: sRGB → working";   // was MINC CST (mac-retired, M3 step 8)
   var b = fxp.addProperty("MINC XFORM"); b.name = "minColor: contain Display P3";
   app.executeCommand(app.findMenuCommandId("minColor: Sync From Names"));   // ids settle
   ly.duplicate();                                                            // dup shares both ids

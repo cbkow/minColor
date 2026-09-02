@@ -9,7 +9,8 @@
   comp.openInViewer();
   var fxp = ly.property("ADBE Effect Parade");
   function add(match, name) { var fx = fxp.addProperty(match); fx.name = name; }
-  add("MINC CST",    "minColor: Rec.709 → working");        // legacy: name carries the verb
+  // (legacy "MINC CST" row retired with mac registration in M3 step 8 — addProperty would
+  //  throw; placeholder coverage lives in 33-legacy-placeholders via the baked fixture)
   add("MINC XFORM",  "minColor: sRGB → working");           // arrow is XFORM-only
   add("MINC XFORM",  "minColor: contain Display P3");            // contain token lives on XFORM
   add("MINC VIEW",   "minColor: view macOS Video View");         // redundant token, agrees
