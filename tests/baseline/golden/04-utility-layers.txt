@@ -13,3 +13,6 @@
 layer 1 src=640x360 par=2
 layer 2 src=640x360 par=2
 layer 3 src=640x360 par=2
+resized layer 1 src=512x512 par=1 anchor=256,256
+resized layer 2 src=512x512 par=1 anchor=256,256
+resized layer 3 src=640x360 par=2 anchor=320,180

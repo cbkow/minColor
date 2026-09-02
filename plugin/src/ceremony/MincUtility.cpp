@@ -41,6 +41,55 @@ MincUtilLayer MincFindUtilityLayer(SPBasicSuite *bp, AEGP_PluginID id, AEGP_Comp
     return out;
 }
 
+/* make a utility SOLID cover its comp: footage dimensions + PAR follow the comp, and after
+   a resize the anchor/position re-center (anchor is in source pixels — it keeps its old
+   value across a footage resize, shifting the layer). A reused solid otherwise keeps its
+   birth size forever: 1.x-era layers, or layers made before a comp was resized — seen live
+   as "not filling the frame" on non-square comps (2026-09-02).                            */
+static void ConformSolidToComp(SPBasicSuite *bp, AEGP_PluginID id, AEGP_ItemSuite9 *its,
+                               AEGP_LayerSuite9 *lys, AEGP_ItemH compItem, AEGP_LayerH sol) {
+    Acq<AEGP_FootageSuite5> fts(bp, kAEGPFootageSuite, kAEGPFootageSuiteVersion5);
+    if (!fts) return;
+    AEGP_ItemH solItem = nullptr;
+    if (lys->AEGP_GetLayerSourceItem(sol, &solItem) != A_Err_NONE || !solItem) return;
+    A_long cw = 0, ch = 0, sw = 0, sh = 0;
+    its->AEGP_GetItemDimensions(compItem, &cw, &ch);
+    its->AEGP_GetItemDimensions(solItem, &sw, &sh);
+    if (cw > 0 && ch > 0 && (sw != cw || sh != ch)) {
+        if (fts->AEGP_SetSolidFootageDimensions(solItem, FALSE, cw, ch) == A_Err_NONE) {
+            Acq<AEGP_StreamSuite6> sts(bp, kAEGPStreamSuite, kAEGPStreamSuiteVersion6);
+            if (sts) {
+                AEGP_LayerStream which[2] = { AEGP_LayerStream_ANCHORPOINT, AEGP_LayerStream_POSITION };
+                for (int i = 0; i < 2; ++i) {
+                    AEGP_StreamRefH sr = nullptr;
+                    if (sts->AEGP_GetNewLayerStream(id, sol, which[i], &sr) != A_Err_NONE || !sr) continue;
+                    AEGP_StreamValue2 v;
+                    memset(&v, 0, sizeof(v));
+                    A_Time t0 = {0, 100};
+                    if (sts->AEGP_GetNewStreamValue(id, sr, AEGP_LTimeMode_LayerTime, &t0, FALSE, &v) == A_Err_NONE) {
+                        v.val.two_d.x = cw / 2.0;
+                        v.val.two_d.y = ch / 2.0;
+                        sts->AEGP_SetStreamValue(id, sr, &v);
+                        sts->AEGP_DisposeStreamValue(&v);
+                    }
+                    sts->AEGP_DisposeStream(sr);
+                }
+            }
+        }
+    }
+    A_Ratio cpar = {1, 1}, spar = {1, 1};
+    its->AEGP_GetItemPixelAspectRatio(compItem, &cpar);
+    its->AEGP_GetItemPixelAspectRatio(solItem, &spar);
+    if ((long)cpar.num * (long)spar.den != (long)spar.num * (long)cpar.den) {
+        AEGP_FootageInterp fi;
+        memset(&fi, 0, sizeof(fi));
+        if (fts->AEGP_GetFootageInterpretation(solItem, FALSE, &fi) == A_Err_NONE) {
+            fi.pix_aspect_ratio = cpar;
+            fts->AEGP_SetFootageInterpretation(solItem, FALSE, &fi);
+        }
+    }
+}
+
 struct UpResult { std::string action = "created", lookAction = "none", effName, error; bool disabledOther = false; };
 
 static UpResult Upsert(SPBasicSuite *bp, AEGP_PluginID id, AEGP_CompH comp, AEGP_ItemH compItem,
@@ -69,6 +118,7 @@ static UpResult Upsert(SPBasicSuite *bp, AEGP_PluginID id, AEGP_CompH comp, AEGP
         A_long idx = 0;
         lys->AEGP_GetLayerIndex(sol, &idx);
         if (idx > 0) lys->AEGP_ReorderLayer(sol, 0);
+        ConformSolidToComp(bp, id, its.p, lys.p, compItem, sol);
         std::vector<MincFxEntry> fx;                          /* rename/retarget the transform */
         MincEnumLayerEffects(bp, id, sol, &fx);
         if (ex.fxIndex1 >= 1 && ex.fxIndex1 <= (int)fx.size()) {
@@ -109,24 +159,9 @@ static UpResult Upsert(SPBasicSuite *bp, AEGP_PluginID id, AEGP_CompH comp, AEGP
             r.error = "solid creation failed";
             return r;
         }
-        {   /* panel parity (addSolid ..., comp.pixelAspect): the AEGP solid is born PAR 1.0,
-               so on an anamorphic comp it covers only the square-pixel center (seen live as
-               "16:9-limited" on a scope comp). Stamp the comp's PAR into the solid footage. */
-            A_Ratio par = {1, 1};
-            if (its->AEGP_GetItemPixelAspectRatio(compItem, &par) == A_Err_NONE &&
-                par.num != (A_long)par.den) {
-                Acq<AEGP_FootageSuite5> fts(bp, kAEGPFootageSuite, kAEGPFootageSuiteVersion5);
-                AEGP_ItemH solItem = nullptr;
-                if (fts && lys->AEGP_GetLayerSourceItem(sol, &solItem) == A_Err_NONE && solItem) {
-                    AEGP_FootageInterp fi;
-                    memset(&fi, 0, sizeof(fi));
-                    if (fts->AEGP_GetFootageInterpretation(solItem, FALSE, &fi) == A_Err_NONE) {
-                        fi.pix_aspect_ratio = par;
-                        fts->AEGP_SetFootageInterpretation(solItem, FALSE, &fi);
-                    }
-                }
-            }
-        }
+        /* panel parity (addSolid ..., comp.pixelAspect): the AEGP solid is born PAR 1.0 —
+           conform stamps the comp's PAR (dimensions already match at birth) */
+        ConformSolidToComp(bp, id, its.p, lys.p, compItem, sol);
         lys->AEGP_SetLayerFlag(sol, AEGP_LayerFlag_ADJUSTMENT_LAYER, TRUE);
         lys->AEGP_SetLayerLabel(sol, isView ? 14 : 9);        /* panel label colors (:1157) */
         lys->AEGP_ReorderLayer(sol, 0);
