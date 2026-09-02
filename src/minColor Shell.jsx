@@ -256,9 +256,18 @@
     return d;
   }
   function liveHeal(d) {                              // the panel's auto-heal, engine-computed target
+    // fresh-project defaults guard: AE sticks "last project settings" at CHANGE time, so
+    // capture the sticky pref and put it back after the heal — minColor never changes what
+    // the user's next fresh project looks like (the ceremonies guard this natively too)
+    var SS = "After Effects Sticky Prefs", SK = "AE Last Project Settings", stickyOrig = null;
+    try { stickyOrig = app.preferences.getPrefAsString(SS, SK, PREFType.PREF_Type_MACHINE_INDEPENDENT); } catch (eSg) {}
     var oldPin = app.project.ocioConfigurationFile || "(empty)";
     app.project.colorManagementSystem = 1;            // (CMS enum: OCIO)
     app.project.ocioConfigurationFile = d.repairTarget;
+    if (stickyOrig !== null) try {
+      app.preferences.savePrefAsString(SS, SK, stickyOrig, PREFType.PREF_Type_MACHINE_INDEPENDENT);
+      app.preferences.saveToDisk();
+    } catch (eSr) {}
     app.purge(PurgeTarget.ALL_CACHES);                // cached frames predate the heal
     runCmd("minColor: Sync From Names", {});          // refresh the effects against the healed authority
     var after = doctorNow();
