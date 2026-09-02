@@ -458,9 +458,17 @@ std::string MincApplyPresetToCurrent(SPBasicSuite *bp, AEGP_PluginID id, const s
     if (!MincRifxPatchProject(projPath.c_str(), cfg.c_str(), pr.pwcsJSON.c_str(), none, xmp, &perr))
         return "{ \"error\": " + JStr("patch failed: " + perr) + " }\n";
     if (!Reopen(e, projPath)) return "{ \"error\": \"reopen failed\" }\n";
+    int bpc = 0;
+    SetBitDepth(e, pr.family, &bpc);                     /* family depth (Linear=32, Display=16) — the
+                                                            reopened project otherwise keeps AE's sticky
+                                                            depth (a lin2020 Set Up once landed at 16,
+                                                            found live 2026-09-02; Migrate always did this) */
     MincAuthorityRefreshBp(bp, id);
     MincWriteMenus(bp, id);                              /* menus follow the new pin immediately */
-    return "{ \"working\": " + JStr(pr.workingSpaceLabel) + ", \"backup\": " + JStr(bpath) + " }\n";
+    char bpcS[16];
+    snprintf(bpcS, sizeof(bpcS), "%d", bpc);
+    return "{ \"working\": " + JStr(pr.workingSpaceLabel) + ", \"bitsPerChannel\": " + bpcS +
+           ", \"backup\": " + JStr(bpath) + " }\n";
 }
 
 std::string MincMigrateProject(SPBasicSuite *bp, AEGP_PluginID id, const std::string &presetKey) {
