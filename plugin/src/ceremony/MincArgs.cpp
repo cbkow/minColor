@@ -9,7 +9,16 @@ MincJsonPtr MincArgsConsume(const char *commandLabel) {
     std::string p = MincSettingsDir() + "/shell-args.json";
     MincJsonPtr j = MincJsonParseFile(p);
     if (!j) return nullptr;
-    if (!commandLabel || j->str("command") != commandLabel) return nullptr;   /* stale/foreign: leave it */
+    if (!commandLabel || j->str("command") != commandLabel) {
+        /* STALE args: the shell writes args and fires the SAME command synchronously, so a
+           file naming a different command is a leftover from a fire that never dispatched.
+           Left in place it silently hijacks the NEXT command of that name — a Set Up once
+           came up on the wrong preset this way (found live 2026-09-02). Discard it.       */
+        remove(p.c_str());
+        MincLog("args: stale for '%s' discarded at '%s' dispatch",
+                j->str("command").c_str(), commandLabel ? commandLabel : "(null)");
+        return nullptr;
+    }
     remove(p.c_str());                                    /* consumed — one dispatch per write */
     {   MincJsonPtr sil = j->get("silent");
         g_silent = (sil && sil->type == MincJsonValue::Bool && sil->boolV);
