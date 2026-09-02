@@ -23,4 +23,4 @@
   layer 2 'minColor RENDER' enabled=false guide=false adj=true
     fx 1 [MINC RENDER] 'minColor: render Video Render'
   layer 3 'ramp_srgb_iccp.png' enabled=true guide=false adj=false
-    fx 1 [MINC CST] 'minColor: sRGB → working'
+    fx 1 [MINC XFORM] 'minColor: sRGB → working'

@@ -10,11 +10,11 @@
 [after] comp 'interp' layers=2
   layer 1 'inner' enabled=true guide=false adj=false
   layer 2 'ramp_linear.exr' enabled=true guide=false adj=false
-    fx 1 [MINC CST] 'minColor: ACEScg → working'
+    fx 1 [MINC XFORM] 'minColor: ACEScg → working'
 [after-inner] comp 'inner' layers=2
   layer 1 'deep' enabled=true guide=false adj=false
   layer 2 'ramp_srgb_iccp.png' enabled=true guide=false adj=false
-    fx 1 [MINC CST] 'minColor: sRGB → working'
+    fx 1 [MINC XFORM] 'minColor: sRGB → working'
 [after-deep] comp 'deep' layers=1
   layer 1 'ramp_prores_nclc111.mov' enabled=true guide=false adj=false
-    fx 1 [MINC CST] 'minColor: Gamma 2.4 Encoded Rec.709 → working'
+    fx 1 [MINC XFORM] 'minColor: Gamma 2.4 Encoded Rec.709 → working'

@@ -53,20 +53,24 @@ EOF
 # never \$ — \$ is an invalid AppleScript escape and the launch fails silently)
 osascript -e "tell application \"$AE_APP\" to DoScript \"try{\$.evalFile(\\\"$WRAP\\\")}catch(e){var f=new File(\\\"$OUT/DONE.txt\\\");f.open(\\\"w\\\");f.write(\\\"OUTER ERROR: \\\"+e.toString());f.close();}\"" &
 OSA_PID=$!
+# restore runs on EVERY exit (a timed-out run once leaked quiet-mode + the stashed dev
+# shell into live state, found 2026-09-02) — armed here, after snapshot + stash happened
+restore_state() {
+  for pd in "$PANELS_GLOB"/*/Scripts/ScriptUI\ Panels; do
+    [ -f "$pd/minColor2 dev.jsx.suite-stash" ] && mv "$pd/minColor2 dev.jsx.suite-stash" "$pd/minColor2 dev.jsx" || true
+  done
+  # restore settings — but keep the handshake the AEGP just wrote: aegp-api.json is
+  # last-launch info by design, and restoring a stale copy would make it lie
+  [ -f "$SETTINGS/aegp-api.json" ] && cp "$SETTINGS/aegp-api.json" "$OUT/.aegp-api.json" || true
+  if [ -d "$SETTINGS_BAK" ]; then rm -rf "$SETTINGS"; cp -R "$SETTINGS_BAK" "$SETTINGS"; fi
+  [ -f "$OUT/.aegp-api.json" ] && mkdir -p "$SETTINGS" && cp "$OUT/.aegp-api.json" "$SETTINGS/aegp-api.json" || true
+}
+trap restore_state EXIT
+
 for i in $(seq 1 600); do [ -f "$OUT/DONE.txt" ] && break; sleep 2; done
 [ -f "$OUT/DONE.txt" ] || { echo "TIMEOUT: no DONE marker"; kill $OSA_PID 2>/dev/null || true; exit 1; }
 wait $OSA_PID 2>/dev/null || true
 ae_quit
-
-# put any stashed dev shell back
-for pd in "$PANELS_GLOB"/*/Scripts/ScriptUI\ Panels; do
-  [ -f "$pd/minColor2 dev.jsx.suite-stash" ] && mv "$pd/minColor2 dev.jsx.suite-stash" "$pd/minColor2 dev.jsx" || true
-done
-# restore settings — but keep the handshake the AEGP just wrote: aegp-api.json is
-# last-launch info by design, and restoring a stale copy would make it lie
-[ -f "$SETTINGS/aegp-api.json" ] && cp "$SETTINGS/aegp-api.json" "$OUT/.aegp-api.json" || true
-if [ -d "$SETTINGS_BAK" ]; then rm -rf "$SETTINGS"; cp -R "$SETTINGS_BAK" "$SETTINGS"; fi
-[ -f "$OUT/.aegp-api.json" ] && mkdir -p "$SETTINGS" && cp "$OUT/.aegp-api.json" "$SETTINGS/aegp-api.json" || true
 
 grep -q "^done" "$OUT/DONE.txt" || { echo "driver failed:"; cat "$OUT/DONE.txt"; exit 1; }
 rm -rf "$OUT"/scratch-* "$WRAP"

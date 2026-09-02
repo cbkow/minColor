@@ -73,20 +73,17 @@ bool MincRenameEffectAt(SPBasicSuite *bp, AEGP_PluginID id, AEGP_LayerH layerH,
 
 bool MincApplyMincWithName(SPBasicSuite *bp, AEGP_PluginID id, AEGP_LayerH layerH,
                            const std::string &grammarName, int targetIndex1) {
+    /* M3 authoring swap: interpret/migrate author the XFORM VARIANT (verb = match name),
+       no longer legacy MINC CST — grammar input/contain names are XFORM-legal. §34
+       ordering: nothing is written through the ref here, so dispose BEFORE the move. */
+    int newIdx = 0;
+    AEGP_EffectRefH effH = MincApplyByMatchWithName(bp, id, layerH, MINC_MATCH_XFORM, grammarName, &newIdx);
+    if (!effH) return false;
     Acq<AEGP_EffectSuite5> efs(bp, kAEGPEffectSuite, kAEGPEffectSuiteVersion5);
-    if (!efs) return false;
-    AEGP_InstalledEffectKey key = MincInstalledKey(bp, id);
-    if (!key) { MincLog("apply: MINC CST not installed"); return false; }
-    AEGP_EffectRefH effH = nullptr;
-    if (efs->AEGP_ApplyEffect(id, layerH, key, &effH) != A_Err_NONE || !effH) return false;
-    std::vector<MincFxEntry> fx;
-    MincEnumLayerEffects(bp, id, layerH, &fx);               /* new effect is the LAST parade child */
-    int newIdx = (int)fx.size();
-    bool ok = MincRenameEffectAt(bp, id, layerH, newIdx, grammarName);
-    if (ok && targetIndex1 > 0 && targetIndex1 != newIdx)
-        efs->AEGP_ReorderEffect(effH, targetIndex1 - 1);     /* AEGP effect index is 0-based */
-    efs->AEGP_DisposeEffect(effH);
-    return ok;
+    if (efs) efs->AEGP_DisposeEffect(effH);
+    if (targetIndex1 > 0 && targetIndex1 != newIdx)
+        MincMoveEffect(bp, id, layerH, newIdx, targetIndex1);
+    return true;
 }
 
 bool MincRemoveEffectAt(SPBasicSuite *bp, AEGP_PluginID id, AEGP_LayerH layerH, int index1) {

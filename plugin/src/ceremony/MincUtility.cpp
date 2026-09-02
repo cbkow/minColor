@@ -97,6 +97,24 @@ static UpResult Upsert(SPBasicSuite *bp, AEGP_PluginID id, AEGP_CompH comp, AEGP
             r.error = "solid creation failed";
             return r;
         }
+        {   /* panel parity (addSolid ..., comp.pixelAspect): the AEGP solid is born PAR 1.0,
+               so on an anamorphic comp it covers only the square-pixel center (seen live as
+               "16:9-limited" on a scope comp). Stamp the comp's PAR into the solid footage. */
+            A_Ratio par = {1, 1};
+            if (its->AEGP_GetItemPixelAspectRatio(compItem, &par) == A_Err_NONE &&
+                par.num != (A_long)par.den) {
+                Acq<AEGP_FootageSuite5> fts(bp, kAEGPFootageSuite, kAEGPFootageSuiteVersion5);
+                AEGP_ItemH solItem = nullptr;
+                if (fts && lys->AEGP_GetLayerSourceItem(sol, &solItem) == A_Err_NONE && solItem) {
+                    AEGP_FootageInterp fi;
+                    memset(&fi, 0, sizeof(fi));
+                    if (fts->AEGP_GetFootageInterpretation(solItem, FALSE, &fi) == A_Err_NONE) {
+                        fi.pix_aspect_ratio = par;
+                        fts->AEGP_SetFootageInterpretation(solItem, FALSE, &fi);
+                    }
+                }
+            }
+        }
         lys->AEGP_SetLayerFlag(sol, AEGP_LayerFlag_ADJUSTMENT_LAYER, TRUE);
         lys->AEGP_SetLayerLabel(sol, isView ? 14 : 9);        /* panel label colors (:1157) */
         lys->AEGP_ReorderLayer(sol, 0);

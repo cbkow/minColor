@@ -370,9 +370,9 @@ static void RebuildEffects(PEnv &e, const MincSuggestCtx &ctx, bool hasLooks, Re
                             int idxI = k + 1;
                             if (!MincRemoveEffectAt(e.bp, e.id, ly, idxI)) { out->failed.push_back(label + " \xe2\x80\x94 remove failed"); relock(); continue; }
                             std::string mname = "minColor: " + ri.space + " \xe2\x86\x92 working";
-                            if (MincApplyMincWithName(e.bp, e.id, ly, mname, idxI)) {   /* addInputTransform parity: MINC, plugin dialect */
+                            if (MincApplyMincWithName(e.bp, e.id, ly, mname, idxI)) {   /* rebuilt as the XFORM variant (M3 authoring swap) */
                                 out->rebuilt.push_back(label + " (" + rest + ")");
-                                fx[k].match = MINC_MATCH_LEGACY;
+                                fx[k].match = MINC_MATCH_XFORM;
                                 fx[k].name = mname;
                                 *touchedMinc = true;
                             } else {

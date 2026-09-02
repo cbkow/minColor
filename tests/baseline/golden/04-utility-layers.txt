@@ -10,3 +10,6 @@
   layer 2 'minColor RENDER' enabled=false guide=false adj=true
     fx 1 [MINC RENDER] 'minColor: render Video Render'
   layer 3 'subject' enabled=true guide=false adj=false
+layer 1 src=640x360 par=2
+layer 2 src=640x360 par=2
+layer 3 src=640x360 par=2

@@ -15,8 +15,9 @@ struct MincFxEntry { std::string match, name; };              /* parade order */
 bool MincEnumLayerEffects(SPBasicSuite *bp, AEGP_PluginID id, AEGP_LayerH layerH,
                           std::vector<MincFxEntry> *out);
 
-/* apply MINC CST + set the grammar display name; effect lands at the END of the parade.
-   targetIndex1 (1-based) moves it when > 0 and different. */
+/* apply the XFORM variant + set the grammar display name (M3 authoring swap — was legacy
+   MINC CST); effect lands at the END of the parade. targetIndex1 (1-based) moves it when
+   > 0 and different. */
 bool MincApplyMincWithName(SPBasicSuite *bp, AEGP_PluginID id, AEGP_LayerH layerH,
                            const std::string &grammarName, int targetIndex1);
 

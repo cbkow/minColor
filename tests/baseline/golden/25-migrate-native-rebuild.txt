@@ -29,5 +29,5 @@
   layer 2 'minColor RENDER' enabled=false guide=false adj=true
     fx 1 [ADBE OCIO Color Space Transform] 'minColor: render Video Render'
   layer 3 'subject' enabled=true guide=false adj=false
-    fx 1 [MINC CST] 'minColor: sRGB → working'
+    fx 1 [MINC XFORM] 'minColor: sRGB → working'
 [state] project: items=5 working='Linear/Linear Rec.709' pin='config-lin709-6f8ad009.ocio' bpc=32 engine=native
