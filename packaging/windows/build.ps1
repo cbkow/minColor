@@ -3,7 +3,7 @@
 # Output: dist-panel\minColor-<ver>.msi (unsigned; SmartScreen shows "unknown publisher" once per machine — Authenticode later signs the same MSI)
 $ErrorActionPreference = "Stop"
 $Root = Resolve-Path (Join-Path $PSScriptRoot "..\..")
-$Ver  = (Select-String -Path "$Root\src\minColor.jsxinc" -Pattern 'var VERSION = "([^"]+)"').Matches[0].Groups[1].Value
+$Ver  = (Select-String -Path "$Root\plugin\CMakeLists.txt" -Pattern 'set\(MINC_VERSION "([^"]+)"\)').Matches[0].Groups[1].Value
 $EngineVer = (Get-Content "$Root\plugin\prebuilt\windows\version.txt" -Raw).Trim()   # File/@DefaultVersion for the unversioned .aex
 # WiX 5.x, pinned: v7 (the unpinned default since 2026) refuses to run until its Open Source Maintenance Fee EULA is accepted,
 # and the .wxs is written against the v4/v5 schema. The util extension must match the tool's major.minor.
@@ -22,7 +22,8 @@ Mirror "$Root\config\dist" "$Stage\configs-central"
 Mirror "$Root\config\dist" "$Stage\configs-shared"
 foreach ($ae in "2025", "2026") {
   Mirror "$Root\dist-panel\minColor-data" "$Stage\panel-$ae\minColor-data"
-  Copy-Item "$Root\dist-panel\minColor.jsx" "$Stage\panel-$ae\minColor.jsx" -Force
+  # dist-panel\minColor.jsx is the 2.0 mac shell; Windows ships the legacy panel until the AEGP lands (M4)
+  Copy-Item "$Root\dist-panel\windows-panel\minColor.jsx" "$Stage\panel-$ae\minColor.jsx" -Force
 }
 $Out = "$Root\dist-panel\minColor-$Ver.msi"
 wix build "$PSScriptRoot\minColor.wxs" -ext WixToolset.Util.wixext -arch x64 `
