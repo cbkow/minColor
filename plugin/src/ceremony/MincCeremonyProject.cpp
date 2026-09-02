@@ -433,40 +433,6 @@ static void RebuildEffects(PEnv &e, const MincSuggestCtx &ctx, bool hasLooks, Re
 }
 
 /* ---------------- ceremonies ---------------- */
-/* fresh-project defaults guard (2026-09-02, Chris's "never compete with Adobe color space"):
-   AE records its sticky "last project settings" the moment project settings CHANGE — probed:
-   a restore SURVIVES quitting AE with the changed project still open. Every pin-touching
-   ceremony captures the sticky blob on entry and puts it back on every exit, so minColor
-   never changes what the user's next fresh project looks like. Capture failure = inert. */
-struct StickyGuard {
-    SPBasicSuite *bp;
-    std::string orig;
-    bool have = false;
-    static const char *SEC() { return "After Effects Sticky Prefs"; }
-    static const char *KEY() { return "AE Last Project Settings"; }
-    explicit StickyGuard(SPBasicSuite *b) : bp(b) {
-        Acq<AEGP_PersistentDataSuite4> pds(bp, kAEGPPersistentDataSuite, kAEGPPersistentDataSuiteVersion4);
-        AEGP_PersistentBlobH blob = nullptr;
-        if (!pds || pds->AEGP_GetApplicationBlob(AEGP_PersistentType_MACHINE_INDEPENDENT, &blob) != A_Err_NONE || !blob) return;
-        A_u_long need = 0;
-        char probe[8] = "";
-        pds->AEGP_GetString(blob, SEC(), KEY(), nullptr, sizeof(probe), probe, &need);
-        if (need == 0) return;
-        std::vector<char> buf((size_t)need + 1, 0);
-        if (pds->AEGP_GetString(blob, SEC(), KEY(), nullptr, (A_u_long)buf.size(), buf.data(), nullptr) == A_Err_NONE && buf[0]) {
-            orig.assign(buf.data());
-            have = true;
-        }
-    }
-    ~StickyGuard() {
-        if (!have) return;
-        Acq<AEGP_PersistentDataSuite4> pds(bp, kAEGPPersistentDataSuite, kAEGPPersistentDataSuiteVersion4);
-        AEGP_PersistentBlobH blob = nullptr;
-        if (!pds || pds->AEGP_GetApplicationBlob(AEGP_PersistentType_MACHINE_INDEPENDENT, &blob) != A_Err_NONE || !blob) return;
-        pds->AEGP_SetString(blob, SEC(), KEY(), orig.c_str());
-    }
-};
-
 std::string MincApplyPresetToCurrent(SPBasicSuite *bp, AEGP_PluginID id, const std::string &presetKey) {
     AEGP_SuiteHandler suites(bp);
     Acq<AEGP_ProjSuite6> pjs(bp, kAEGPProjSuite, kAEGPProjSuiteVersion6);
@@ -477,7 +443,6 @@ std::string MincApplyPresetToCurrent(SPBasicSuite *bp, AEGP_PluginID id, const s
     Acq<AEGP_UtilitySuite6> uts(bp, kAEGPUtilitySuite, kAEGPUtilitySuiteVersion6);
     PEnv e;
     if (!AcquireEnv(bp, id, suites, e, pjs, its, cps, lys, fts, uts)) return "{ \"error\": \"suite acquire failed\" }\n";
-    StickyGuard sticky(bp);                              /* fresh-project defaults survive this ceremony */
     MincPresetInfo pr = MincPresetMeta(presetKey);
     if (!pr.valid) return "{ \"error\": " + JStr("unknown preset " + presetKey) + " }\n";
     std::string projPath = ProjPath(e);
@@ -508,7 +473,6 @@ std::string MincMigrateProject(SPBasicSuite *bp, AEGP_PluginID id, const std::st
     Acq<AEGP_UtilitySuite6> uts(bp, kAEGPUtilitySuite, kAEGPUtilitySuiteVersion6);
     PEnv e;
     if (!AcquireEnv(bp, id, suites, e, pjs, its, cps, lys, fts, uts)) return "{ \"error\": \"suite acquire failed\" }\n";
-    StickyGuard sticky(bp);                              /* fresh-project defaults survive this ceremony */
     MincPresetInfo pr = MincPresetMeta(presetKey);
     if (!pr.valid) return "{ \"error\": " + JStr("unknown preset " + presetKey) + " }\n";
     std::string projPath = ProjPath(e);
@@ -621,7 +585,6 @@ std::string MincPackageForAnyAE(SPBasicSuite *bp, AEGP_PluginID id) {
     Acq<AEGP_UtilitySuite6> uts(bp, kAEGPUtilitySuite, kAEGPUtilitySuiteVersion6);
     PEnv e;
     if (!AcquireEnv(bp, id, suites, e, pjs, its, cps, lys, fts, uts)) return "{ \"error\": \"suite acquire failed\" }\n";
-    StickyGuard sticky(bp);                              /* fresh-project defaults survive this ceremony */
     std::string projPath = ProjPath(e);
     if (projPath.empty()) return "{ \"error\": \"save the project first\" }\n";
 
@@ -675,7 +638,6 @@ std::string MincRepairProject(SPBasicSuite *bp, AEGP_PluginID id) {
     Acq<AEGP_UtilitySuite6> uts(bp, kAEGPUtilitySuite, kAEGPUtilitySuiteVersion6);
     PEnv e;
     if (!AcquireEnv(bp, id, suites, e, pjs, its, cps, lys, fts, uts)) return "{ \"error\": \"suite acquire failed\" }\n";
-    StickyGuard sticky(bp);                              /* fresh-project defaults survive this ceremony */
     std::string projPath = ProjPath(e);
     if (projPath.empty()) return "{ \"error\": \"save the project first\" }\n";
     MincAuthorityRefreshBp(bp, id);
