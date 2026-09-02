@@ -242,10 +242,18 @@
 
   var currentPreset = null, currentPin = null;
   function doctorNow(passive) {
-    /* passive (heartbeat) ticks yield when an UNCONSUMED shell-args file exists — another
-       writer (a click mid-flight, the test suite) owns the seam right now               */
-    if (passive && (new File(SETTINGS + "/shell-args.json")).exists) return null;
-    return runCmd("minColor: Doctor", {}, "doctor");
+    if (!passive) return runCmd("minColor: Doctor", {}, "doctor");   // user-initiated: run the command
+    /* heartbeat is READ-ONLY: the AEGP diagnoses on idle and writes doctor-last.json on
+       change — a panel timer must NEVER executeCommand (AE dispatch mid-startup or
+       mid-project-load throws script errors and can kill the panel's drawing).         */
+    var f = new File(SETTINGS + "/reports/doctor-last.json");
+    if (!f.exists || !f.open("r")) return null;
+    var s = f.read(); f.close();
+    var changed = (s !== $.global.__minColorDocRaw);
+    $.global.__minColorDocRaw = s;
+    var d; try { d = eval("(" + s + ")"); } catch (eP) { return null; }
+    if (d) d.__fresh = changed;                       // heal only on TRANSITION, never every tick
+    return d;
   }
   function liveHeal(d) {                              // the panel's auto-heal, engine-computed target
     var oldPin = app.project.ocioConfigurationFile || "(empty)";
@@ -269,7 +277,7 @@
     try {
       var d = doctorNow(passive);
       if (!d) { if (!passive) docText.text = "no doctor report"; return; }
-      if (d.status === "yellow" && d.repairTarget) { try { d = liveHeal(d); } catch (eAR) {} }
+      if (d.status === "yellow" && d.repairTarget && (!passive || d.__fresh)) { try { d = liveHeal(d); } catch (eAR) {} }
       var pk = d.preset || null, pin = d.pin || null;
       if (pk !== currentPreset || pin !== currentPin) { try { repopulateMenus(); currentPreset = pk; currentPin = pin; } catch (eRp) {} }
       var colors = { green: [0.28, 0.82, 0.4, 1], yellow: [0.95, 0.78, 0.18, 1], red: [0.94, 0.32, 0.28, 1], unmanaged: [0.55, 0.55, 0.55, 1] };

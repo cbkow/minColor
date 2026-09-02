@@ -205,15 +205,29 @@ static void CmdUtility(void) {
 static A_Err IdleHook(AEGP_GlobalRefcon, AEGP_IdleRefcon, A_long *max_sleepPL) {
     static unsigned long lastSyncedGen = 0;
     static bool keyScanned = false;
+    static double lastDoctorMs = 0;
+    static std::string lastDoctorJson;
     if (g_pica && g_id) {
         if (!keyScanned) { keyScanned = true; MincInstalledKey(g_pica, g_id); }   /* timed scan, once (RESULTS §31) */
         MincAuthorityRefreshBp(g_pica, g_id);
         MincAuthoritySnapshot s;                        /* project/preset changed -> names are the durable
                                                            store: re-derive every instance's state */
-        if (MincAuthorityGet(&s) && s.generation != lastSyncedGen) {
+        bool haveSnap = MincAuthorityGet(&s);
+        if (haveSnap && s.generation != lastSyncedGen) {
             lastSyncedGen = s.generation;
             MincWriteMenus(g_pica, g_id);       /* menus follow the pin — fresh BEFORE the walk */
             MincSyncFromNames(g_pica, g_id);
+        }
+        /* doctor heartbeat: the AEGP diagnoses on idle and writes the report ON CHANGE —
+           the shell only READS it. A panel timer must never executeCommand: AE dispatch
+           mid-startup/mid-project-load throws script errors and wedges launches (the
+           2026-09-02 "buttons disappear" class). Idle only pumps when AE is healthy, so
+           the write moment is inherently a safe moment.                                 */
+        double nowMs = MincNowMs();
+        if (haveSnap && nowMs - lastDoctorMs > 5000) {
+            lastDoctorMs = nowMs;
+            std::string j = MincDoctorDiagnose(g_pica, g_id).toJson();
+            if (j != lastDoctorJson) { lastDoctorJson = j; MincWriteReport("doctor", j); }
         }
         char reason[32] = "";
         if (MincConsumeWalkMarker(reason, sizeof(reason))) {
