@@ -16,6 +16,8 @@
 #include "../ceremony/MincUtility.h"
 #include "../ceremony/MincTranslate.h"
 #include <cstdio>
+#include <sys/stat.h>
+#include <vector>
 
 static AEGP_PluginID  g_id = 0;
 static SPBasicSuite  *g_pica = nullptr;
@@ -40,8 +42,10 @@ static void CmdStripForeign(void);
 static void CmdStripAll(void);
 static void CmdArchive(void);
 static void CmdPackage(void);
+static void CmdProbeN0(void);                            /* TEMPORARY — 2.0N N0 probes, removed after */
 
 static MincCommandDef g_commands[] = {
+    { "minColor: Probe N0",            CmdProbeN0,     0 },   /* TEMPORARY */
     { "minColor: Sync From Names",     CmdSync,        0 },
     { "minColor: About",               CmdAbout,       0 },
     { "minColor: Doctor",              CmdDoctor,      0 },
@@ -138,6 +142,44 @@ static void CmdInterpretSel(void) {
     suites.UtilitySuite6()->AEGP_ReportInfoUnicode(g_id, u16);
 }
 
+/* TEMPORARY (2.0N probe N0a): read back popup selections of native minColor-named effects
+   on the active comp — proves MincGetPopupText for the walk's drift detection. */
+static void CmdProbeN0(void) {
+    MincArgsConsume("minColor: Probe N0");
+    Acq<AEGP_ItemSuite9>  its(g_pica, kAEGPItemSuite,  kAEGPItemSuiteVersion9);
+    Acq<AEGP_CompSuite12> cps(g_pica, kAEGPCompSuite,  kAEGPCompSuiteVersion12);
+    Acq<AEGP_LayerSuite9> lys(g_pica, kAEGPLayerSuite, kAEGPLayerSuiteVersion9);
+    Acq<AEGP_EffectSuite5> efs(g_pica, kAEGPEffectSuite, kAEGPEffectSuiteVersion5);
+    if (!its || !cps || !lys || !efs) { MincLog("probeN0: suites"); return; }
+    AEGP_ItemH active = nullptr;
+    its->AEGP_GetActiveItem(&active);
+    AEGP_ItemType aty = AEGP_ItemType_NONE;
+    if (active) its->AEGP_GetItemType(active, &aty);
+    if (!active || aty != AEGP_ItemType_COMP) { MincLog("probeN0: no active comp"); return; }
+    AEGP_CompH comp = nullptr;
+    cps->AEGP_GetCompFromItem(active, &comp);
+    A_long nL = 0;
+    lys->AEGP_GetCompNumLayers(comp, &nL);
+    for (A_long li = 0; li < nL; ++li) {
+        AEGP_LayerH ly = nullptr;
+        if (lys->AEGP_GetCompLayerByIndex(comp, li, &ly) != A_Err_NONE || !ly) continue;
+        std::vector<MincFxEntry> fx;
+        MincEnumLayerEffects(g_pica, g_id, ly, &fx);
+        for (int k = 0; k < (int)fx.size(); ++k) {
+            if (fx[k].name.compare(0, 10, "minColor: ") != 0) continue;
+            AEGP_EffectRefH effH = nullptr;
+            if (efs->AEGP_GetLayerEffectByIndex(g_id, ly, k, &effH) != A_Err_NONE || !effH) continue;
+            std::string p1, p2;
+            bool ok1 = MincGetPopupText(g_pica, g_id, effH, 1, &p1);
+            bool ok2 = MincGetPopupText(g_pica, g_id, effH, 2, &p2);
+            MincLog("probeN0: [%s] '%s' popup1=%s('%s') popup2=%s('%s')",
+                    fx[k].match.c_str(), fx[k].name.c_str(),
+                    ok1 ? "ok" : "FAIL", p1.c_str(), ok2 ? "ok" : "FAIL", p2.c_str());
+            efs->AEGP_DisposeEffect(effH);
+        }
+    }
+}
+
 static void ReportCeremony(const char *name, const std::string &json) {
     MincWriteReport(name, json);
     MincLog("%s: %s", name, json.substr(0, 200).c_str());
@@ -229,6 +271,22 @@ static A_Err IdleHook(AEGP_GlobalRefcon, AEGP_IdleRefcon, A_long *max_sleepPL) {
             std::string j = MincDoctorDiagnose(g_pica, g_id).toJson();
             if (j != lastDoctorJson) { lastDoctorJson = j; MincWriteReport("doctor", j); }
         }
+        {   /* TEMPORARY (2.0N probe N0b): marker-triggered Repair FROM IDLE — proves the
+               save→patch→reopen ceremony is stable outside a CommandHook (the open-time
+               auto-heal context). Reentrancy-guarded; marker consumed before running.   */
+            static bool healInFlight = false;
+            std::string mk = MincSettingsDir() + "/probe-heal";
+            struct stat stM {};
+            if (!healInFlight && ::stat(mk.c_str(), &stM) == 0) {
+                healInFlight = true;
+                remove(mk.c_str());
+                MincLog("probeN0b: repair from idle BEGIN");
+                std::string r = MincRepairProject(g_pica, g_id);
+                MincWriteReport("repair", r);
+                MincLog("probeN0b: repair from idle END %s", r.substr(0, 160).c_str());
+                healInFlight = false;
+            }
+        }
         char reason[32] = "";
         if (MincConsumeWalkMarker(reason, sizeof(reason))) {
             /* effect-armed walk (delete-first: a drop landing mid-walk re-creates the marker
@@ -288,9 +346,11 @@ extern "C" DllExport A_Err MincAegpEntry(struct SPBasicSuite *pica_basicP, A_lon
             MincLog("commands registered=%d idle=%d hook=%d menuhook=%d", registered, (int)e2, (int)e3, (int)e4);
         }
         if (registered > 0) {
-            const char *labels[16];
-            for (int i = 0; i < g_nCommands && i < 16; ++i) labels[i] = g_commands[i].label;
-            MincWriteHandshake(labels, g_nCommands);     /* AFTER registration — never lies */
+            std::vector<const char *> labels;            /* sized to the table — never a fixed cap
+                                                            (a 17th command overran labels[16] and
+                                                            crashed at launch, 2026-09-03) */
+            for (int i = 0; i < g_nCommands; ++i) labels.push_back(g_commands[i].label);
+            MincWriteHandshake(labels.data(), g_nCommands);   /* AFTER registration — never lies */
         } else { MincLog("command registration FAILED"); out = A_Err_GENERIC; }
     } catch (...) { MincLog("AegpEntry: exception"); out = A_Err_GENERIC; }
     return out;
