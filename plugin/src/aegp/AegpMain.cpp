@@ -62,11 +62,28 @@ static MincCommandDef g_commands[] = {
 };
 static const int g_nCommands = (int)(sizeof(g_commands) / sizeof(g_commands[0]));
 
+/* Force the active comp to re-render its current frame. Our effects read authority (working
+   space/config) + arb at render time, all invisible to AE's seq-data fingerprint, so an
+   authority or arb change made from the AEGP leaves the cached frame until the user scrubs.
+   PF_TouchActiveItem marks the active item dirty — O(1), NO comp walk — and GuidMix keys the
+   new cache. Effect-side the badge does this too (Ui.cpp); this is the AEGP path for the walk.
+   PF_TouchActiveItem takes no args (app-global active item), so it's callable via the basic
+   suite from an AEGP. (2026-09-03) */
+static void MincTouchActiveItem(void) {
+    if (!g_pica) return;
+    const void *sv = nullptr;
+    if (g_pica->AcquireSuite(kPFAdvItemSuite, kPFAdvItemSuiteVersion1, &sv) == kSPNoError && sv) {
+        ((const PF_AdvItemSuite1 *)sv)->PF_TouchActiveItem();
+        g_pica->ReleaseSuite(kPFAdvItemSuite, kPFAdvItemSuiteVersion1);
+    }
+}
+
 /* ---------------- handlers ---------------- */
 static void CmdSync(void) {
     MincAuthorityRefreshBp(g_pica, g_id);               /* refresh FIRST — the sync payload carries
                                                            authority state (idle hook does this order) */
     MincSyncFromNames(g_pica, g_id, true);              /* panel/user-invoked sync christens by intent */
+    MincTouchActiveItem();                              /* names/arbs changed -> re-render */
 }
 
 static void CmdAbout(void) {
@@ -102,6 +119,7 @@ static void CmdDoctor(void) {
 static void CmdInterpret(void) {
     MincArgsConsume("minColor: Interpret Timeline");
     MincInterpretReport r = MincInterpretTimeline(g_pica, g_id);
+    MincTouchActiveItem();                               /* new/changed CSTs -> re-render now */
     MincWriteReport("interpret", r.toJson());
     MincLog("interpret: added=%d skipped=%d flagged=%d failed=%d identity=%d contained=%d%s%s",
             (int)r.added.size(), (int)r.skipped.size(), (int)r.flagged.size(),
@@ -122,6 +140,7 @@ static void CmdInterpretSel(void) {
         if (a) space = a->str("space");
     }
     MincInterpretReport r = MincInterpretSelection(g_pica, g_id, space);
+    MincTouchActiveItem();                               /* new/changed CSTs -> re-render now */
     MincWriteReport("interpret-selected", r.toJson());
     MincLog("interpret-selected: added=%d skipped=%d flagged=%d failed=%d%s%s",
             (int)r.added.size(), (int)r.skipped.size(), (int)r.flagged.size(), (int)r.failed.size(),
@@ -220,6 +239,8 @@ static A_Err IdleHook(AEGP_GlobalRefcon, AEGP_IdleRefcon, A_long *max_sleepPL) {
             lastSyncedGen = s.generation;
             MincWriteMenus(g_pica, g_id);       /* menus follow the pin — fresh BEFORE the walk */
             MincSyncFromNames(g_pica, g_id);
+            MincTouchActiveItem();              /* authority changed (incl. a MANUAL working-space
+                                                   change) -> re-render the current frame */
         }
         /* doctor heartbeat: the AEGP diagnoses on idle and writes the report ON CHANGE —
            the shell only READS it. A panel timer must never executeCommand: AE dispatch
