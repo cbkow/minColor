@@ -107,11 +107,9 @@ static void CmdInterpret(void) {
             (int)r.added.size(), (int)r.skipped.size(), (int)r.flagged.size(),
             (int)r.failed.size(), (int)r.identity.size(), (int)r.contained.size(),
             r.error.empty() ? "" : " error=", r.error.c_str());
-    if (MincQuietMode() || MincArgsTakeSilent()) return;
+    if (MincQuietMode() || MincArgsTakeSilent() || r.error.empty()) return;   /* success: silent (log+report) */
     char msg[256];
-    if (!r.error.empty()) snprintf(msg, sizeof(msg), "Interpret Timeline: %s", r.error.c_str());
-    else snprintf(msg, sizeof(msg), "Interpret Timeline: %d added, %d skipped, %d flagged, %d failed",
-                  (int)r.added.size(), (int)r.skipped.size(), (int)r.flagged.size(), (int)r.failed.size());
+    snprintf(msg, sizeof(msg), "minColor Interpret Timeline: %s", r.error.c_str());
     AEGP_SuiteHandler suites(g_pica);
     A_UTF16Char u16[300];
     MincU8ToU16(msg, u16, 300);
@@ -128,11 +126,9 @@ static void CmdInterpretSel(void) {
     MincLog("interpret-selected: added=%d skipped=%d flagged=%d failed=%d%s%s",
             (int)r.added.size(), (int)r.skipped.size(), (int)r.flagged.size(), (int)r.failed.size(),
             r.error.empty() ? "" : " error=", r.error.c_str());
-    if (MincQuietMode() || MincArgsTakeSilent()) return;
+    if (MincQuietMode() || MincArgsTakeSilent() || r.error.empty()) return;   /* success: silent (log+report) */
     char msg[256];
-    if (!r.error.empty()) snprintf(msg, sizeof(msg), "Interpret Selected: %s", r.error.c_str());
-    else snprintf(msg, sizeof(msg), "Interpret Selected: %d added, %d skipped, %d flagged, %d failed",
-                  (int)r.added.size(), (int)r.skipped.size(), (int)r.flagged.size(), (int)r.failed.size());
+    snprintf(msg, sizeof(msg), "minColor Interpret Selected: %s", r.error.c_str());
     AEGP_SuiteHandler suites(g_pica);
     A_UTF16Char u16[300];
     MincU8ToU16(msg, u16, 300);
@@ -142,8 +138,14 @@ static void CmdInterpretSel(void) {
 static void ReportCeremony(const char *name, const std::string &json) {
     MincWriteReport(name, json);
     MincLog("%s: %s", name, json.substr(0, 200).c_str());
-    if (MincQuietMode() || MincArgsTakeSilent()) return;
-    std::string msg = std::string(name) + (json.find("\"error\"") != std::string::npos ? ": FAILED — see report" : ": done");
+    /* success is silent (the change is visible + logged + in reports/<name>-last.json);
+       only a FAILURE surfaces, and it shows the REASON (actionable) — not a detail dump. */
+    size_t ei = json.find("\"error\"");
+    if (MincQuietMode() || MincArgsTakeSilent() || ei == std::string::npos) return;
+    std::string reason;                                  /* pull the "error":"..." value */
+    size_t q1 = json.find('"', json.find(':', ei) + 1);
+    if (q1 != std::string::npos) { size_t q2 = json.find('"', q1 + 1); if (q2 != std::string::npos) reason = json.substr(q1 + 1, q2 - q1 - 1); }
+    std::string msg = std::string("minColor ") + name + " failed" + (reason.empty() ? "" : ": " + reason);
     AEGP_SuiteHandler suites(g_pica);
     A_UTF16Char u16[300];
     MincU8ToU16(msg.c_str(), u16, 300);

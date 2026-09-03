@@ -383,9 +383,8 @@
       });
     } else {
       guard("Migrate", function () {
-        var msg = "Preset: " + presetLabel + "\nFootage level becomes NOTHING (assignments harvested as suggestions)." +
-                  "\n\nSave, back up, patch and reopen now?";
-        if (!confirm(msg)) return "cancelled";
+        // no confirm(): clicking "Migrate Current" in the dialog (which explains the op) IS the
+        // confirmation, and migrate backs up first — a second yes/no was one popup too many.
         var r = runCmd("minColor: Migrate Project", { preset: presetKey }, "migrate");
         try { runCmd("minColor: Utility Layers", { view: ddView.selection ? ddView.selection.text : null, render: ddRender.selection ? ddRender.selection.text : null }, "utility-layers"); } catch (eU) {}
         try { repopulateMenus(); } catch (eRp2) {}
@@ -408,14 +407,9 @@
 
   // ---- Interpret ----
   function interpretDetail(label, r) {
-    var detail = [];
-    if (r.added && r.added.length) detail.push("ADDED:\n  " + cap(r.added));
-    if (r.failed && r.failed.length) detail.push("FAILED:\n  " + cap(r.failed));
-    if (r.flagged && r.flagged.length) detail.push("FLAGGED:\n  " + cap(r.flagged));
-    if (r.identity && r.identity.length) detail.push("ALREADY WORKING-SPACE (identity, no CST needed):\n  " + cap(r.identity));
-    if (r.contained && r.contained.length) detail.push("CONTAINED (treated as media, interior skipped):\n  " + cap(r.contained));
-    if (r.skipped && r.skipped.length) detail.push("SKIPPED:\n  " + cap(r.skipped));
-    if (detail.length) alert("minColor \u2014 " + label + "\n\n" + detail.join("\n\n"));
+    /* success is silent \u2014 the summary lands on the status line (the return value below) and
+       the full breakdown is in reports/interpret*-last.json. Only FAILURES pop a dialog. */
+    if (r.failed && r.failed.length) alert("minColor \u2014 " + label + " \u2014 failed\n\n  " + cap(r.failed));
     return "added " + (r.added ? r.added.length : 0) + ", failed " + (r.failed ? r.failed.length : 0) +
            ", identity " + (r.identity ? r.identity.length : 0) + ", skipped " + (r.skipped ? r.skipped.length : 0);
   }
@@ -453,11 +447,7 @@
     if (!confirm("minColor \u2014 Strip ALL OCIO\n\nRemove EVERY OCIO effect from this timeline and its precomps?\n\n\u2022 foreign AND minColor effects\n\u2022 CDL/FILE grades too (listed in the report)\n\u2022 minColor view/render layers deleted\n\u2022 contained precomps NOT spared\n\nOne undo reverses everything.")) return;
     guard("Strip ALL OCIO", function () {
       var r = runCmd("minColor: Strip ALL", {}, "strip-all");
-      var detail = [];
-      if (r.stripped.length) detail.push("STRIPPED:\n  " + cap(r.stripped));
-      if (r.layersRemoved.length) detail.push("LAYERS REMOVED:\n  " + cap(r.layersRemoved));
-      if (r.failed.length) detail.push("FAILED:\n  " + cap(r.failed));
-      if (detail.length) alert("minColor \u2014 strip ALL\n\n" + detail.join("\n\n").substr(0, 4000));
+      if (r.failed.length) alert("minColor \u2014 strip ALL \u2014 failed\n\n  " + cap(r.failed));   /* success is silent */
       return "stripped " + r.stripped.length + ", layers removed " + r.layersRemoved.length;
     });
   };
@@ -465,12 +455,7 @@
   bStrip.onClick = function () {
     guard("Strip foreign OCIO", function () {
       var r = runCmd("minColor: Strip Foreign OCIO", {}, "strip-foreign");
-      var detail = [];
-      if (r.stripped.length) detail.push("STRIPPED:\n  " + cap(r.stripped));
-      if (r.gradesLeft.length) detail.push("FILE GRADES LEFT (review):\n  " + cap(r.gradesLeft));
-      if (r.contained.length) detail.push("CONTAINED (untouched):\n  " + cap(r.contained));
-      if (r.failed.length) detail.push("FAILED:\n  " + cap(r.failed));
-      if (detail.length) alert("minColor \u2014 strip\n\n" + detail.join("\n\n").substr(0, 4000));
+      if (r.failed.length) alert("minColor \u2014 strip \u2014 failed\n\n  " + cap(r.failed));   /* success is silent */
       return "stripped " + r.stripped.length + ", grades left " + r.gradesLeft.length;
     });
   };
