@@ -127,13 +127,20 @@ MincDoctorResult MincDoctorDiagnose(SPBasicSuite *bp, AEGP_PluginID id) {
             A_Boolean on = FALSE;
             cs->AEGP_IsOCIOColorManagementUsed(id, &on);
             cmsOk = (on != FALSE);
-            AEGP_MemHandle pH = nullptr, wH = nullptr;
-            char buf[2048] = "";
-            if (cs->AEGP_GetOCIOConfigurationFilePath(id, &pH) == A_Err_NONE) {
-                MincUtf16HandleToUtf8(suites, pH, buf, sizeof(buf)); pin = buf;
-            }
-            if (cs->AEGPD_GetOCIOWorkingColorSpace(id, &wH) == A_Err_NONE) {
-                buf[0] = 0; MincUtf16HandleToUtf8(suites, wH, buf, sizeof(buf)); workingBare = buf;
+            /* OCIO-OFF GUARD (2026-09-03): only touch the OCIO getters when OCIO is actually
+               on. On an Adobe-managed (ICC) project the working-space getter is the same
+               non-OCIO-state call that crashed at the Home screen (§f2f4329) — and even when
+               it doesn't crash, poking it every 5s is minColor competing with a flow it isn't
+               part of. OCIO off → empty pin/working → "unmanaged", the correct calm status. */
+            if (cmsOk) {
+                AEGP_MemHandle pH = nullptr, wH = nullptr;
+                char buf[2048] = "";
+                if (cs->AEGP_GetOCIOConfigurationFilePath(id, &pH) == A_Err_NONE) {
+                    MincUtf16HandleToUtf8(suites, pH, buf, sizeof(buf)); pin = buf;
+                }
+                if (cs->AEGPD_GetOCIOWorkingColorSpace(id, &wH) == A_Err_NONE) {
+                    buf[0] = 0; MincUtf16HandleToUtf8(suites, wH, buf, sizeof(buf)); workingBare = buf;
+                }
             }
             bp->ReleaseSuite(kAEGPColorSettingsSuite, kAEGPColorSettingsSuiteVersion5);
         }
