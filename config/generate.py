@@ -708,13 +708,15 @@ def main():
         t = add_file_rules(t, p["working"])
         t = set_roles(t, p["working"], linear)
         t = downlevel_24(t)
-        h = hashlib.sha1(t.encode()).hexdigest()[:8]
-        # AE caches parsed configs per path per session (verified 2026-08-25): a changed config MUST
-        # get a new path, or running sessions keep serving the stale parse. Hence content-hashed names.
-        path = os.path.join(DIST, "config-%s-%s.ocio" % (key, h))
-        # NEVER delete old hashed configs: projects and the sticky pref keep absolute paths, and a
-        # project opened with an unreachable config enters a broken, non-recoverable OCIO state for
-        # the session (Adobe bug; verified 2026-08-26). Old versions stay (they are ~70KB each).
+        # STABLE readable name (2026-09-03), one per preset. Content-hashed filenames were
+        # dropped: they didn't give backward-compat, they forced shipping every historical hash
+        # forever or old pins DANGLE on upgrade (-> silent Adobe-color fallback = colour
+        # regression). A stable name always exists in every install, so a pin never dangles.
+        # Config updates are ADDITIVE-ONLY (never remove/redefine an existing space/look), so an
+        # old project's spaces always still resolve; true byte-freeze is Archive/Package's
+        # sidecar, not the live store. NB a content change needs an AE restart to re-parse (AE
+        # caches per path per session) — acceptable, since configs change only on plugin update.
+        path = os.path.join(DIST, "config-%s.ocio" % key)
         open(path, "w", encoding="utf-8").write(t)
         cfg = validate(path, p["working"], p["working"], LINEAR_VIEW_CHECKS if linear else SDR_VIEW_CHECKS)
         if not linear:

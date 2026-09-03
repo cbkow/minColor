@@ -2,7 +2,7 @@
  "generated": "by config/generate.py",
  "presets": {
   "acescg": {
-   "config": "config-acescg-1066cdbf.ocio",
+   "config": "config-acescg.ocio",
    "working": "ACEScg",
    "family": "Linear",
    "label": "Linear \u00b7 ACEScg",
@@ -179,7 +179,7 @@
    ]
   },
   "ap0": {
-   "config": "config-ap0-399b4777.ocio",
+   "config": "config-ap0.ocio",
    "working": "ACES2065-1",
    "family": "Linear",
    "label": "Linear \u00b7 ACES2065-1",
@@ -356,7 +356,7 @@
    ]
   },
   "lin709": {
-   "config": "config-lin709-6f8ad009.ocio",
+   "config": "config-lin709.ocio",
    "working": "Linear Rec.709",
    "family": "Linear",
    "label": "Linear \u00b7 Rec.709",
@@ -533,7 +533,7 @@
    ]
   },
   "lin2020": {
-   "config": "config-lin2020-bbca2713.ocio",
+   "config": "config-lin2020.ocio",
    "working": "Linear Rec.2020",
    "family": "Linear",
    "label": "Linear \u00b7 Rec.2020",
@@ -710,7 +710,7 @@
    ]
   },
   "sdr22": {
-   "config": "config-sdr22-45643084.ocio",
+   "config": "config-sdr22.ocio",
    "working": "Rec.709 Gamma 2.2",
    "family": "Display",
    "label": "SDR",

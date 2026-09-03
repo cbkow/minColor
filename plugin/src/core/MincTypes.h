@@ -68,7 +68,7 @@ typedef struct {                        /* v2 SEQUENCE data (the arb PARAM stays
     MinColorArb arb;
     uint16_t    seqVersion;             /* MINC_SEQ_VERSION */
     uint16_t    reserved;
-    char        configBase[MINC_CONFIGBASE_LEN];   /* hashed config FILENAME, e.g. config-acescg-84aa8926.ocio */
+    char        configBase[MINC_CONFIGBASE_LEN];   /* config FILENAME, e.g. config-acescg.ocio (stable, 2026-09-03) */
     char        passportWorking[MINC_SPACE_LEN];   /* working space at last healthy sync */
 } MincSeqData;
 

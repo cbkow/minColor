@@ -57,21 +57,24 @@ std::string MincFamilyFor(const std::string &key) {
 }
 
 std::string MincPresetFromConfigBase(const std::string &base) {
-    /* CONFIG_PATTERN: config-([A-Za-z0-9]+)-[0-9a-f]+\.ocio$ (jsxinc:198) */
+    /* Accepts BOTH the stable name config-<preset>.ocio (2026-09-03) and the legacy hashed
+       config-<preset>-<hex>.ocio (old dev/shipped pins still resolve their preset). Preset
+       keys are alphanumeric (no dash), so a trailing "-<hex>" is unambiguously a legacy hash. */
     const std::string pre = "config-", suf = ".ocio";
     if (base.size() <= pre.size() + suf.size()) return "";
     if (base.compare(0, pre.size(), pre) != 0) return "";
     if (base.compare(base.size() - suf.size(), suf.size(), suf) != 0) return "";
     std::string mid = base.substr(pre.size(), base.size() - pre.size() - suf.size());
+    std::string preset = mid;
     size_t dash = mid.rfind('-');
-    if (dash == std::string::npos || dash == 0 || dash + 1 >= mid.size()) return "";
-    std::string preset = mid.substr(0, dash), hash = mid.substr(dash + 1);
+    if (dash != std::string::npos && dash > 0 && dash + 1 < mid.size()) {
+        std::string tail = mid.substr(dash + 1);
+        bool hex = true;
+        for (char c : tail) if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'))) { hex = false; break; }
+        if (hex) preset = mid.substr(0, dash);           /* legacy hash suffix -> strip it */
+    }
     for (size_t i = 0; i < preset.size(); ++i)
         if (!isalnum((unsigned char)preset[i])) return "";
-    for (size_t i = 0; i < hash.size(); ++i) {
-        char c = hash[i];
-        if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'))) return "";
-    }
     return preset;
 }
 
