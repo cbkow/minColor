@@ -31,6 +31,13 @@ void MincAuthorityRefreshBp(SPBasicSuite *bp, AEGP_PluginID aegpId) {
     if (!bp || !aegpId) return;
     try {
         AEGP_SuiteHandler suites(bp);
+        {   /* NO-PROJECT GUARD (2026-09-03): at AE's Home screen there is no project, and
+               the per-project ColorSettings getters CRASH the plugin ("minColorAEGP error"
+               + plugin shutdown, seen live). Never touch colour state without a project.  */
+            Acq<AEGP_ProjSuite6> pjs(bp, kAEGPProjSuite, kAEGPProjSuiteVersion6);
+            AEGP_ProjectH projH = nullptr;
+            if (!pjs || pjs->AEGP_GetProjectByIndex(0, &projH) != A_Err_NONE || !projH) return;
+        }
         const void *csV = nullptr;
         if (bp->AcquireSuite(kAEGPColorSettingsSuite, kAEGPColorSettingsSuiteVersion5,
                              &csV) != kSPNoError || !csV) return;

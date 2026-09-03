@@ -102,6 +102,11 @@ MincDoctorResult MincDoctorDiagnose(SPBasicSuite *bp, AEGP_PluginID id) {
 
     AEGP_ProjectH projH = nullptr;
     pjs->AEGP_GetProjectByIndex(0, &projH);
+    if (!projH) {                                        /* Home screen: colour getters would crash */
+        r.status = "unmanaged";
+        r.text = "no project open";
+        return r;
+    }
     std::string projPath;
     if (projH) {
         AEGP_MemHandle ph = nullptr;
