@@ -178,6 +178,39 @@ PF_Err MincHandleEvent(MincVerb verb, PF_InData *in_data, PF_OutData *out_data, 
         ERR(suites.surface_suiteP->DrawString(surf, white, font, u16, &o, kDRAWBOT_TextAlignment_Default, kDRAWBOT_TextTruncation_None, 0.0f));
         Ascii16(line2, u16, 300); o.y = fr.top + 26.0f;
         ERR(suites.surface_suiteP->DrawString(surf, white, font, u16, &o, kDRAWBOT_TextAlignment_Default, kDRAWBOT_TextTruncation_None, 0.0f));
+        /* Read-as-a-control (2026-09-03): the badge is clickable but a bare status readout
+           looks like a label, so users don't know to click it. A field border + a disclosure
+           chevron are the universal "this edits" signals — no mechanism change, still the same
+           arb-direct click menu. Chevron only on clickable verbs (legacy is display-only).   */
+        if (verb != MINC_VERB_LEGACY) {
+            DRAWBOT_ColorRGBA edge = {0.92f, 0.92f, 0.92f, 0.35f};
+            DRAWBOT_PenRef pen = NULL;
+            if (suites.supplier_suiteP->NewPen(sup, &edge, 1.0f, &pen) == kSPNoError && pen) {
+                DRAWBOT_PathRef bpath = NULL;
+                if (suites.supplier_suiteP->NewPath(sup, &bpath) == kSPNoError && bpath) {
+                    DRAWBOT_RectF32 br = { fr.left + 0.5f, fr.top + 0.5f,
+                                          (float)(fr.right - fr.left) - 1.0f, (float)(fr.bottom - fr.top) - 1.0f };
+                    suites.path_suiteP->AddRect(bpath, &br);
+                    suites.surface_suiteP->StrokePath(surf, pen, bpath);
+                    ERR2(suites.supplier_suiteP->ReleaseObject((DRAWBOT_ObjectRef)bpath));
+                }
+                ERR2(suites.supplier_suiteP->ReleaseObject((DRAWBOT_ObjectRef)pen));
+            }
+            /* disclosure chevron: a downward "v" at the right edge, aligned with line1 */
+            float cx = (float)fr.right - 11.0f, cy = fr.top + 9.0f;
+            DRAWBOT_PenRef cpen = NULL;
+            if (suites.supplier_suiteP->NewPen(sup, &wcol, 1.4f, &cpen) == kSPNoError && cpen) {
+                DRAWBOT_PathRef cpath = NULL;
+                if (suites.supplier_suiteP->NewPath(sup, &cpath) == kSPNoError && cpath) {
+                    suites.path_suiteP->MoveTo(cpath, cx - 4.0f, cy);
+                    suites.path_suiteP->LineTo(cpath, cx, cy + 4.0f);
+                    suites.path_suiteP->LineTo(cpath, cx + 4.0f, cy);
+                    suites.surface_suiteP->StrokePath(surf, cpen, cpath);
+                    ERR2(suites.supplier_suiteP->ReleaseObject((DRAWBOT_ObjectRef)cpath));
+                }
+                ERR2(suites.supplier_suiteP->ReleaseObject((DRAWBOT_ObjectRef)cpen));
+            }
+        }
         if (white) ERR2(suites.supplier_suiteP->ReleaseObject((DRAWBOT_ObjectRef)white));
         if (font)  ERR2(suites.supplier_suiteP->ReleaseObject((DRAWBOT_ObjectRef)font));
         if (brush) ERR2(suites.supplier_suiteP->ReleaseObject((DRAWBOT_ObjectRef)brush));

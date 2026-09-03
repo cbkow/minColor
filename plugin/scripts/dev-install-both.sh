@@ -59,4 +59,17 @@ rm -rf "$STAGE"; mkdir -p "$STAGE"
 cp -R "$AEGP" "$STAGE/minColorAEGP.plugin"
 osascript -e 'do shell script "rm -rf \"'"$PLUGINS"'/minColorAEGP.plugin\" \"'"$PLUGINS"'/mincProbeAegp.plugin\" && cp -R \"'"$STAGE"'/minColorAEGP.plugin\" \"'"$PLUGINS"'/\" && rm -rf \"'"$STAGE"'\"" with administrator privileges'
 echo "AEGP  -> $PLUGINS/minColorAEGP.plugin"
+
+# panel: the 2.0 shell IS the one panel now, installed under its real shipping name
+# minColor.jsx (no more "minColor2 dev.jsx" alt — the transition is over). Any 0.9.x
+# panel + its minColor-data payload are removed; the shell needs no payload.
+REPO="$(cd "$HERE/.." && pwd)"
+SHELL_SRC="$REPO/src/minColor Shell.jsx"
+for pd in "$HOME/Library/Preferences/Adobe/After Effects/"*/Scripts/ScriptUI\ Panels; do
+  [ -d "$pd" ] || continue
+  rm -f "$pd/minColor2 dev.jsx" "$pd/minColor2 dev.jsx.suite-stash"   # retire the dev alt
+  rm -rf "$pd/minColor-data"                                          # 0.9.x payload, unused by the shell
+  cp "$SHELL_SRC" "$pd/minColor.jsx"
+  echo "panel -> $pd/minColor.jsx"
+done
 echo "installed pair: $S1 (restart AE)"

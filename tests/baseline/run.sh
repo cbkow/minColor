@@ -34,11 +34,11 @@ touch "$SETTINGS/quiet-mode"
 # pin the extension table: goldens were recorded against this exact table, and the user's
 # live table (which the suite would otherwise read) legitimately drifts (container rules etc.)
 cp "$BASE/fixtures/extension-defaults.suite.json" "$SETTINGS/extension-defaults.json"
-# a docked dev shell initializes at AE startup and races the suite (shell-args writes) —
-# move any aside for the run, restored with the settings below
+# the docked shell (now the one panel, minColor.jsx) initializes at AE startup and races the
+# suite (shell-args writes) — move it aside for the run, restored by the EXIT trap below
 PANELS_GLOB="$HOME/Library/Preferences/Adobe/After Effects"
 for pd in "$PANELS_GLOB"/*/Scripts/ScriptUI\ Panels; do
-  [ -f "$pd/minColor2 dev.jsx" ] && mv "$pd/minColor2 dev.jsx" "$pd/minColor2 dev.jsx.suite-stash" || true
+  [ -f "$pd/minColor.jsx" ] && mv "$pd/minColor.jsx" "$pd/minColor.jsx.suite-stash" || true
 done
 
 # wrapper sets the globals then runs the driver (DoScript cannot pass arguments)
@@ -57,7 +57,7 @@ OSA_PID=$!
 # shell into live state, found 2026-09-02) — armed here, after snapshot + stash happened
 restore_state() {
   for pd in "$PANELS_GLOB"/*/Scripts/ScriptUI\ Panels; do
-    [ -f "$pd/minColor2 dev.jsx.suite-stash" ] && mv "$pd/minColor2 dev.jsx.suite-stash" "$pd/minColor2 dev.jsx" || true
+    [ -f "$pd/minColor.jsx.suite-stash" ] && mv "$pd/minColor.jsx.suite-stash" "$pd/minColor.jsx" || true
   done
   # restore settings — but keep the handshake the AEGP just wrote: aegp-api.json is
   # last-launch info by design, and restoring a stale copy would make it lie
