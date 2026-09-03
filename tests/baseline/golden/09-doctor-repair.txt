@@ -1,6 +1,6 @@
 [doctor-before] canRepair=false
 [doctor-before] family=Linear
-[doctor-before] pin=config-acescg-1066cdbf.ocio
+[doctor-before] pin=config-acescg.ocio
 [doctor-before] preset=acescg
 [doctor-before] status=green
 [doctor-before] text=acescg · Linear/ACEScg · central
@@ -8,7 +8,7 @@
 [repair] status=green
 [doctor-after] canRepair=false
 [doctor-after] family=Linear
-[doctor-after] pin=config-acescg-1066cdbf.ocio
+[doctor-after] pin=config-acescg.ocio
 [doctor-after] preset=acescg
 [doctor-after] status=green
 [doctor-after] text=acescg · Linear/ACEScg · central

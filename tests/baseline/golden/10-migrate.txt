@@ -16,7 +16,7 @@
 [migrate] strippedPipeline=0
 [migrate] viewRenderRetargeted=0
 [migrate] working=Linear/Linear Rec.709
-[state] project: items=5 working='Linear/Linear Rec.709' pin='config-lin709-6f8ad009.ocio' bpc=32 engine=-
+[state] project: items=5 working='Linear/Linear Rec.709' pin='config-lin709.ocio' bpc=32 engine=-
 [after] comp 'mig' layers=3
   layer 1 'minColor VIEW (guide)' enabled=true guide=true adj=true
     fx 1 [MINC VIEW] 'minColor: view macOS Video View'
