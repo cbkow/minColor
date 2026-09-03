@@ -5,6 +5,7 @@
 #include "MincEffectOps.h"
 #include "MincTranslate.h"
 #include "MincArchive.h"
+#include "MincStrip.h"
 #include "MincMenusWrite.h"
 #include "MincDoctor.h"
 #include "MincJson.h"
@@ -520,6 +521,48 @@ std::string MincMigrateProject(SPBasicSuite *bp, AEGP_PluginID id, const std::st
     if (!SaveTo(e, projPath)) return "{ \"error\": \"save failed\" }\n";
     std::string berr, bpath = BackupCopy(projPath, "premigrate", &berr);
     if (bpath.empty()) return "{ \"error\": " + JStr(berr) + " }\n";
+
+    /* PRE-REOPEN SAFETY (2026-09-03): when the project is in OCIO FALLBACK (ocioOn == false — its
+       pinned config didn't load: unmounted volume / deleted config), its native OCIO effects are
+       unvalidated. The repin + Reopen below turns OCIO on and makes AE validate them against THEIR
+       baked config paths, aborting inside OCIOWrapper on any unreachable one — a crash migrate can't
+       survive because it fires DURING the reopen, before RebuildEffects can clean up. Foreign native
+       effects are what migrate discards anyway, so strip them now (OCIO off = structural, no config
+       needed) and re-save so the patch+reopen see the clean file. If minColor-authored native effects
+       remain, THEIR config is unreachable too (else OCIO would be on) — refuse rather than reopen into
+       a crash; the premigrate backup is already taken. When ocioOn is true the project opened cleanly,
+       so every native config is reachable and the existing flow is left untouched. See MincStrip. */
+    {
+        MincAuthorityRefreshBp(bp, id);
+        MincAuthoritySnapshot fb = {};
+        MincAuthorityGet(&fb);
+        if (!fb.ocioOn) {
+            int foreign = 0, mincOwned = 0;
+            MincScanNativeOcio(bp, id, &foreign, &mincOwned);
+            if (mincOwned > 0) {
+                char m[360];
+                snprintf(m, sizeof(m),
+                    "%d minColor native OCIO effect(s) reference a config that can't be reached "
+                    "right now (colour management is off \xe2\x80\x94 the pinned OCIO config didn't "
+                    "load). Migrating would reopen into a crash. Make the config reachable (mount the "
+                    "volume or restore the config), reopen the project, then migrate.", mincOwned);
+                return "{ \"error\": " + JStr(m) + " }\n";
+            }
+            if (foreign > 0) {
+                MincStripForeignNativeProject(bp, id);
+                /* verify the strip actually cleared them — a partial failure (locked host, remove
+                   error) would leave a native effect to abort the reopen; refuse instead. */
+                int f2 = 0, m2 = 0;
+                MincScanNativeOcio(bp, id, &f2, &m2);
+                if (f2 + m2 > 0)
+                    return "{ \"error\": " + JStr("could not clear all unreachable native OCIO "
+                        "effects before reopen (some could not be removed); migration stopped to "
+                        "avoid a crash. Strip Foreign OCIO on the affected comps, then migrate.") + " }\n";
+                if (!SaveTo(e, projPath)) return "{ \"error\": \"save failed after foreign strip\" }\n";
+            }
+        }
+    }
+
     std::vector<MincXmpUpsert> xmp = {
         { "harvest", harvest },
         { "provenance", ProvenanceRecord(presetKey, pr.config) },

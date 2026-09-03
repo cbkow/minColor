@@ -144,3 +144,130 @@ std::string MincStripForeignOcio(SPBasicSuite *bp, AEGP_PluginID id, bool all) {
            ", \"contained\": " + JArr2(e.contained) + ", \"failed\": " + JArr2(e.failed) +
            ", \"layersRemoved\": " + JArr2(e.layersRemoved) + " }\n";
 }
+
+/* --- Pre-reopen migrate safety (2026-09-03): whole-project native-OCIO scan + foreign strip -----
+   A project whose pinned OCIO config is unreachable opens in FALLBACK (OCIO off) — AE never
+   validates its native OCIO effects. Migrate repins to a reachable config and REOPENS, which turns
+   OCIO on and makes AE validate every native OCIO effect against ITS OWN baked config path,
+   aborting inside OCIOWrapper on any that's unreachable (unmounted volume, deleted config) — the
+   crash fires DURING the reopen, before RebuildEffects can clean up. Foreign native effects are
+   exactly what migrate discards anyway, so stripping them here — while OCIO is still off, a purely
+   structural removal that needs no config — lets the reopen proceed. Only FOREIGN natives are
+   touched: legacy MINC placeholders (resurrected post-reopen) and minColor-named natives (retargeted
+   post-reopen, or refused by the guard) are left alone.  See [[mincolor-2-0-direction]]. */
+
+static bool SNativeOcio(const std::string &mn) { return mn.compare(0, 9, "ADBE OCIO") == 0; }
+static bool SForeignNative(const MincFxEntry &f) {
+    return SNativeOcio(f.match) && f.name.compare(0, 10, "minColor: ") != 0;
+}
+
+static void SScan(SEnv &e, AEGP_CompH compH, std::set<int32_t> &seen, int *foreign, int *mincOwned) {
+    AEGP_ItemH item = nullptr; e.cps->AEGP_GetItemFromComp(compH, &item);
+    A_long cid = 0; if (item) e.its->AEGP_GetItemID(item, &cid);
+    if (seen.count((int32_t)cid)) return;
+    seen.insert((int32_t)cid);
+    A_long nL = 0; e.lys->AEGP_GetCompNumLayers(compH, &nL);
+    for (A_long L = 0; L < nL; ++L) {
+        AEGP_LayerH ly = nullptr;
+        if (e.lys->AEGP_GetCompLayerByIndex(compH, L, &ly) != A_Err_NONE || !ly) continue;
+        std::vector<MincFxEntry> fx; MincEnumLayerEffects(e.bp, e.id, ly, &fx);
+        for (auto &f : fx) {
+            if (!SNativeOcio(f.match)) continue;
+            if (f.name.compare(0, 10, "minColor: ") == 0) ++*mincOwned; else ++*foreign;
+        }
+        AEGP_ItemH src = nullptr; e.lys->AEGP_GetLayerSourceItem(ly, &src);
+        if (src) {
+            AEGP_ItemType ty = AEGP_ItemType_NONE; e.its->AEGP_GetItemType(src, &ty);
+            if (ty == AEGP_ItemType_COMP) {
+                AEGP_CompH sub = nullptr;
+                if (e.cps->AEGP_GetCompFromItem(src, &sub) == A_Err_NONE && sub) SScan(e, sub, seen, foreign, mincOwned);
+            }
+        }
+    }
+}
+
+static void SStripForeign(SEnv &e, AEGP_CompH compH, std::set<int32_t> &seen) {
+    AEGP_ItemH item = nullptr; e.cps->AEGP_GetItemFromComp(compH, &item);
+    A_long cid = 0; if (item) e.its->AEGP_GetItemID(item, &cid);
+    if (seen.count((int32_t)cid)) return;
+    seen.insert((int32_t)cid);
+    std::string compName = item ? SItemName(e, item) : "";
+    A_long nL = 0; e.lys->AEGP_GetCompNumLayers(compH, &nL);
+    for (A_long L = 0; L < nL; ++L) {
+        AEGP_LayerH ly = nullptr;
+        if (e.lys->AEGP_GetCompLayerByIndex(compH, L, &ly) != A_Err_NONE || !ly) continue;
+        std::string label = compName + "/" + SLayerName(e, ly);
+        std::vector<MincFxEntry> fx; MincEnumLayerEffects(e.bp, e.id, ly, &fx);
+        for (int k = 0; k < (int)fx.size(); ++k) {
+            if (!SForeignNative(fx[k])) continue;
+            const std::string nm = fx[k].name;
+            bool wl = MincLayerLocked(e.bp, ly);
+            if (wl) MincSetLayerLocked(e.bp, ly, false);
+            bool ok = MincRemoveEffectAt(e.bp, e.id, ly, k + 1);
+            if (wl) MincSetLayerLocked(e.bp, ly, true);
+            if (ok) { e.stripped.push_back(label + " [" + nm + "]"); fx.erase(fx.begin() + k); --k; }
+            else e.failed.push_back(label + " [" + nm + "] \xe2\x80\x94 remove failed");
+        }
+        AEGP_ItemH src = nullptr; e.lys->AEGP_GetLayerSourceItem(ly, &src);
+        if (src) {
+            AEGP_ItemType ty = AEGP_ItemType_NONE; e.its->AEGP_GetItemType(src, &ty);
+            if (ty == AEGP_ItemType_COMP) {
+                AEGP_CompH sub = nullptr;
+                if (e.cps->AEGP_GetCompFromItem(src, &sub) == A_Err_NONE && sub) SStripForeign(e, sub, seen);
+            }
+        }
+    }
+}
+
+static bool SAcquireProj(SPBasicSuite *bp, AEGP_PluginID id, AEGP_SuiteHandler &suites, SEnv &e,
+                         Acq<AEGP_ItemSuite9> &its, Acq<AEGP_CompSuite12> &cps, Acq<AEGP_LayerSuite9> &lys) {
+    if (!its || !cps || !lys) return false;
+    e.bp = bp; e.id = id; e.suites = &suites; e.its = its.p; e.cps = cps.p; e.lys = lys.p; e.all = false;
+    return true;
+}
+
+void MincScanNativeOcio(SPBasicSuite *bp, AEGP_PluginID id, int *foreign, int *mincOwned) {
+    if (foreign) *foreign = 0;
+    if (mincOwned) *mincOwned = 0;
+    AEGP_SuiteHandler suites(bp);
+    Acq<AEGP_ProjSuite6>  pjs(bp, kAEGPProjSuite,  kAEGPProjSuiteVersion6);
+    Acq<AEGP_ItemSuite9>  its(bp, kAEGPItemSuite,  kAEGPItemSuiteVersion9);
+    Acq<AEGP_CompSuite12> cps(bp, kAEGPCompSuite,  kAEGPCompSuiteVersion12);
+    Acq<AEGP_LayerSuite9> lys(bp, kAEGPLayerSuite, kAEGPLayerSuiteVersion9);
+    SEnv e;
+    if (!pjs || !SAcquireProj(bp, id, suites, e, its, cps, lys)) return;
+    AEGP_ProjectH projH = nullptr;
+    if (pjs->AEGP_GetProjectByIndex(0, &projH) != A_Err_NONE || !projH) return;
+    int f = 0, m = 0; std::set<int32_t> seen;
+    AEGP_ItemH it = nullptr; its->AEGP_GetFirstProjItem(projH, &it);
+    while (it) {
+        AEGP_ItemType ty = AEGP_ItemType_NONE; its->AEGP_GetItemType(it, &ty);
+        if (ty == AEGP_ItemType_COMP) { AEGP_CompH c = nullptr; if (cps->AEGP_GetCompFromItem(it, &c) == A_Err_NONE && c) SScan(e, c, seen, &f, &m); }
+        AEGP_ItemH nx = nullptr; its->AEGP_GetNextProjItem(projH, it, &nx); it = nx;
+    }
+    if (foreign) *foreign = f;
+    if (mincOwned) *mincOwned = m;
+}
+
+std::string MincStripForeignNativeProject(SPBasicSuite *bp, AEGP_PluginID id) {
+    AEGP_SuiteHandler suites(bp);
+    Acq<AEGP_ProjSuite6>    pjs(bp, kAEGPProjSuite,  kAEGPProjSuiteVersion6);
+    Acq<AEGP_ItemSuite9>    its(bp, kAEGPItemSuite,  kAEGPItemSuiteVersion9);
+    Acq<AEGP_CompSuite12>   cps(bp, kAEGPCompSuite,  kAEGPCompSuiteVersion12);
+    Acq<AEGP_LayerSuite9>   lys(bp, kAEGPLayerSuite, kAEGPLayerSuiteVersion9);
+    Acq<AEGP_UtilitySuite6> uts(bp, kAEGPUtilitySuite, kAEGPUtilitySuiteVersion6);
+    SEnv e;
+    if (!pjs || !SAcquireProj(bp, id, suites, e, its, cps, lys)) return "{ \"error\": \"suite acquire failed\" }\n";
+    AEGP_ProjectH projH = nullptr;
+    if (pjs->AEGP_GetProjectByIndex(0, &projH) != A_Err_NONE || !projH) return "{ \"error\": \"no project\" }\n";
+    if (uts) uts->AEGP_StartUndoGroup("minColor pre-migrate foreign strip");
+    std::set<int32_t> seen;
+    AEGP_ItemH it = nullptr; its->AEGP_GetFirstProjItem(projH, &it);
+    while (it) {
+        AEGP_ItemType ty = AEGP_ItemType_NONE; its->AEGP_GetItemType(it, &ty);
+        if (ty == AEGP_ItemType_COMP) { AEGP_CompH c = nullptr; if (cps->AEGP_GetCompFromItem(it, &c) == A_Err_NONE && c) SStripForeign(e, c, seen); }
+        AEGP_ItemH nx = nullptr; its->AEGP_GetNextProjItem(projH, it, &nx); it = nx;
+    }
+    if (uts) uts->AEGP_EndUndoGroup();
+    return "{ \"stripped\": " + JArr2(e.stripped) + ", \"failed\": " + JArr2(e.failed) + " }\n";
+}
