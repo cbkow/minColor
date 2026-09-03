@@ -74,17 +74,21 @@ def main():
     # OS merges — no folder creation, no separate configs step (each carries the store).
     plugin_src = os.path.join(ROOT, "plugin", "build", "minColorCST.plugin")
     aegp_src = os.path.join(ROOT, "plugin", "build", "minColorAEGP.plugin")
+    # config-master-*.ocio are OCIO-2.5 QCView/Blender/tooling masters, NOT AE presets. They
+    # must NOT reach AE's MediaCore config store: AE's OCIO (<=2.4) can abort loading a 2.5
+    # config, and it's unpinned by any preset anyway (RESULTS §40, 2026-09-03).
+    AE_STORE_SKIP = shutil.ignore_patterns("config-master-*.ocio")
     if os.path.isdir(plugin_src):
         mac_root = os.path.join(OUT, "plugin-macOS", "minColor")
         shutil.copytree(plugin_src, os.path.join(mac_root, "minColorCST.plugin"))
-        shutil.copytree(DIST, os.path.join(mac_root, "configs"))
+        shutil.copytree(DIST, os.path.join(mac_root, "configs"), ignore=AE_STORE_SKIP)
         if os.path.isdir(aegp_src):                     # the AEGP sits BESIDE the MediaCore dir in
             shutil.copytree(aegp_src, os.path.join(OUT, "plugin-macOS", "minColorAEGP.plugin"))
     win_src = os.path.join(ROOT, "plugin", "prebuilt", "windows")   # Windows session commits Release .aex + version.txt here
     if os.path.isdir(win_src):
         win_root = os.path.join(OUT, "plugin-windows", "minColor")
         shutil.copytree(win_src, win_root)
-        shutil.copytree(DIST, os.path.join(win_root, "configs"))
+        shutil.copytree(DIST, os.path.join(win_root, "configs"), ignore=AE_STORE_SKIP)
     pay = os.path.join(OUT, "minColor-data")
     os.makedirs(os.path.join(pay, "settings"))
     cfgs = os.path.join(pay, "configs")
