@@ -28,6 +28,10 @@ MincTranslateReport MincTranslateToNative(SPBasicSuite *bp, AEGP_PluginID id) {
     std::string pinBase = pin.substr(pin.find_last_of('/') == std::string::npos ? 0 : pin.find_last_of('/') + 1);
     MincSuggestCtx ctx = MincBuildSuggestCtx(MincPresetFromConfigBase(pinBase), pin);
     bool hasLooks = THasLooks(pin);
+    std::set<std::string> configLooks;                   /* per-look validity: never author a native
+                                                            Look Transform for a look absent from the
+                                                            config — that is the crash landmine (§41). */
+    { std::vector<std::string> lv = MincConfigLooks(pin); for (auto &l : lv) configLooks.insert(l); }
     if (uts) uts->AEGP_StartUndoGroup("minColor translate to native");
     AEGP_ProjectH projH = nullptr;
     pjs->AEGP_GetProjectByIndex(0, &projH);
@@ -73,9 +77,9 @@ MincTranslateReport MincTranslateToNative(SPBasicSuite *bp, AEGP_PluginID id) {
                                 continue;
                             }
                             std::string look = rest.substr(5);
-                            if (!hasLooks) {
+                            if (!configLooks.count(look)) {    /* THIS look absent -> never author native */
                                 if (MincRemoveEffectAt(bp, id, ly, k + 1)) {
-                                    out.removed.push_back(label + " \xe2\x80\x94 looks do not exist in this preset");
+                                    out.removed.push_back(label + " \xe2\x80\x94 look not in this preset's config");
                                     fx.erase(fx.begin() + k); --k;
                                 } else out.failed.push_back(label + " \xe2\x80\x94 remove failed");
                                 if (wl) MincSetLayerLocked(bp, ly, true);

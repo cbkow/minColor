@@ -82,7 +82,7 @@ static void JsonList(MincJsonPtr node, const char *key, std::vector<std::string>
     for (auto &v : a->arr) if (v && v->type == MincJsonValue::String) out.push_back(v->strV);
 }
 
-static std::vector<std::string> ConfigLooks(const std::string &pinPath) {  /* configLooks port (:1201) */
+std::vector<std::string> MincConfigLooks(const std::string &pinPath) {  /* configLooks port (:1201) */
     std::vector<std::string> names;
     std::string s = MincReadTextFile(pinPath);
     size_t li = s.find("\nlooks:");
@@ -159,7 +159,7 @@ MincMenuLists MincMenuListsFor(const std::string &presetKey, const std::string &
             keep(m.input); keep(m.view); keep(m.render);
         }
     }
-    m.looks = ConfigLooks(pinPath);
+    m.looks = MincConfigLooks(pinPath);
     m.valid = true;
     return m;
 }

@@ -11,25 +11,23 @@
     fx 3 [MINC LOOK] 'minColor: look Some Look'
     fx 4 [MINC VIEW] 'minColor: render Video Render'
 [package] archive=[object Object]
-[package] failed=1
-    vst/subject [minColor: look Some Look] — 'Some Look' not found among 27 entries
+[package] failed=0
 [package] remapped=0
-[package] removed=0
+[package] removed=1
+    vst/subject [minColor: look Some Look] — look not in this preset's config
 [package] translated=2
 [after-package] comp 'vst' layers=1
   layer 1 'subject' enabled=true guide=false adj=false
     fx 1 [ADBE OCIO Color Space Transform] 'minColor: sRGB → working'
     fx 2 [ADBE OCIO Color Space Transform] 'minColor: view macOS Video View'
-    fx 3 [ADBE OCIO Look Transform] 'minColor: look Some Look'
-    fx 4 [MINC VIEW] 'minColor: render Video Render'
+    fx 3 [MINC VIEW] 'minColor: render Video Render'
 [strip-all] contained=0
 [strip-all] failed=0
 [strip-all] gradesLeft=0
 [strip-all] layersRemoved=0
-[strip-all] stripped=4
+[strip-all] stripped=3
     vst/subject [minColor: sRGB → working]
     vst/subject [minColor: view macOS Video View]
-    vst/subject [minColor: look Some Look]
     vst/subject [minColor: render Video Render]
 [after-strip-all] comp 'vst' layers=1
   layer 1 'subject' enabled=true guide=false adj=false

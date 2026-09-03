@@ -195,7 +195,9 @@ static bool ConfigHasLooks(const std::string &pin) {      /* configLooks() truth
     std::string sect = s.substr(li + 7, 4000);
     return sect.find("name:") != std::string::npos;
 }
-static void RebuildEffects(PEnv &e, const MincSuggestCtx &ctx, bool hasLooks, RebuildOut *out, bool *touchedMinc) {
+static void RebuildEffects(PEnv &e, const MincSuggestCtx &ctx, const std::set<std::string> &configLooks,
+                           RebuildOut *out, bool *touchedMinc) {
+    const bool hasLooks = !configLooks.empty();
     AEGP_ProjectH projH = nullptr;
     e.pjs->AEGP_GetProjectByIndex(0, &projH);
     AEGP_ItemH itemH = nullptr;
@@ -238,9 +240,16 @@ static void RebuildEffects(PEnv &e, const MincSuggestCtx &ctx, bool hasLooks, Re
                         const std::string &nm = fx[k].name, &mn = fx[k].match;
                         bool oursName = nm.compare(0, 10, "minColor: ") == 0;
                         if (mn == "ADBE OCIO Look Transform" && oursName) {   /* :394-404 */
-                            if (!hasLooks) {
+                            /* A native OCIO Look Transform referencing a look ABSENT from the new
+                               config is the crash landmine: AE's OCIO THROWS on a missing look and
+                               aborts (RESULTS §41). Check THIS look, not just whether the config has
+                               any looks — a preset with other looks but not this one still strands.
+                               Our own MINC LOOK effect is immune (it passes through), so keeping a
+                               *valid* native look is fine; an invalid one must go.                  */
+                            std::string lk = (nm.compare(0, 15, "minColor: look ") == 0) ? nm.substr(15) : "";
+                            if (lk.empty() || !configLooks.count(lk)) {
                                 if (MincRemoveEffectAt(e.bp, e.id, ly, k + 1)) {
-                                    out->removed.push_back(label + " [" + nm + "] \xe2\x80\x94 looks do not exist in this preset");
+                                    out->removed.push_back(label + " [" + nm + "] \xe2\x80\x94 look not in this preset's config");
                                     fx.erase(fx.begin() + k); --k;
                                 } else out->failed.push_back(label + " [" + nm + "] \xe2\x80\x94 remove failed");
                                 continue;
@@ -529,7 +538,9 @@ std::string MincMigrateProject(SPBasicSuite *bp, AEGP_PluginID id, const std::st
     MincSuggestCtx ctx = MincBuildSuggestCtx(presetKey, cfg);
     RebuildOut rb;
     bool touched = false;
-    RebuildEffects(e, ctx, ConfigHasLooks(cfg), &rb, &touched);
+    std::set<std::string> configLooks;                   /* per-look validity (native-look crash guard) */
+    { std::vector<std::string> lv = MincConfigLooks(cfg); for (auto &l : lv) configLooks.insert(l); }
+    RebuildEffects(e, ctx, configLooks, &rb, &touched);
     if (touched) MincSyncFromNames(bp, id);
 
     /* post-audit */

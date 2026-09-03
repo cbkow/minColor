@@ -29,6 +29,9 @@ struct MincMenuLists {
 };
 MincMenuLists MincMenuListsFor(const std::string &presetKey, const std::string &pinPath);
 
+/* look NAMES defined in a config (for per-look validity checks). */
+std::vector<std::string> MincConfigLooks(const std::string &pinPath);
+
 struct MincPick { std::string space; std::string why; };      /* space=="" means none */
 /* item facts the caller collects via AEGP */
 struct MincItemFacts {
