@@ -43,4 +43,4 @@
 /* mirrors of GlobalSetup()'s out_flags / out_flags2 (MinColorCST.cpp) — AE compares these
    at scan time and warns per effect on mismatch. All five PiPLs share one GlobalSetup.    */
 #define MINC_PIPL_OUTFLAGS    0x06008410
-#define MINC_PIPL_OUTFLAGS2   0x08201400
+#define MINC_PIPL_OUTFLAGS2   0x08A01400

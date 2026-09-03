@@ -84,10 +84,23 @@ static PF_Err HandleBadgeClick(MincVerb verb, PF_InData *in_data, PF_OutData *ou
     int pick = MincShowMenu(ptrs, n, checked);
     MincLog("badge: pick=%d%s", pick, pick < 0 ? " (dismissed)" : "");
     if (pick >= 0 && pick < n && strcmp(items[pick], sd.arb.space) != 0) {
-        if (MincApplyEdit(in_data, (int)verb, items[pick]))  /* rename + eager-mint payload + marker */
+        if (MincApplyEdit(in_data, (int)verb, items[pick])) { /* rename + eager-mint payload + marker */
             out_data->out_flags |= PF_OutFlag_REFRESH_UI;    /* repaint the badge NOW — without this the
                                                                 chip showed the old space until the next
                                                                 unrelated param event (Chris, step 5 test) */
+            /* Re-render the FRAME. FORCE_RERENDER is only a "maybe" for smart effects — AE
+               re-checks the cache GUID, and our arb change lives in the process-global registry
+               (not the flattened seq-data AE fingerprints), so AE decides nothing changed and
+               serves the cached frame (Chris: had to scrub a frame away and back). PF_TouchActiveItem
+               marks the active item dirty directly — no GUID re-check, no playhead nudge — so the
+               current frame actually re-renders; GuidMix then keys the cache on the new arb.       */
+            out_data->out_flags |= PF_OutFlag_FORCE_RERENDER;
+            PF_AdvItemSuite1 *adv = NULL;
+            if (!AEFX_AcquireSuite(in_data, out_data, kPFAdvItemSuite, kPFAdvItemSuiteVersion1, NULL, (void **)&adv) && adv) {
+                adv->PF_TouchActiveItem();
+                AEFX_ReleaseSuite(in_data, out_data, kPFAdvItemSuite, kPFAdvItemSuiteVersion1, NULL);
+            }
+        }
     }
     extra->u.do_click.send_drag = FALSE;
     extra->evt_out_flags = PF_EO_HANDLED_EVENT;
@@ -141,80 +154,114 @@ PF_Err MincHandleEvent(MincVerb verb, PF_InData *in_data, PF_OutData *out_data, 
     ERR(suites.drawbot_suiteP->GetSupplier(drawRef, &sup));
     ERR(suites.drawbot_suiteP->GetSurface(drawRef, &surf));
     if (!err) {
+        /* Badge as a labeled DROPDOWN + a status row (2026-09-03, Chris's design):
+           the direction (→working / working→) is fixed by which effect this IS, never a user
+           choice, so it becomes the LABEL, not part of the value. Top row = verb label +
+           neutral dropdown field showing the SPACE only + chevron. Bottom row = a colored
+           status dot + short health text (color lives only on the dot — a calm timeline reads
+           neutral, a problem stands out). Legacy is display-only: label + space, no field.   */
         const PF_Rect fr = extra->effect_win.current_frame;
-        DRAWBOT_RectF32 r = { fr.left + 0.5f, fr.top + 0.5f, (float)(fr.right - fr.left), (float)(fr.bottom - fr.top) };
-        DRAWBOT_ColorRGBA bg;
-        switch (status) {                                            /* chip = the ladder made visible */
-            case MINC_STATUS_OK:               bg = viaPassport ? DRAWBOT_ColorRGBA{0.13f, 0.22f, 0.34f, 1}
-                                                                : DRAWBOT_ColorRGBA{0.13f, 0.30f, 0.16f, 1}; break;
-            case MINC_STATUS_PASS_EMPTY:       bg = {0.25f, 0.25f, 0.25f, 1}; break;
-            default:                           bg = {0.36f, 0.28f, 0.10f, 1}; break;
+        const float L = (float)fr.left, T = (float)fr.top, R = (float)fr.right;
+        bool clickable = (verb != MINC_VERB_LEGACY);
+
+        /* neutral panel background (status no longer colors the whole block) */
+        DRAWBOT_ColorRGBA bg = {0.16f, 0.16f, 0.17f, 1};
+        {   DRAWBOT_RectF32 r = { L + 0.5f, T + 0.5f, (float)(fr.right - fr.left), (float)(fr.bottom - fr.top) };
+            DRAWBOT_PathRef p = NULL; DRAWBOT_BrushRef b = NULL;
+            ERR(suites.supplier_suiteP->NewPath(sup, &p));
+            ERR(suites.supplier_suiteP->NewBrush(sup, &bg, &b));
+            ERR(suites.path_suiteP->AddRect(p, &r));
+            ERR(suites.surface_suiteP->FillPath(surf, b, p, kDRAWBOT_FillType_Default));
+            if (b) ERR2(suites.supplier_suiteP->ReleaseObject((DRAWBOT_ObjectRef)b));
+            if (p) ERR2(suites.supplier_suiteP->ReleaseObject((DRAWBOT_ObjectRef)p));
         }
-        DRAWBOT_PathRef path = NULL; DRAWBOT_BrushRef brush = NULL;
-        ERR(suites.supplier_suiteP->NewPath(sup, &path));
-        ERR(suites.supplier_suiteP->NewBrush(sup, &bg, &brush));
-        ERR(suites.path_suiteP->AddRect(path, &r));
-        ERR(suites.surface_suiteP->FillPath(surf, brush, path, kDRAWBOT_FillType_Default));
-        char line1[300], line2[300];
-        if (arb.space[0])
-            snprintf(line1, sizeof(line1),
-                     arb.direction == MINC_DIR_LOOK ? "look: %s" :
-                     (arb.direction == MINC_DIR_TO_WORKING) ? "%s -> working" : "working -> %s", arb.space);
-        else snprintf(line1, sizeof(line1), "(unset - name the effect and Sync)");
-        switch (status) {
-            case MINC_STATUS_OK:                snprintf(line2, sizeof(line2), viaPassport ? "OK (passport)  \xc2\xb7  working: %s" : "OK  \xc2\xb7  working: %s", auth.workingSpace); break;
-            case MINC_STATUS_PASS_EMPTY:        snprintf(line2, sizeof(line2), "passthrough"); break;
-            case MINC_STATUS_PASS_OCIO_OFF:     snprintf(line2, sizeof(line2), "PASSTHROUGH: project not in OCIO mode"); break;
-            case MINC_STATUS_PASS_UNKNOWN_SPACE:snprintf(line2, sizeof(line2), "PASSTHROUGH: space not in config"); break;
-            default:                            snprintf(line2, sizeof(line2), "PASSTHROUGH: config unreadable"); break;
+
+        const char *label;
+        switch (verb) {
+            case MINC_VERB_LOOK:   label = "Look";   break;
+            case MINC_VERB_VIEW:   label = "View";   break;
+            case MINC_VERB_RENDER: label = "Render"; break;
+            case MINC_VERB_XFORM:  label = "Input";  break;   /* input or contain: both → working */
+            default: label = (arb.direction == MINC_DIR_LOOK) ? "Look"
+                            : (arb.direction == MINC_DIR_FROM_WORKING) ? "View" : "Input"; break;
         }
-        float fsize = 0; DRAWBOT_FontRef font = NULL; DRAWBOT_BrushRef white = NULL;
+        char value[MINC_SPACE_LEN + 8];
+        if (arb.space[0]) snprintf(value, sizeof(value), "%s", arb.space);
+        else              snprintf(value, sizeof(value), "(unset)");
+
+        float fsize = 0; DRAWBOT_FontRef font = NULL;
         ERR(suites.supplier_suiteP->GetDefaultFontSize(sup, &fsize));
         ERR(suites.supplier_suiteP->NewDefaultFont(sup, fsize, &font));
-        DRAWBOT_ColorRGBA wcol = {0.92f, 0.92f, 0.92f, 1};
+        DRAWBOT_ColorRGBA wcol = {0.92f, 0.92f, 0.92f, 1}, dim = {0.62f, 0.62f, 0.64f, 1};
+        DRAWBOT_BrushRef white = NULL, grey = NULL;
         ERR(suites.supplier_suiteP->NewBrush(sup, &wcol, &white));
+        ERR(suites.supplier_suiteP->NewBrush(sup, &dim, &grey));
         DRAWBOT_UTF16Char u16[300]; DRAWBOT_PointF32 o;
-        Ascii16(line1, u16, 300); o.x = fr.left + 6.0f; o.y = fr.top + 13.0f;
-        ERR(suites.surface_suiteP->DrawString(surf, white, font, u16, &o, kDRAWBOT_TextAlignment_Default, kDRAWBOT_TextTruncation_None, 0.0f));
-        Ascii16(line2, u16, 300); o.y = fr.top + 26.0f;
-        ERR(suites.surface_suiteP->DrawString(surf, white, font, u16, &o, kDRAWBOT_TextAlignment_Default, kDRAWBOT_TextTruncation_None, 0.0f));
-        /* Read-as-a-control (2026-09-03): the badge is clickable but a bare status readout
-           looks like a label, so users don't know to click it. A field border + a disclosure
-           chevron are the universal "this edits" signals — no mechanism change, still the same
-           arb-direct click menu. Chevron only on clickable verbs (legacy is display-only).   */
-        if (verb != MINC_VERB_LEGACY) {
-            DRAWBOT_ColorRGBA edge = {0.92f, 0.92f, 0.92f, 0.35f};
-            DRAWBOT_PenRef pen = NULL;
-            if (suites.supplier_suiteP->NewPen(sup, &edge, 1.0f, &pen) == kSPNoError && pen) {
-                DRAWBOT_PathRef bpath = NULL;
-                if (suites.supplier_suiteP->NewPath(sup, &bpath) == kSPNoError && bpath) {
-                    DRAWBOT_RectF32 br = { fr.left + 0.5f, fr.top + 0.5f,
-                                          (float)(fr.right - fr.left) - 1.0f, (float)(fr.bottom - fr.top) - 1.0f };
-                    suites.path_suiteP->AddRect(bpath, &br);
-                    suites.surface_suiteP->StrokePath(surf, pen, bpath);
-                    ERR2(suites.supplier_suiteP->ReleaseObject((DRAWBOT_ObjectRef)bpath));
+
+        /* --- row 1: label + dropdown field --- */
+        const float fieldL = L + 52.0f, fieldR = R - 6.0f, rowY = T + 13.0f;
+        Ascii16(label, u16, 300); o.x = L + 6.0f; o.y = rowY;
+        ERR(suites.surface_suiteP->DrawString(surf, grey, font, u16, &o, kDRAWBOT_TextAlignment_Default, kDRAWBOT_TextTruncation_None, 0.0f));
+        if (clickable) {
+            DRAWBOT_ColorRGBA fieldbg = {0.22f, 0.22f, 0.24f, 1}, edge = {0.92f, 0.92f, 0.92f, 0.30f};
+            DRAWBOT_RectF32 fld = { fieldL, T + 3.0f, fieldR - fieldL, 16.0f };
+            DRAWBOT_PathRef fp = NULL; DRAWBOT_BrushRef fb = NULL; DRAWBOT_PenRef fpen = NULL;
+            if (suites.supplier_suiteP->NewBrush(sup, &fieldbg, &fb) == kSPNoError && fb &&
+                suites.supplier_suiteP->NewPath(sup, &fp) == kSPNoError && fp) {
+                suites.path_suiteP->AddRect(fp, &fld);
+                suites.surface_suiteP->FillPath(surf, fb, fp, kDRAWBOT_FillType_Default);
+                if (suites.supplier_suiteP->NewPen(sup, &edge, 1.0f, &fpen) == kSPNoError && fpen) {
+                    suites.surface_suiteP->StrokePath(surf, fpen, fp);
+                    ERR2(suites.supplier_suiteP->ReleaseObject((DRAWBOT_ObjectRef)fpen));
                 }
-                ERR2(suites.supplier_suiteP->ReleaseObject((DRAWBOT_ObjectRef)pen));
+                ERR2(suites.supplier_suiteP->ReleaseObject((DRAWBOT_ObjectRef)fp));
             }
-            /* disclosure chevron: a downward "v" at the right edge, aligned with line1 */
-            float cx = (float)fr.right - 11.0f, cy = fr.top + 9.0f;
+            if (fb) ERR2(suites.supplier_suiteP->ReleaseObject((DRAWBOT_ObjectRef)fb));
+            /* chevron at field right edge */
+            float cx = fieldR - 9.0f, cy = T + 8.0f;
             DRAWBOT_PenRef cpen = NULL;
             if (suites.supplier_suiteP->NewPen(sup, &wcol, 1.4f, &cpen) == kSPNoError && cpen) {
                 DRAWBOT_PathRef cpath = NULL;
                 if (suites.supplier_suiteP->NewPath(sup, &cpath) == kSPNoError && cpath) {
-                    suites.path_suiteP->MoveTo(cpath, cx - 4.0f, cy);
-                    suites.path_suiteP->LineTo(cpath, cx, cy + 4.0f);
-                    suites.path_suiteP->LineTo(cpath, cx + 4.0f, cy);
+                    suites.path_suiteP->MoveTo(cpath, cx - 3.5f, cy);
+                    suites.path_suiteP->LineTo(cpath, cx, cy + 3.5f);
+                    suites.path_suiteP->LineTo(cpath, cx + 3.5f, cy);
                     suites.surface_suiteP->StrokePath(surf, cpen, cpath);
                     ERR2(suites.supplier_suiteP->ReleaseObject((DRAWBOT_ObjectRef)cpath));
                 }
                 ERR2(suites.supplier_suiteP->ReleaseObject((DRAWBOT_ObjectRef)cpen));
             }
         }
+        Ascii16(value, u16, 300); o.x = fieldL + 4.0f; o.y = rowY;
+        ERR(suites.surface_suiteP->DrawString(surf, white, font, u16, &o, kDRAWBOT_TextAlignment_Default, kDRAWBOT_TextTruncation_None, 0.0f));
+
+        /* --- row 2: status dot + short health text --- */
+        DRAWBOT_ColorRGBA dot; const char *stext;
+        switch (status) {
+            case MINC_STATUS_OK:                 dot = viaPassport ? DRAWBOT_ColorRGBA{0.32f, 0.60f, 0.95f, 1}
+                                                                   : DRAWBOT_ColorRGBA{0.30f, 0.82f, 0.42f, 1};
+                                                 stext = viaPassport ? "via passport" : "OK"; break;
+            case MINC_STATUS_PASS_EMPTY:         dot = {0.55f, 0.55f, 0.55f, 1}; stext = "passthrough"; break;
+            case MINC_STATUS_PASS_OCIO_OFF:      dot = {0.95f, 0.72f, 0.20f, 1}; stext = "passthrough \xe2\x80\x94 not in OCIO"; break;
+            case MINC_STATUS_PASS_UNKNOWN_SPACE: dot = {0.95f, 0.72f, 0.20f, 1}; stext = "passthrough \xe2\x80\x94 space not in config"; break;
+            default:                             dot = {0.95f, 0.72f, 0.20f, 1}; stext = "passthrough \xe2\x80\x94 config unreadable"; break;
+        }
+        {   DRAWBOT_RectF32 d = { L + 6.0f, T + 21.0f, 6.0f, 6.0f };
+            DRAWBOT_PathRef dp = NULL; DRAWBOT_BrushRef db = NULL;
+            if (suites.supplier_suiteP->NewBrush(sup, &dot, &db) == kSPNoError && db &&
+                suites.supplier_suiteP->NewPath(sup, &dp) == kSPNoError && dp) {
+                suites.path_suiteP->AddRect(dp, &d);
+                suites.surface_suiteP->FillPath(surf, db, dp, kDRAWBOT_FillType_Default);
+                ERR2(suites.supplier_suiteP->ReleaseObject((DRAWBOT_ObjectRef)dp));
+            }
+            if (db) ERR2(suites.supplier_suiteP->ReleaseObject((DRAWBOT_ObjectRef)db));
+        }
+        Ascii16(stext, u16, 300); o.x = L + 16.0f; o.y = T + 27.0f;
+        ERR(suites.surface_suiteP->DrawString(surf, grey, font, u16, &o, kDRAWBOT_TextAlignment_Default, kDRAWBOT_TextTruncation_None, 0.0f));
+
         if (white) ERR2(suites.supplier_suiteP->ReleaseObject((DRAWBOT_ObjectRef)white));
+        if (grey)  ERR2(suites.supplier_suiteP->ReleaseObject((DRAWBOT_ObjectRef)grey));
         if (font)  ERR2(suites.supplier_suiteP->ReleaseObject((DRAWBOT_ObjectRef)font));
-        if (brush) ERR2(suites.supplier_suiteP->ReleaseObject((DRAWBOT_ObjectRef)brush));
-        if (path)  ERR2(suites.supplier_suiteP->ReleaseObject((DRAWBOT_ObjectRef)path));
         extra->evt_out_flags = PF_EO_HANDLED_EVENT;
     }
     ERR2(AEFX_ReleaseDrawbotSuites(in_data, out_data));
