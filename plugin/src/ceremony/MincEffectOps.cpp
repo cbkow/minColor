@@ -199,6 +199,7 @@ bool MincSetPopupByName(SPBasicSuite *bp, AEGP_PluginID id, AEGP_EffectRefH effH
     return true;
 }
 
+
 bool MincLayerLocked(SPBasicSuite *bp, AEGP_LayerH layerH) {
     Acq<AEGP_LayerSuite9> lys(bp, kAEGPLayerSuite, kAEGPLayerSuiteVersion9);
     if (!lys) return false;
