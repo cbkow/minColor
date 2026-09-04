@@ -173,6 +173,21 @@ MincTranslateReport MincTranslateToNative(SPBasicSuite *bp, AEGP_PluginID id) {
     return out;
 }
 
+/* lean-v3 self-contained authoring helpers (adopt authors OUR variants) */
+static uint16_t TDirForKind(const std::string &k) {
+    if (k == "view" || k == "render") return MINC_DIR_FROM_WORKING;
+    if (k == "look") return MINC_DIR_LOOK;
+    return MINC_DIR_TO_WORKING;                                  /* input, contain */
+}
+static MinColorArb TArb(const std::string &kind, const std::string &space) {
+    MinColorArb a; memset(&a, 0, sizeof(a)); a.magic = MINC_ARB_MAGIC; a.version = MINC_ARB_VERSION;
+    a.direction = TDirForKind(kind); snprintf(a.space, MINC_SPACE_LEN, "%s", space.c_str());
+    return a;
+}
+static std::string TLookSpace(const std::string &g) {          /* "minColor: look X" -> X */
+    const std::string p = "minColor: look "; return g.compare(0, p.size(), p) == 0 ? g.substr(p.size()) : g;
+}
+
 MincTranslateReport MincTranslateToPlugin(SPBasicSuite *bp, AEGP_PluginID id) {
     MincTranslateReport out;
     AEGP_SuiteHandler suites(bp);
@@ -188,6 +203,9 @@ MincTranslateReport MincTranslateToPlugin(SPBasicSuite *bp, AEGP_PluginID id) {
     std::string pin = snap.configPath;
     std::string pinBase = pin.substr(pin.find_last_of('/') == std::string::npos ? 0 : pin.find_last_of('/') + 1);
     MincSuggestCtx ctx = MincBuildSuggestCtx(MincPresetFromConfigBase(pinBase), pin);
+    std::string cfgBase = pinBase;                              /* passport for self-contained authoring */
+    std::string working = snap.workingSpace[0] ? std::string(snap.workingSpace)
+                                               : MincPresetMeta(MincPresetFromConfigBase(pinBase)).working;
     bool hasLooks = THasLooks(pin);
     if (uts) uts->AEGP_StartUndoGroup("minColor adopt");
     AEGP_ProjectH projH = nullptr;
@@ -241,6 +259,7 @@ MincTranslateReport MincTranslateToPlugin(SPBasicSuite *bp, AEGP_PluginID id) {
                             int endIdx = 0;
                             AEGP_EffectRefH lf = MincApplyByMatchWithName(bp, id, ly, MINC_MATCH_LOOK, nm, &endIdx);
                             if (lf) {
+                                { MinColorArb a = TArb("look", TLookSpace(nm)); MincWriteEffectArb(bp, id, lf, &a, cfgBase.c_str(), working.c_str()); }
                                 { Acq<AEGP_EffectSuite5> efs(bp, kAEGPEffectSuite, kAEGPEffectSuiteVersion5); if (efs) efs->AEGP_DisposeEffect(lf); }
                                 if (endIdx != idx) MincMoveEffect(bp, id, ly, endIdx, idx);
                                 out.converted.push_back(label);
@@ -270,6 +289,8 @@ MincTranslateReport MincTranslateToPlugin(SPBasicSuite *bp, AEGP_PluginID id) {
                         int endIdx2 = 0;
                         AEGP_EffectRefH nf = MincApplyByMatchWithName(bp, id, ly, targetMatch, newName, &endIdx2);
                         if (nf) {
+                            { MincFxName pn = MincParseFxName(newName); MinColorArb a = TArb(pn.kind, pn.space);
+                              MincWriteEffectArb(bp, id, nf, &a, cfgBase.c_str(), working.c_str()); }
                             { Acq<AEGP_EffectSuite5> efs(bp, kAEGPEffectSuite, kAEGPEffectSuiteVersion5); if (efs) efs->AEGP_DisposeEffect(nf); }
                             if (endIdx2 != idx2) MincMoveEffect(bp, id, ly, endIdx2, idx2);
                             out.converted.push_back(label);
@@ -286,8 +307,6 @@ MincTranslateReport MincTranslateToPlugin(SPBasicSuite *bp, AEGP_PluginID id) {
         itemH = nextH;
     }
     if (uts) uts->AEGP_EndUndoGroup();
-    MincSyncFromNames(bp, id);                               /* panel: syncPluginNames + stampEngine("plugin");
-                                                                the walk writes payloads; engine stamp = shell/XMP
-                                                                concern deferred to the contract flip */
+    /* lean-v3: adopted effects authored self-contained above — no name-walk */
     return out;
 }
