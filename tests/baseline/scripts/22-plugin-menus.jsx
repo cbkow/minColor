@@ -9,7 +9,7 @@
   }
   MincBase.savedProject("menus22");
   writeAnswers("acescg");
-  var id = app.findMenuCommandId("minColor: Set Up Project");
+  var id = app.findMenuCommandId("minColor: Migrate Project");
   if (id) app.executeCommand(id); else MincBase.log("NATIVE SETUP UNAVAILABLE");
   var m = MincBase.readJson("/Users/Shared/minColor/settings/plugin-menus.json");
   if (m) { delete m.generatedBy; MincBase.dumpReport("menus", m); }

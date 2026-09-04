@@ -23,7 +23,7 @@
   }
   MincBase.savedProject("rp31");
   writeAnswers("acescg");
-  app.executeCommand(app.findMenuCommandId("minColor: Set Up Project"));
+  app.executeCommand(app.findMenuCommandId("minColor: Migrate Project"));
   var comp = app.project.items.addComp("rp", 640, 360, 1, 3, 24);
   comp.layers.addSolid([0.5, 0.5, 0.5], "subject", 640, 360, 1);
   comp.openInViewer();

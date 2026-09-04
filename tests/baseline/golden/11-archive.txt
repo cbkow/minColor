@@ -1,3 +1,0 @@
-[archive] provenance=<dir>/provenance.json
-[archive] sidecar=<dir>/config-acescg.ocio
-[state] project: items=3 working='Linear/ACEScg' pin='config-acescg-interface.ocio' bpc=32 engine=-

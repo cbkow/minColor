@@ -6,7 +6,6 @@
 #include <string>
 #include "MincCore.h"
 
-std::string MincArchiveProject(SPBasicSuite *bp, AEGP_PluginID id);   /* JSON report */
 
 /* ensureSidecar core (also used by Package): trees + config beside projPath + minColor.json
    merge. cfgOut = the sidecar config's absolute path. */

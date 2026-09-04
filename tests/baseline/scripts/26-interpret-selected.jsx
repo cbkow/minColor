@@ -15,7 +15,7 @@
   }
   MincBase.savedProject("isel26");
   writeAnswers("acescg");
-  app.executeCommand(app.findMenuCommandId("minColor: Set Up Project"));
+  app.executeCommand(app.findMenuCommandId("minColor: Migrate Project"));
   var png = MincBase.importFixture("ramp_srgb_iccp.png");
   var mov = MincBase.importFixture("ramp_prores_nclc111.mov");
   var comp = app.project.items.addComp("isel", 640, 360, 1, 3, 24);

@@ -23,7 +23,7 @@
   // phase 1: interpret on sdr22 — tagged 709 -> Rec.1886 (detected), untagged -> fallback
   MincBase.savedProject("sem32");
   writeAnswers("sdr22");
-  app.executeCommand(app.findMenuCommandId("minColor: Set Up Project"));
+  app.executeCommand(app.findMenuCommandId("minColor: Migrate Project"));
   var tagged = MincBase.importFixture("ramp_prores_nclc111.mov");
   var untagged = MincBase.importFixture("ramp_untagged.mov");
   var comp = app.project.items.addComp("sem", 640, 360, 1, 3, 24);
@@ -38,7 +38,7 @@
   // phase 2: 709-video transform migrated INTO sdr22 -> remapped to Rec.1886, not removed
   MincBase.savedProjectNamed("sem32b", "sem32mig");
   writeAnswers("acescg");
-  app.executeCommand(app.findMenuCommandId("minColor: Set Up Project"));
+  app.executeCommand(app.findMenuCommandId("minColor: Migrate Project"));
   var c2 = app.project.items.addComp("mig", 640, 360, 1, 3, 24);
   var ly2 = c2.layers.addSolid([0.5, 0.5, 0.5], "subject", 640, 360, 1);
   c2.openInViewer();

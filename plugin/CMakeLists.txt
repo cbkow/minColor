@@ -193,7 +193,6 @@ if(APPLE)
     src/ceremony/MincCeremonyProject.cpp
     src/ceremony/MincStrip.cpp
     src/ceremony/MincArchive.cpp
-    src/ceremony/MincTranslate.cpp
     src/ceremony/MincMenusWrite.cpp
     src/ceremony/MincArgs.cpp
     src/ceremony/MincUtility.cpp

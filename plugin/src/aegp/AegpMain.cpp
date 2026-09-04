@@ -14,7 +14,6 @@
 #include "../ceremony/MincMenusWrite.h"
 #include "../ceremony/MincArgs.h"
 #include "../ceremony/MincUtility.h"
-#include "../ceremony/MincTranslate.h"
 #include <cstdio>
 #include <vector>
 
@@ -32,15 +31,11 @@ static void CmdInterpret(void);
 static void CmdInterpretSel(void);
 static void CmdUtility(void);
 static void CmdApplyLook(void);
-static void CmdAdopt(void);
 static void CmdRepair(void);
 static void CmdRenderPreset(void);
-static void CmdSetUp(void);
 static void CmdMigrate(void);
 static void CmdStripForeign(void);
 static void CmdStripAll(void);
-static void CmdArchive(void);
-static void CmdPackage(void);
 
 static MincCommandDef g_commands[] = {
     { "minColor: Sync From Names",     CmdSync,        0 },
@@ -50,15 +45,11 @@ static MincCommandDef g_commands[] = {
     { "minColor: Interpret Selected",  CmdInterpretSel, 0 },
     { "minColor: Utility Layers",      CmdUtility,     0 },
     { "minColor: Apply Look",          CmdApplyLook,   0 },
-    { "minColor: Adopt Effects",       CmdAdopt,       0 },
     { "minColor: Repair",              CmdRepair,      0 },
     { "minColor: Apply Render Preset", CmdRenderPreset, 0 },
-    { "minColor: Set Up Project",      CmdSetUp,       0 },
     { "minColor: Migrate Project",     CmdMigrate,     0 },
     { "minColor: Strip Foreign OCIO",  CmdStripForeign, 0 },
     { "minColor: Strip ALL",           CmdStripAll,    0 },
-    { "minColor: Archive Project",     CmdArchive,     0 },
-    { "minColor: Package for Any AE",  CmdPackage,     0 },
 };
 static const int g_nCommands = (int)(sizeof(g_commands) / sizeof(g_commands[0]));
 
@@ -171,11 +162,6 @@ static void ReportCeremony(const char *name, const std::string &json) {
     suites.UtilitySuite6()->AEGP_ReportInfoUnicode(g_id, u16);
 }
 
-static void CmdSetUp(void) {
-    std::string key;
-    if (!MincPickPreset("minColor: Set Up Project", &key)) { MincLog("setup: no preset picked"); return; }
-    ReportCeremony("setup", MincApplyPresetToCurrent(g_pica, g_id, key));
-}
 static void CmdMigrate(void) {
     std::string key;
     if (!MincPickPreset("minColor: Migrate Project", &key)) { MincLog("migrate: no preset picked"); return; }
@@ -184,8 +170,6 @@ static void CmdMigrate(void) {
 
 static void CmdStripForeign(void) { MincArgsConsume("minColor: Strip Foreign OCIO"); ReportCeremony("strip-foreign", MincStripForeignOcio(g_pica, g_id, false)); }
 static void CmdStripAll(void)     { MincArgsConsume("minColor: Strip ALL"); ReportCeremony("strip-all",     MincStripForeignOcio(g_pica, g_id, true)); }
-static void CmdArchive(void)      { MincArgsConsume("minColor: Archive Project"); ReportCeremony("archive",       MincArchiveProject(g_pica, g_id)); }
-static void CmdPackage(void)      { MincArgsConsume("minColor: Package for Any AE"); ReportCeremony("package",       MincPackageForAnyAE(g_pica, g_id)); }
 static void CmdRepair(void)       { MincArgsConsume("minColor: Repair"); ReportCeremony("repair",        MincRepairProject(g_pica, g_id)); }
 static void CmdRenderPreset(void) {
     std::string name;
@@ -201,20 +185,6 @@ static void CmdApplyLook(void) {
     }
     ReportCeremony("apply-look", MincApplyLook(g_pica, g_id, look));
 }
-static void CmdAdopt(void) {
-    MincArgsConsume("minColor: Adopt Effects");
-    MincTranslateReport tr = MincTranslateToPlugin(g_pica, g_id);
-    char tn[16]; snprintf(tn, sizeof(tn), "%d", (int)tr.converted.size());
-    std::string json = std::string("{ \"converted\": ") + tn + ", \"failed\": [";
-    for (size_t i = 0; i < tr.failed.size(); ++i) { if (i) json += ", "; std::string e = "\""; for (char c : tr.failed[i]) { if (c == '"' || c == '\\') e += '\\'; e += c; } json += e + "\""; }
-    json += "], \"remapped\": [";
-    for (size_t i = 0; i < tr.remapped.size(); ++i) { if (i) json += ", "; std::string e = "\""; for (char c : tr.remapped[i]) { if (c == '"' || c == '\\') e += '\\'; e += c; } json += e + "\""; }
-    json += "], \"removed\": [";
-    for (size_t i = 0; i < tr.removed.size(); ++i) { if (i) json += ", "; std::string e = "\""; for (char c : tr.removed[i]) { if (c == '"' || c == '\\') e += '\\'; e += c; } json += e + "\""; }
-    json += "] }\n";
-    ReportCeremony("adopt", json);
-}
-
 static void CmdUtility(void) {
     std::string view, render;
     {   MincJsonPtr a = MincArgsConsume("minColor: Utility Layers");

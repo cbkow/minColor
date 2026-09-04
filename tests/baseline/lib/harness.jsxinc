@@ -38,9 +38,9 @@ var MincBase = (function () {
     if (!r) log("NATIVE REPORT MISSING: " + reportName);
     return r;
   }
-  function setUpProject(presetKey) {                   // the everywhere-fixture: quiet Set Up
-    writeAnswers(presetKey);
-    return runCmd("minColor: Set Up Project", null, "setup");
+  function setUpProject(presetKey) {                   // the everywhere-fixture: quiet Migrate
+    writeAnswers(presetKey);                            // (Set Up retired; Migrate on a fresh project = pin config)
+    return runCmd("minColor: Migrate Project", null, "migrate");
   }
 
   // ---- library absorptions (the two reads the flip keeps script-side) ----
@@ -69,6 +69,7 @@ var MincBase = (function () {
     });
     s = s.replace(/\d{4}-\d{2}-\d{2}[T ]?[\d:.\-]*/g, "DATE");
     s = s.replace(/\d{8}-\d{6}/g, "STAMP");              // backup timestamps
+    s = s.replace(/STAMP-\d+/g, "STAMP");                // collision suffix (fixture + test both back up in the same second)
     s = s.replace(/"panel":"[^"]*"/g, '"panel":"VER"');
     s = s.replace(/"plugin":"[^"]*"/g, '"plugin":"VER"');
     s = s.replace(/"ocioEngine":"[^"]*"/g, '"ocioEngine":"VER"');

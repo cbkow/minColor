@@ -3,7 +3,6 @@
 #include "MincSettings.h"
 #include "MincSuggest.h"
 #include "MincEffectOps.h"
-#include "MincTranslate.h"
 #include "MincArchive.h"
 #include "MincStrip.h"
 #include "MincMenusWrite.h"
@@ -443,63 +442,6 @@ static void RebuildEffects(PEnv &e, const MincSuggestCtx &ctx, const std::set<st
 }
 
 /* ---------------- ceremonies ---------------- */
-std::string MincApplyPresetToCurrent(SPBasicSuite *bp, AEGP_PluginID id, const std::string &presetKey) {
-    AEGP_SuiteHandler suites(bp);
-    Acq<AEGP_ProjSuite6> pjs(bp, kAEGPProjSuite, kAEGPProjSuiteVersion6);
-    Acq<AEGP_ItemSuite9> its(bp, kAEGPItemSuite, kAEGPItemSuiteVersion9);
-    Acq<AEGP_CompSuite12> cps(bp, kAEGPCompSuite, kAEGPCompSuiteVersion12);
-    Acq<AEGP_LayerSuite9> lys(bp, kAEGPLayerSuite, kAEGPLayerSuiteVersion9);
-    Acq<AEGP_FootageSuite5> fts(bp, kAEGPFootageSuite, kAEGPFootageSuiteVersion5);
-    Acq<AEGP_UtilitySuite6> uts(bp, kAEGPUtilitySuite, kAEGPUtilitySuiteVersion6);
-    PEnv e;
-    if (!AcquireEnv(bp, id, suites, e, pjs, its, cps, lys, fts, uts)) return "{ \"error\": \"suite acquire failed\" }\n";
-    MincPresetInfo pr = MincPresetMeta(presetKey);
-    if (!pr.valid) return "{ \"error\": " + JStr("unknown preset " + presetKey) + " }\n";
-    std::string projPath = ProjPath(e);
-    if (projPath.empty()) return "{ \"error\": \"save the project first\" }\n";
-    std::string cfg = MincCentralConfigsDir() + "/" + pr.config;
-    if (!PathExists(cfg)) return "{ \"error\": " + JStr("config not in central store: " + pr.config) + " }\n";
-    /* lean-v3 PATH 2 ("plugin is the package"): AE pins a LEAN per-preset INTERFACE config (its
-       own neutralizer — only scene_linear as working, default_* → scene_linear so unassigned
-       footage passes through, one Raw view). The minColor EFFECT never reads it; the effect
-       renders from the full config (config-<preset>.ocio, embedded / central store) via its
-       passport. Switch is LIVE via ExecuteScript — NO reopen, NO PwCs patch. Sidecar still bundles
-       the full config + LUTs for archival handoff. */
-    std::string cfgTarget, serr;
-    if (!MincEnsureSidecar(projPath, presetKey, &cfgTarget, &serr))
-        return "{ \"error\": " + JStr(serr) + " }\n";
-    std::string ifacePath, ierr;
-    if (!MincWriteInterfaceConfig(projPath, presetKey, &ifacePath, &ierr))
-        return "{ \"error\": " + JStr(ierr) + " }\n";
-    std::string js = "app.project.colorManagementSystem=1; app.project.ocioConfigurationFile=" + JStr(ifacePath) + ";";
-    std::string scriptErr;
-    if (uts) {
-        AEGP_MemHandle resH = nullptr, errH = nullptr;
-        uts->AEGP_ExecuteScript(id, js.c_str(), FALSE, &resH, &errH);   /* no native config setter — bridge it */
-        if (errH) {
-            void *p = nullptr;
-            suites.MemorySuite1()->AEGP_LockMemHandle(errH, &p);
-            if (p && ((char *)p)[0]) scriptErr = (char *)p;
-            suites.MemorySuite1()->AEGP_UnlockMemHandle(errH);
-            suites.MemorySuite1()->AEGP_FreeMemHandle(errH);
-        }
-        if (resH) suites.MemorySuite1()->AEGP_FreeMemHandle(resH);
-    }
-    if (!scriptErr.empty()) return "{ \"error\": " + JStr("config switch failed: " + scriptErr) + " }\n";
-    int bpc = 0;
-    SetBitDepth(e, pr.family, &bpc);                     /* live; AEGP_SetProjectBitDepth works under OCIO (§30) */
-    MincAuthorityRefreshBp(bp, id);
-    /* report the MEASURED working space, not a claim — if the live switch neutralized to None the
-       snapshot is empty; if AE kept a working space the report shows it (embrace-None depends on
-       None, so a non-empty value here is the signal that the switch did NOT neutralize). */
-    MincAuthoritySnapshot ss = {}; MincAuthorityGet(&ss);
-    std::string wsNow = ss.workingSpace[0] ? std::string(ss.workingSpace) : std::string("None (neutralized)");
-    MincWriteMenus(bp, id);                              /* menus follow the new pin */
-    char bpcS[16];
-    snprintf(bpcS, sizeof(bpcS), "%d", bpc);
-    return "{ \"working\": " + JStr(wsNow) + ", \"bitsPerChannel\": " + std::string(bpcS) +
-           ", \"config\": " + JStr(ifacePath) + ", \"effectConfig\": " + JStr(pr.config) + " }\n";
-}
 
 std::string MincMigrateProject(SPBasicSuite *bp, AEGP_PluginID id, const std::string &presetKey) {
     AEGP_SuiteHandler suites(bp);
@@ -648,75 +590,6 @@ std::string MincMigrateProject(SPBasicSuite *bp, AEGP_PluginID id, const std::st
            ", \"backups\": " + bstats + " }\n";
 }
 
-std::string MincPackageForAnyAE(SPBasicSuite *bp, AEGP_PluginID id) {
-    AEGP_SuiteHandler suites(bp);
-    Acq<AEGP_ProjSuite6> pjs(bp, kAEGPProjSuite, kAEGPProjSuiteVersion6);
-    Acq<AEGP_ItemSuite9> its(bp, kAEGPItemSuite, kAEGPItemSuiteVersion9);
-    Acq<AEGP_CompSuite12> cps(bp, kAEGPCompSuite, kAEGPCompSuiteVersion12);
-    Acq<AEGP_LayerSuite9> lys(bp, kAEGPLayerSuite, kAEGPLayerSuiteVersion9);
-    Acq<AEGP_FootageSuite5> fts(bp, kAEGPFootageSuite, kAEGPFootageSuiteVersion5);
-    Acq<AEGP_UtilitySuite6> uts(bp, kAEGPUtilitySuite, kAEGPUtilitySuiteVersion6);
-    PEnv e;
-    if (!AcquireEnv(bp, id, suites, e, pjs, its, cps, lys, fts, uts)) return "{ \"error\": \"suite acquire failed\" }\n";
-    std::string projPath = ProjPath(e);
-    if (projPath.empty()) return "{ \"error\": \"save the project first\" }\n";
-
-    /* identity from the live pin (interface config -> preset via the -interface strip) */
-    MincAuthorityRefreshBp(bp, id);
-    MincAuthoritySnapshot snap = {};
-    MincAuthorityGet(&snap);
-    std::string preset = MincPresetFromConfigBase(Basename2(snap.configPath));
-    if (preset.empty()) return "{ \"error\": \"not a minColor project\" }\n";
-    std::string cfgTarget, serr;
-    if (!MincEnsureSidecar(projPath, preset, &cfgTarget, &serr))     /* full config + LUTs beside the project */
-        return "{ \"error\": " + JStr(serr) + " }\n";
-    /* lean-v3 Path 2: Package EXPORTS native OCIO effects for machines without minColor — those
-       bind to AE's PROJECT config, so pin the FULL config (not the lean interface) BEFORE
-       translating, else native authoring can't find the input/view spaces. */
-    {
-        std::string js = "app.project.colorManagementSystem=1; app.project.ocioConfigurationFile=" + JStr(cfgTarget) + ";";
-        std::string scriptErr;
-        if (uts) {
-            AEGP_MemHandle resH = nullptr, errH = nullptr;
-            uts->AEGP_ExecuteScript(id, js.c_str(), FALSE, &resH, &errH);
-            if (errH) {
-                void *p = nullptr;
-                suites.MemorySuite1()->AEGP_LockMemHandle(errH, &p);
-                if (p && ((char *)p)[0]) scriptErr = (char *)p;
-                suites.MemorySuite1()->AEGP_UnlockMemHandle(errH);
-                suites.MemorySuite1()->AEGP_FreeMemHandle(errH);
-            }
-            if (resH) suites.MemorySuite1()->AEGP_FreeMemHandle(resH);
-        }
-        if (!scriptErr.empty()) return "{ \"error\": " + JStr("config switch failed: " + scriptErr) + " }\n";
-        MincAuthorityRefreshBp(bp, id);
-    }
-    MincTranslateReport tr = MincTranslateToNative(bp, id);          /* authors native against the FULL config */
-
-    /* the panel re-pins live and stamps engine="native" during translate (:640); the native
-       path folds both into one patch ceremony — save (persists translated effects), patch
-       pin + engine, reopen. Working space and footage untouched.                          */
-    if (!SaveTo(e, projPath)) return "{ \"error\": \"save failed\" }\n";
-    std::vector<MincFootagePatch> none;
-    std::vector<MincXmpUpsert> xmp = { { "engine", "native" } };
-    std::string perr;
-    if (!MincRifxPatchProject(projPath.c_str(), cfgTarget.c_str(), nullptr, none, xmp, &perr))
-        return "{ \"error\": " + JStr("patch failed: " + perr) + " }\n";
-    if (!Reopen(e, projPath)) return "{ \"error\": \"reopen failed\" }\n";
-    MincAuthorityRefreshBp(bp, id);
-    MincWriteMenus(bp, id);                              /* menus follow the sidecar pin */
-
-    std::string ar = MincArchiveProject(bp, id);                     /* :494 */
-    while (!ar.empty() && ar[ar.size() - 1] == '\n') ar.erase(ar.size() - 1);
-
-    char tn[16];
-    snprintf(tn, sizeof(tn), "%d", (int)tr.converted.size());
-    return std::string("{ \"translated\": ") + tn +
-           ", \"failed\": " + JArr(tr.failed) +
-           ", \"remapped\": " + JArr(tr.remapped) +
-           ", \"removed\": " + JArr(tr.removed) +
-           ", \"archive\": " + ar + " }\n";
-}
 
 /* Native Repair (M3 decision: BOTH shapes — the shell heals live for the instant UX; this
    command is the shell-less zero-bridge twin): same-hash re-point via the patch ceremony,
