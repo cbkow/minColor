@@ -1,10 +1,11 @@
 [apply] bitsPerChannel=32
-[apply] config=<dir>/config-acescg.ocio
-[apply] working=None (neutralized)
-[state] project: items=0 working='Linear/ACEScg' pin='config-acescg.ocio' bpc=32 engine=-
+[apply] config=<dir>/config-acescg-interface.ocio
+[apply] effectConfig=config-acescg.ocio
+[apply] working=ACEScg
+[state] project: items=0 working='Linear/ACEScg' pin='config-acescg-interface.ocio' bpc=32 engine=-
 [doctor] canRepair=false
 [doctor] family=Linear
-[doctor] pin=config-acescg.ocio
+[doctor] pin=config-acescg-interface.ocio
 [doctor] preset=acescg
 [doctor] status=green
 [doctor] text=acescg · Linear/ACEScg · sidecar

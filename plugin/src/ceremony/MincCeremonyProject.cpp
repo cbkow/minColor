@@ -459,15 +459,19 @@ std::string MincApplyPresetToCurrent(SPBasicSuite *bp, AEGP_PluginID id, const s
     if (projPath.empty()) return "{ \"error\": \"save the project first\" }\n";
     std::string cfg = MincCentralConfigsDir() + "/" + pr.config;
     if (!PathExists(cfg)) return "{ \"error\": " + JStr("config not in central store: " + pr.config) + " }\n";
-    /* lean-v3 EMBRACE-NONE: dump the config into <project>/_minColor, then switch AE's config LIVE
-       (which auto-nulls the working space to None) via the ExecuteScript bridge — NO reopen, NO
-       PwCs patch. AE holds the config only to NEUTRALIZE its own colour management; our
-       self-contained effects own all colour (working resolved from the config's scene_linear role).
-       The one "Profile None is missing" warning is expected — the re-migrate cue. */
+    /* lean-v3 PATH 2 ("plugin is the package"): AE pins a LEAN per-preset INTERFACE config (its
+       own neutralizer — only scene_linear as working, default_* → scene_linear so unassigned
+       footage passes through, one Raw view). The minColor EFFECT never reads it; the effect
+       renders from the full config (config-<preset>.ocio, embedded / central store) via its
+       passport. Switch is LIVE via ExecuteScript — NO reopen, NO PwCs patch. Sidecar still bundles
+       the full config + LUTs for archival handoff. */
     std::string cfgTarget, serr;
     if (!MincEnsureSidecar(projPath, presetKey, &cfgTarget, &serr))
         return "{ \"error\": " + JStr(serr) + " }\n";
-    std::string js = "app.project.colorManagementSystem=1; app.project.ocioConfigurationFile=" + JStr(cfgTarget) + ";";
+    std::string ifacePath, ierr;
+    if (!MincWriteInterfaceConfig(projPath, presetKey, &ifacePath, &ierr))
+        return "{ \"error\": " + JStr(ierr) + " }\n";
+    std::string js = "app.project.colorManagementSystem=1; app.project.ocioConfigurationFile=" + JStr(ifacePath) + ";";
     std::string scriptErr;
     if (uts) {
         AEGP_MemHandle resH = nullptr, errH = nullptr;
@@ -485,11 +489,16 @@ std::string MincApplyPresetToCurrent(SPBasicSuite *bp, AEGP_PluginID id, const s
     int bpc = 0;
     SetBitDepth(e, pr.family, &bpc);                     /* live; AEGP_SetProjectBitDepth works under OCIO (§30) */
     MincAuthorityRefreshBp(bp, id);
+    /* report the MEASURED working space, not a claim — if the live switch neutralized to None the
+       snapshot is empty; if AE kept a working space the report shows it (embrace-None depends on
+       None, so a non-empty value here is the signal that the switch did NOT neutralize). */
+    MincAuthoritySnapshot ss = {}; MincAuthorityGet(&ss);
+    std::string wsNow = ss.workingSpace[0] ? std::string(ss.workingSpace) : std::string("None (neutralized)");
     MincWriteMenus(bp, id);                              /* menus follow the new pin */
     char bpcS[16];
     snprintf(bpcS, sizeof(bpcS), "%d", bpc);
-    return "{ \"working\": \"None (neutralized)\", \"bitsPerChannel\": " + std::string(bpcS) +
-           ", \"config\": " + JStr(cfgTarget) + " }\n";
+    return "{ \"working\": " + JStr(wsNow) + ", \"bitsPerChannel\": " + std::string(bpcS) +
+           ", \"config\": " + JStr(ifacePath) + ", \"effectConfig\": " + JStr(pr.config) + " }\n";
 }
 
 std::string MincMigrateProject(SPBasicSuite *bp, AEGP_PluginID id, const std::string &presetKey) {
@@ -509,40 +518,29 @@ std::string MincMigrateProject(SPBasicSuite *bp, AEGP_PluginID id, const std::st
     std::string cfg = MincCentralConfigsDir() + "/" + pr.config;
     if (!PathExists(cfg)) return "{ \"error\": " + JStr("config not in central store: " + pr.config) + " }\n";
 
-    /* pre-reopen half */
-    std::vector<SyncRow> rows;
-    std::string workName;
-    if (!BuildSyncRows(e, projPath, &rows, &workName)) return "{ \"error\": \"sync report failed\" }\n";
-    std::vector<MincFootagePatch> strip;
-    std::string harvestItems;
-    bool first = true;
-    for (auto &r : rows) {
-        if (r.ok) continue;
-        std::string cleaned;
-        for (char c : r.current) if (c != '"') cleaned += c;   /* :736 quote strip */
-        if (!first) harvestItems += ",";
-        harvestItems += "\"" + std::to_string(r.id) + "\":{\"name\":\"" + cleaned + "\"}";
-        first = false;
-        MincFootagePatch fp;
-        fp.id = r.id;
-        fp.profileJSON = MincRifxProfileJSON(pr.working.c_str(), pr.family.c_str());
-        strip.push_back(fp);
-    }
-    std::string harvest = "{ \"migrated\": \"" + presetKey + "\", \"items\": {" + harvestItems + "} }";
+    /* lean-v3 EMBRACE-NONE migrate: sidecar the config, switch AE LIVE (auto-None working; no
+       reopen, no PwCs working-space patch, no footage native-reprofile — AE just neutralizes;
+       our self-contained effects own all colour), then fix the existing minColor effects on the
+       LIVE project. RebuildEffects strips foreign natives; a save+backup guards the pre-migrate
+       state. Provenance/harvest deferred with the reopen (revisit: an XMP-only stamp). */
+    std::string cfgTarget, serr;
+    if (!MincEnsureSidecar(projPath, presetKey, &cfgTarget, &serr))
+        return "{ \"error\": " + JStr(serr) + " }\n";
+    std::string ifacePath, ierr;
+    if (!MincWriteInterfaceConfig(projPath, presetKey, &ifacePath, &ierr))
+        return "{ \"error\": " + JStr(ierr) + " }\n";
     if (!SaveTo(e, projPath)) return "{ \"error\": \"save failed\" }\n";
     std::string berr, bpath = BackupCopy(projPath, "premigrate", &berr);
     if (bpath.empty()) return "{ \"error\": " + JStr(berr) + " }\n";
 
-    /* PRE-REOPEN SAFETY (2026-09-03): when the project is in OCIO FALLBACK (ocioOn == false — its
+    /* PRE-SWITCH SAFETY (2026-09-03): when the project is in OCIO FALLBACK (ocioOn == false — its
        pinned config didn't load: unmounted volume / deleted config), its native OCIO effects are
-       unvalidated. The repin + Reopen below turns OCIO on and makes AE validate them against THEIR
-       baked config paths, aborting inside OCIOWrapper on any unreachable one — a crash migrate can't
-       survive because it fires DURING the reopen, before RebuildEffects can clean up. Foreign native
+       unvalidated. The live config switch below turns OCIO on and can make AE validate them against
+       THEIR baked config paths, aborting inside OCIOWrapper on any unreachable one. Foreign native
        effects are what migrate discards anyway, so strip them now (OCIO off = structural, no config
-       needed) and re-save so the patch+reopen see the clean file. If minColor-authored native effects
-       remain, THEIR config is unreachable too (else OCIO would be on) — refuse rather than reopen into
-       a crash; the premigrate backup is already taken. When ocioOn is true the project opened cleanly,
-       so every native config is reachable and the existing flow is left untouched. See MincStrip. */
+       needed). If minColor-authored native effects remain, THEIR config is unreachable too (else OCIO
+       would be on) — refuse rather than switch into a crash; the premigrate backup is already taken.
+       When ocioOn is true the project opened cleanly, so every native config is reachable — leave it. */
     {
         MincAuthorityRefreshBp(bp, id);
         MincAuthoritySnapshot fb = {};
@@ -555,60 +553,61 @@ std::string MincMigrateProject(SPBasicSuite *bp, AEGP_PluginID id, const std::st
                 snprintf(m, sizeof(m),
                     "%d minColor native OCIO effect(s) reference a config that can't be reached "
                     "right now (colour management is off \xe2\x80\x94 the pinned OCIO config didn't "
-                    "load). Migrating would reopen into a crash. Make the config reachable (mount the "
+                    "load). Migrating would validate into a crash. Make the config reachable (mount the "
                     "volume or restore the config), reopen the project, then migrate.", mincOwned);
                 return "{ \"error\": " + JStr(m) + " }\n";
             }
             if (foreign > 0) {
                 MincStripForeignNativeProject(bp, id);
                 /* verify the strip actually cleared them — a partial failure (locked host, remove
-                   error) would leave a native effect to abort the reopen; refuse instead. */
+                   error) would leave a native effect to abort the switch; refuse instead. */
                 int f2 = 0, m2 = 0;
                 MincScanNativeOcio(bp, id, &f2, &m2);
                 if (f2 + m2 > 0)
                     return "{ \"error\": " + JStr("could not clear all unreachable native OCIO "
-                        "effects before reopen (some could not be removed); migration stopped to "
+                        "effects (some could not be removed); migration stopped to "
                         "avoid a crash. Strip Foreign OCIO on the affected comps, then migrate.") + " }\n";
-                if (!SaveTo(e, projPath)) return "{ \"error\": \"save failed after foreign strip\" }\n";
             }
         }
     }
 
-    std::vector<MincXmpUpsert> xmp = {
-        { "harvest", harvest },
-        { "provenance", ProvenanceRecord(presetKey, pr.config) },
-    };
-    std::string perr;
-    if (!MincRifxPatchProject(projPath.c_str(), cfg.c_str(), pr.pwcsJSON.c_str(), strip, xmp, &perr))
-        return "{ \"error\": " + JStr("patch failed: " + perr) + " }\n";
-
-    /* reopen — every handle above is now dead; the env suites remain valid */
-    if (!Reopen(e, projPath)) return "{ \"error\": \"reopen failed\" }\n";
+    /* live config switch — AE pins the LEAN INTERFACE config (its neutralizer); the effect renders
+       from the full config via its passport, never this pin (no native setter; bridge it) */
+    std::string js = "app.project.colorManagementSystem=1; app.project.ocioConfigurationFile=" + JStr(ifacePath) + ";";
+    std::string scriptErr;
+    if (uts) {
+        AEGP_MemHandle resH = nullptr, errH = nullptr;
+        uts->AEGP_ExecuteScript(id, js.c_str(), FALSE, &resH, &errH);
+        if (errH) {
+            void *p = nullptr;
+            suites.MemorySuite1()->AEGP_LockMemHandle(errH, &p);
+            if (p && ((char *)p)[0]) scriptErr = (char *)p;
+            suites.MemorySuite1()->AEGP_UnlockMemHandle(errH);
+            suites.MemorySuite1()->AEGP_FreeMemHandle(errH);
+        }
+        if (resH) suites.MemorySuite1()->AEGP_FreeMemHandle(resH);
+    }
+    if (!scriptErr.empty()) return "{ \"error\": " + JStr("config switch failed: " + scriptErr) + " }\n";
     MincAuthorityRefreshBp(bp, id);
     MincWriteMenus(bp, id);                              /* menus follow the new pin immediately */
 
     int bpc = 0;
     SetBitDepth(e, pr.family, &bpc);
-    MincSuggestCtx ctx = MincBuildSuggestCtx(presetKey, cfg);
+    MincSuggestCtx ctx = MincBuildSuggestCtx(presetKey, cfgTarget);
     RebuildOut rb;
     bool touched = false;
     std::set<std::string> configLooks;                   /* per-look validity (native-look crash guard) */
-    { std::vector<std::string> lv = MincConfigLooks(cfg); for (auto &l : lv) configLooks.insert(l); }
+    { std::vector<std::string> lv = MincConfigLooks(cfgTarget); for (auto &l : lv) configLooks.insert(l); }
     RebuildEffects(e, ctx, configLooks, &rb, &touched);
+    /* write self-contained arbs from the (now-correct) names — MincSyncFromNames is embrace-None
+       capable: passport = sidecar basename, working resolves from the config's scene_linear role
+       at render when the live None switch leaves the working space empty. */
     if (touched) MincSyncFromNames(bp, id);
 
-    /* post-audit */
-    std::vector<SyncRow> audit;
-    std::string wn2;
-    int residual = 0;
-    if (BuildSyncRows(e, projPath, &audit, &wn2))
-        for (auto &r : audit) if (!r.ok) ++residual;
     MincAuthorityRefreshBp(bp, id);
-    MincAuthoritySnapshot snap = {};
-    MincAuthorityGet(&snap);
-    std::string pinNow = snap.configPath;
-    const char *CENTRAL = "/Library/Application Support/Adobe/Common/Plug-ins/7.0/MediaCore/minColor";
-    std::string locus = (pinNow.compare(0, strlen(CENTRAL), CENTRAL) == 0) ? "central" : "sidecar (central store not installed)";
+    MincAuthoritySnapshot snap = {}; MincAuthorityGet(&snap);   /* MEASURED working, not a claim */
+    std::string wsNow = snap.workingSpace[0] ? std::string(snap.workingSpace) : std::string("None (neutralized)");
+    std::string locus = "sidecar (project-local)";       /* embrace-None always pins the _minColor copy */
     /* backups stats (:658-666) */
     int bcount = 0; double bmb = 0;
     {
@@ -630,11 +629,12 @@ std::string MincMigrateProject(SPBasicSuite *bp, AEGP_PluginID id, const std::st
     }
     char nums[256];
     snprintf(nums, sizeof(nums),
-             ", \"stripped\": %d, \"residual\": %d, \"harvested\": %d, \"effectsRebuilt\": %d, \"viewRenderRetargeted\": %d, \"bitsPerChannel\": %d",
-             (int)strip.size(), residual, (int)strip.size(), (int)rb.rebuilt.size(), rb.viewRender, bpc);
+             ", \"effectsRebuilt\": %d, \"viewRenderRetargeted\": %d, \"bitsPerChannel\": %d",
+             (int)rb.rebuilt.size(), rb.viewRender, bpc);
     char bstats[64];
     snprintf(bstats, sizeof(bstats), "{ \"count\": %d, \"mb\": %.1f }", bcount, bmb);
-    return "{ \"preset\": " + JStr(presetKey) + ", \"working\": " + JStr(pr.workingSpaceLabel) +
+    return "{ \"preset\": " + JStr(presetKey) + ", \"working\": " + JStr(wsNow) +
+           ", \"config\": " + JStr(ifacePath) + ", \"effectConfig\": " + JStr(pr.config) +
            ", \"pinLocus\": " + JStr(locus) + nums +
            ", \"backup\": " + JStr(bpath) +
            ", \"effectsFailed\": " + JArr(rb.failed) +
@@ -661,17 +661,37 @@ std::string MincPackageForAnyAE(SPBasicSuite *bp, AEGP_PluginID id) {
     std::string projPath = ProjPath(e);
     if (projPath.empty()) return "{ \"error\": \"save the project first\" }\n";
 
-    MincTranslateReport tr = MincTranslateToNative(bp, id);          /* :491 */
-
-    /* identity from the live pin (sidecarInfo semantics, :492) */
+    /* identity from the live pin (interface config -> preset via the -interface strip) */
     MincAuthorityRefreshBp(bp, id);
     MincAuthoritySnapshot snap = {};
     MincAuthorityGet(&snap);
     std::string preset = MincPresetFromConfigBase(Basename2(snap.configPath));
     if (preset.empty()) return "{ \"error\": \"not a minColor project\" }\n";
     std::string cfgTarget, serr;
-    if (!MincEnsureSidecar(projPath, preset, &cfgTarget, &serr))     /* :493 */
+    if (!MincEnsureSidecar(projPath, preset, &cfgTarget, &serr))     /* full config + LUTs beside the project */
         return "{ \"error\": " + JStr(serr) + " }\n";
+    /* lean-v3 Path 2: Package EXPORTS native OCIO effects for machines without minColor — those
+       bind to AE's PROJECT config, so pin the FULL config (not the lean interface) BEFORE
+       translating, else native authoring can't find the input/view spaces. */
+    {
+        std::string js = "app.project.colorManagementSystem=1; app.project.ocioConfigurationFile=" + JStr(cfgTarget) + ";";
+        std::string scriptErr;
+        if (uts) {
+            AEGP_MemHandle resH = nullptr, errH = nullptr;
+            uts->AEGP_ExecuteScript(id, js.c_str(), FALSE, &resH, &errH);
+            if (errH) {
+                void *p = nullptr;
+                suites.MemorySuite1()->AEGP_LockMemHandle(errH, &p);
+                if (p && ((char *)p)[0]) scriptErr = (char *)p;
+                suites.MemorySuite1()->AEGP_UnlockMemHandle(errH);
+                suites.MemorySuite1()->AEGP_FreeMemHandle(errH);
+            }
+            if (resH) suites.MemorySuite1()->AEGP_FreeMemHandle(resH);
+        }
+        if (!scriptErr.empty()) return "{ \"error\": " + JStr("config switch failed: " + scriptErr) + " }\n";
+        MincAuthorityRefreshBp(bp, id);
+    }
+    MincTranslateReport tr = MincTranslateToNative(bp, id);          /* authors native against the FULL config */
 
     /* the panel re-pins live and stamps engine="native" during translate (:640); the native
        path folds both into one patch ceremony — save (persists translated effects), patch

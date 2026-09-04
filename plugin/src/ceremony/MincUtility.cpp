@@ -267,7 +267,8 @@ std::string MincApplyLook(SPBasicSuite *bp, AEGP_PluginID id, const std::string 
     if (!comp) return "{ \"error\": \"open a comp\" }\n";
     MincAuthorityRefreshBp(bp, id);
     MincAuthoritySnapshot snap = {}; MincAuthorityGet(&snap);
-    std::string cfgBase = CfgBaseOf(snap.configPath);
+    std::string cfgBase;                                     /* lean-v3 Path 2: FULL config, not AE's interface pin */
+    MincEffectConfigPath(snap.configPath, "", &cfgBase);
     std::string working = snap.workingSpace[0] ? std::string(snap.workingSpace)
                                                : MincPresetMeta(MincPresetFromConfigBase(cfgBase)).working;
     std::string vAct = "absent", rAct = "absent";
@@ -300,7 +301,8 @@ std::string MincEnsureUtilityLayers(SPBasicSuite *bp, AEGP_PluginID id,
     MincAuthorityRefreshBp(bp, id);
     MincAuthoritySnapshot snap = {};
     MincAuthorityGet(&snap);
-    std::string pin = snap.configPath;
+    std::string fullBase;                                    /* lean-v3 Path 2: FULL config for space-checks + passport */
+    std::string pin = MincEffectConfigPath(snap.configPath, "", &fullBase);
     std::string view = viewSpace, render = renderSpace;
     if (view.empty() || render.empty()) {                    /* family defaults from the menus file */
         MincMenus menus;
@@ -311,7 +313,7 @@ std::string MincEnsureUtilityLayers(SPBasicSuite *bp, AEGP_PluginID id,
     }
     if (view.empty() || render.empty()) return "{ \"error\": \"no spaces given and no plugin-menus defaults\" }\n";
     std::string working = snap.workingSpace[0] ? std::string(snap.workingSpace)
-                                               : MincPresetMeta(MincPresetFromConfigBase(CfgBaseOf(pin))).working;
+                                               : MincPresetMeta(MincPresetFromConfigBase(fullBase)).working;
     if (uts) uts->AEGP_StartUndoGroup("minColor utility layers");
     UpResult rr = Upsert(bp, id, comp, active, "render", render, pin, working);   /* render first, */
     UpResult rv = Upsert(bp, id, comp, active, "view",   view,   pin, working);   /* view last -> view on, render off (:1356) */

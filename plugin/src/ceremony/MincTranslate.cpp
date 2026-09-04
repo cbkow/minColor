@@ -24,9 +24,9 @@ MincTranslateReport MincTranslateToNative(SPBasicSuite *bp, AEGP_PluginID id) {
     MincAuthorityRefreshBp(bp, id);
     MincAuthoritySnapshot snap = {};
     MincAuthorityGet(&snap);
-    std::string pin = snap.configPath;
-    std::string pinBase = pin.substr(pin.find_last_of('/') == std::string::npos ? 0 : pin.find_last_of('/') + 1);
-    MincSuggestCtx ctx = MincBuildSuggestCtx(MincPresetFromConfigBase(pinBase), pin);
+    std::string fullBase;                                    /* lean-v3 Path 2: FULL config, not AE's interface pin */
+    std::string pin = MincEffectConfigPath(snap.configPath, "", &fullBase);
+    MincSuggestCtx ctx = MincBuildSuggestCtx(MincPresetFromConfigBase(fullBase), pin);
     bool hasLooks = THasLooks(pin);
     std::set<std::string> configLooks;                   /* per-look validity: never author a native
                                                             Look Transform for a look absent from the
@@ -200,12 +200,11 @@ MincTranslateReport MincTranslateToPlugin(SPBasicSuite *bp, AEGP_PluginID id) {
     MincAuthorityRefreshBp(bp, id);
     MincAuthoritySnapshot snap = {};
     MincAuthorityGet(&snap);
-    std::string pin = snap.configPath;
-    std::string pinBase = pin.substr(pin.find_last_of('/') == std::string::npos ? 0 : pin.find_last_of('/') + 1);
-    MincSuggestCtx ctx = MincBuildSuggestCtx(MincPresetFromConfigBase(pinBase), pin);
-    std::string cfgBase = pinBase;                              /* passport for self-contained authoring */
+    std::string cfgBase;                                       /* lean-v3 Path 2: FULL config, not AE's interface pin */
+    std::string pin = MincEffectConfigPath(snap.configPath, "", &cfgBase);
+    MincSuggestCtx ctx = MincBuildSuggestCtx(MincPresetFromConfigBase(cfgBase), pin);
     std::string working = snap.workingSpace[0] ? std::string(snap.workingSpace)
-                                               : MincPresetMeta(MincPresetFromConfigBase(pinBase)).working;
+                                               : MincPresetMeta(MincPresetFromConfigBase(cfgBase)).working;
     bool hasLooks = THasLooks(pin);
     if (uts) uts->AEGP_StartUndoGroup("minColor adopt");
     AEGP_ProjectH projH = nullptr;

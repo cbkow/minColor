@@ -133,13 +133,15 @@ static int SyncOnce(SPBasicSuite *bp, AEGP_PluginID aegpId, bool christen) {
     /* passport source: the CURRENT healthy authority. Written into every synced instance so the
        .aep carries the content-addressed config basename + working space across platforms. */
     MincAuthoritySnapshot snap = {}; MincAuthorityGet(&snap);
-    bool authHealthy = snap.ocioOn && snap.configPath[0] && snap.workingSpace[0];
+    /* lean-v3 EMBRACE-NONE: a managed project's working space is None by design, so
+       snap.workingSpace is empty for a healthy project — it must NOT gate the passport.
+       ocioOn + a pinned config are sufficient to establish "managed"; the config-basename
+       passport is what the effect needs, and it resolves working from the config's
+       scene_linear role at render when passportWorking is empty (§42, proven headless). */
+    bool authHealthy = snap.ocioOn && snap.configPath[0];
     char passBase[MINC_CONFIGBASE_LEN] = "";
-    if (authHealthy) {
-        const char *b = snap.configPath;
-        for (const char *p = snap.configPath; *p; ++p) if (*p == '/' || *p == '\\') b = p + 1;
-        if (b[0] && !strstr(b, "..") && strlen(b) < sizeof(passBase)) strncpy(passBase, b, sizeof(passBase) - 1);
-    }
+    if (authHealthy)
+        MincPassportConfigBase(snap.configPath, passBase, sizeof(passBase));   /* full config (strip -interface); basename + traversal guard inside */
     int seen = 0, wrote = 0, badname = 0, reminted = 0, placeholders = 0, christened = 0;
     MincMenus menus;
     bool haveMenus = christen && MincMenusGet(&menus);   /* no menus file -> no christening, ever */

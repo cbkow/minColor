@@ -16,4 +16,4 @@
 [after] preset=acescg
 [after] status=green
 [after] text=acescg · Linear/ACEScg · sidecar
-[state] project: items=0 working='None' pin='config-acescg.ocio' bpc=32 engine=-
+[state] project: items=0 working='Linear/ACEScg' pin='config-acescg.ocio' bpc=32 engine=-

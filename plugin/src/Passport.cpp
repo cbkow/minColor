@@ -61,20 +61,30 @@ const char *MincLocalStoreConfigDir(void) {
 
 bool MincEffectiveAuthority(const MincAuthoritySnapshot *live, const MincSeqData *sd,
                             MincAuthoritySnapshot *out) {
-    bool healthy = live->ocioOn && live->configPath[0] && live->workingSpace[0];
-    bool passportOk = sd && sd->configBase[0] && sd->passportWorking[0] &&
+    /* lean-v3 SELF-CONTAINED: the effect renders from its OWN config — the passport's config
+       basename, resolved against the plugin-relative store — NOT AE's project config. AE's
+       pinned config is a neutralizer we deliberately ignore (it may be a lean "interface"
+       config that lacks the input spaces). The passport WINS whenever its config resolves;
+       working space is passportWorking when set, else the engine derives it from the config's
+       scene_linear role (embrace-scene_linear). We fall back to AE's live authority only for a
+       genuinely unauthored/legacy effect (no passport) or a config the store can't resolve
+       (e.g. a user's custom pin) — best effort, never silently wrong for a managed project. */
+    bool passportOk = sd && sd->configBase[0] &&
                       !strchr(sd->configBase, '/') && !strchr(sd->configBase, '\\') &&
                       !strstr(sd->configBase, "..");
-    if (healthy && (!passportOk || MincPathExists(live->configPath))) { *out = *live; return false; }
     const char *store = MincLocalStoreConfigDir();
     if (passportOk && store[0]) {
-        memset(out, 0, sizeof(*out));
-        out->ocioOn = true;
-        snprintf(out->configPath, sizeof(out->configPath), "%s/%s", store, sd->configBase);
-        snprintf(out->workingSpace, sizeof(out->workingSpace), "%s", sd->passportWorking);
-        out->generation = live->generation;
-        return true;                                 /* engine ladder still guards: missing file -> pass-through */
+        char cand[2600];
+        snprintf(cand, sizeof(cand), "%s/%s", store, sd->configBase);
+        if (MincPathExists(cand)) {
+            memset(out, 0, sizeof(*out));
+            out->ocioOn = true;
+            snprintf(out->configPath, sizeof(out->configPath), "%s", cand);
+            snprintf(out->workingSpace, sizeof(out->workingSpace), "%s", sd->passportWorking);
+            out->generation = live->generation;
+            return true;
+        }
     }
-    *out = *live;
+    *out = *live;                                    /* no resolvable passport -> AE's live authority */
     return false;
 }

@@ -269,12 +269,14 @@ MincInterpretReport MincInterpretTimeline(SPBasicSuite *bp, AEGP_PluginID id) {
     MincAuthorityRefreshBp(bp, id);
     MincAuthoritySnapshot snap = {};
     MincAuthorityGet(&snap);
-    e.pin = snap.configPath;
-    std::string pinBase = e.pin.substr(e.pin.find_last_of('/') == std::string::npos ? 0 : e.pin.find_last_of('/') + 1);
-    e.ctx = MincBuildSuggestCtx(MincPresetFromConfigBase(pinBase), e.pin);
-    e.cfgBase = pinBase;                                     /* passport: config basename + working */
+    std::string fullBase;                                    /* lean-v3 Path 2: author against the FULL config */
+    std::string fullPath = MincEffectConfigPath(snap.configPath, "", &fullBase);
+    e.pin = fullPath;                                        /* FULL config path — space-checks (:197) + ctx, NOT AE's interface pin */
+    std::string preset = MincPresetFromConfigBase(fullBase);
+    e.ctx = MincBuildSuggestCtx(preset, fullPath);           /* suggestions read the FULL space list */
+    e.cfgBase = fullBase;                                    /* passport = full config basename */
     e.working = snap.workingSpace[0] ? std::string(snap.workingSpace)
-                                     : MincPresetMeta(MincPresetFromConfigBase(pinBase)).working;
+                                     : MincPresetMeta(preset).working;
     /* detected + harvest: TEMP-COPY save (probe-E copy semantics — the user's file is untouched;
        mirrors the panel's data without its force-save) */
     {
@@ -362,12 +364,14 @@ MincInterpretReport MincInterpretSelection(SPBasicSuite *bp, AEGP_PluginID id, c
     MincAuthorityRefreshBp(bp, id);
     MincAuthoritySnapshot snap = {};
     MincAuthorityGet(&snap);
-    e.pin = snap.configPath;
-    std::string pinBase = e.pin.substr(e.pin.find_last_of('/') == std::string::npos ? 0 : e.pin.find_last_of('/') + 1);
-    e.ctx = MincBuildSuggestCtx(MincPresetFromConfigBase(pinBase), e.pin);
-    e.cfgBase = pinBase;                                     /* passport: config basename + working */
+    std::string fullBase;                                    /* lean-v3 Path 2: author against the FULL config */
+    std::string fullPath = MincEffectConfigPath(snap.configPath, "", &fullBase);
+    e.pin = fullPath;                                        /* FULL config path — space-checks (:197) + ctx, NOT AE's interface pin */
+    std::string preset = MincPresetFromConfigBase(fullBase);
+    e.ctx = MincBuildSuggestCtx(preset, fullPath);           /* suggestions read the FULL space list */
+    e.cfgBase = fullBase;                                    /* passport = full config basename */
     e.working = snap.workingSpace[0] ? std::string(snap.workingSpace)
-                                     : MincPresetMeta(MincPresetFromConfigBase(pinBase)).working;
+                                     : MincPresetMeta(preset).working;
     if (space.empty()) {                                     /* suggestion path needs detected/harvest */
         AEGP_ProjectH projH = nullptr;
         pjs->AEGP_GetProjectByIndex(0, &projH);

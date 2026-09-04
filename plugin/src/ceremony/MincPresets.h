@@ -25,3 +25,10 @@ bool MincPinBehind(const std::string &presetKey, const std::string &pinnedBase,
 
 /* filename-match search: central store, project sidecar (_minColor beside projPath), shared configs */
 std::string MincFindConfigByName(const std::string &base, const std::string &projPathOrEmpty);
+
+/* lean-v3 Path 2: AE's live pin is the lean INTERFACE config (config-<preset>-interface.ocio);
+   the effect authors against the FULL config. Given the pinned path, return the FULL config's
+   absolute path (resolved via the store) and set *fullBaseOut to its basename (-interface
+   stripped). Falls back to the pin itself when it isn't an interface config or can't resolve. */
+std::string MincEffectConfigPath(const std::string &pinnedPath, const std::string &projPathOrEmpty,
+                                 std::string *fullBaseOut);

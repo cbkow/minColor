@@ -17,6 +17,28 @@
 #include "MincBuildStamp.h"
 #include "MincSignal.h"     /* cross-bundle walk marker (effect arms, AEGP consumes) */
 #include <set>
+#include <string>
+#include <cstring>
+#include <cstdio>
+
+/* lean-v3 Path 2: the passport must name the FULL config (config-<preset>.ocio) the effect
+   renders from, but every authoring site stamps it from AE's LIVE pin — which is now the LEAN
+   INTERFACE config (config-<preset>-interface.ocio). Derive the basename and strip a trailing
+   "-interface" before ".ocio" so the passport names the full config. No-op for any basename
+   without the suffix (custom pins, legacy). Traversal-guarded. */
+static inline void MincPassportConfigBase(const char *path, char *out, size_t cap) {
+    if (!out || cap == 0) return;
+    out[0] = 0;
+    if (!path || !path[0]) return;
+    const char *b = path;
+    for (const char *p = path; *p; ++p) if (*p == '/' || *p == '\\') b = p + 1;   /* basename */
+    if (strstr(b, "..")) return;
+    std::string s(b);
+    const std::string sfx = "-interface.ocio";
+    if (s.size() > sfx.size() && s.compare(s.size() - sfx.size(), sfx.size(), sfx) == 0)
+        s = s.substr(0, s.size() - sfx.size()) + ".ocio";
+    snprintf(out, cap, "%s", s.c_str());
+}
 
 /* ---- MincLog.cpp — per-binary log file, basename via MINC_LOG_BASENAME compile def ---- */
 void        MincDebugLog(const char *fmt, ...);          /* compiled out unless MINC_DEBUG */

@@ -52,7 +52,9 @@ static PF_Err ParamsSetup(PF_InData *in_data, PF_OutData *out_data) {
         PF_ADD_ARBITRARY2("Transform",
                           0, 0,                       /* lean-v3: hidden truth store, no UI (was the ECW badge) */
                           0,
-                          PF_PUI_INVISIBLE,
+                          PF_PUI_NO_ECW_UI,           /* SDK: an ARBITRARY_DATA param MUST pair with NO_ECW (or
+                                                         TOPIC/CONTROL) — INVISIBLE alone = "Unsupported effect
+                                                         control!" at ECW build. NO_ECW_UI = no control at all. */
                           arbH,
                           ARB_DISK_ID,
                           NULL);
@@ -260,8 +262,7 @@ static void OnPopupChanged(MincVerb verb, PF_InData *in_data, PF_OutData *out_da
     pay.payVersion = 2;
     MincAuthoritySnapshot live = {}; MincAuthorityGet(&live);
     if (live.ocioOn && live.configPath[0]) {                      /* stamp the passport from live authority */
-        const char *b = strrchr(live.configPath, '/'); b = b ? b + 1 : live.configPath;
-        snprintf(pay.configBase, MINC_CONFIGBASE_LEN, "%s", b);
+        MincPassportConfigBase(live.configPath, pay.configBase, MINC_CONFIGBASE_LEN);  /* full config (strip -interface) */
         snprintf(pay.passportWorking, MINC_SPACE_LEN, "%s", live.workingSpace);
     }
     HandleGeneric(in_data, out_data, params, &pay);

@@ -81,6 +81,58 @@ bool MincEnsureSidecar(const std::string &projPath, const std::string &preset,
     return true;
 }
 
+bool MincWriteInterfaceConfig(const std::string &projPath, const std::string &preset,
+                              std::string *ifaceOut, std::string *errOut) {
+    MincPresetInfo pr = MincPresetMeta(preset);
+    if (!pr.valid) { if (errOut) *errOut = "unknown preset " + preset; return false; }
+    if (pr.working.empty()) { if (errOut) *errOut = "preset has no working space"; return false; }
+    size_t sl = projPath.find_last_of('/');
+    if (sl == std::string::npos) { if (errOut) *errOut = "bad project path"; return false; }
+    std::string sd = projPath.substr(0, sl) + "/_minColor";
+    mkdir(sd.c_str(), 0777);
+    std::string ws = pr.working;                          /* the ONE space AE composites in */
+    bool display = (pr.family == "Display");
+    const char *alloc = display ? "uniform" : "lg2";
+    const char *allocvars = display ? "[0, 1]" : "[-8, 5, 0.00390625]";
+    std::string c;
+    c += "ocio_profile_version: 2\n\n";
+    c += "# minColor INTERFACE config (generated) — AE PROJECT SETTINGS ONLY.\n";
+    c += "# AE's neutralizer: the only working space is '" + ws + "' (scene_linear); default_* all\n";
+    c += "# point at it so UNASSIGNED footage passes through untouched, and the sole view is Raw\n";
+    c += "# (passthrough — display is baked on minColor adjustment layers). The minColor effect\n";
+    c += "# does NOT read this file; it renders from its own full config (config-" + preset + ".ocio).\n\n";
+    c += "name: minColor-interface-" + preset + "\n";
+    c += "strictparsing: false\n\n";
+    c += "roles:\n";
+    const char *roles[] = { "reference", "scene_linear", "rendering", "default",
+                            "default_byte", "default_float", "color_picking", "compositing_log",
+                            "color_timing", "matte_paint", "texture_paint" };
+    for (const char *r : roles) c += std::string("  ") + r + ": " + ws + "\n";
+    c += "  data: Raw\n\n";
+    c += "displays:\n  none:\n    - !<View> {name: Raw, colorspace: Raw}\n\n";
+    c += "active_displays: [none]\nactive_views: [Raw]\n\n";
+    c += "colorspaces:\n";
+    c += "  - !<ColorSpace>\n";
+    c += "    name: " + ws + "\n";
+    c += "    family: \"\"\n";
+    c += "    bitdepth: 32f\n";
+    c += "    description: minColor interface pivot (identity/reference; the effect owns real colour).\n";
+    c += "    isdata: false\n";
+    c += std::string("    allocation: ") + alloc + "\n";
+    c += std::string("    allocationvars: ") + allocvars + "\n\n";
+    c += "  - !<ColorSpace>\n";
+    c += "    name: Raw\n";
+    c += "    family: \"\"\n";
+    c += "    bitdepth: 32f\n";
+    c += "    description: Raw data (no transform) — the passthrough viewer view.\n";
+    c += "    isdata: true\n";
+    c += "    allocation: uniform\n";
+    std::string ifacePath = sd + "/config-" + preset + "-interface.ocio";
+    if (!MincWriteTextFile(ifacePath, c)) { if (errOut) *errOut = "interface config write failed"; return false; }
+    if (ifaceOut) *ifaceOut = ifacePath;
+    return true;
+}
+
 std::string MincArchiveProject(SPBasicSuite *bp, AEGP_PluginID id) {
     AEGP_SuiteHandler suites(bp);
     Acq<AEGP_ProjSuite6> pjs(bp, kAEGPProjSuite, kAEGPProjSuiteVersion6);
