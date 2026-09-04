@@ -86,6 +86,31 @@ bool MincApplyMincWithName(SPBasicSuite *bp, AEGP_PluginID id, AEGP_LayerH layer
     return true;
 }
 
+bool MincApplyMincSelfContained(SPBasicSuite *bp, AEGP_PluginID id, AEGP_LayerH layerH,
+                                const std::string &grammarName, int targetIndex1,
+                                const MinColorArb *arb, const char *configBase, const char *working) {
+    int newIdx = 0;
+    AEGP_EffectRefH effH = MincApplyByMatchWithName(bp, id, layerH, MINC_MATCH_XFORM, grammarName, &newIdx);
+    if (!effH) return false;
+    MincWriteEffectArb(bp, id, effH, arb, configBase, working);      /* author BEFORE dispose/move (§34) */
+    Acq<AEGP_EffectSuite5> efs(bp, kAEGPEffectSuite, kAEGPEffectSuiteVersion5);
+    if (efs) efs->AEGP_DisposeEffect(effH);
+    if (targetIndex1 > 0 && targetIndex1 != newIdx)
+        MincMoveEffect(bp, id, layerH, newIdx, targetIndex1);
+    return true;
+}
+
+bool MincReauthorEffectAt(SPBasicSuite *bp, AEGP_PluginID id, AEGP_LayerH layerH, int index1,
+                          const MinColorArb *arb, const char *configBase, const char *working) {
+    Acq<AEGP_EffectSuite5> efs(bp, kAEGPEffectSuite, kAEGPEffectSuiteVersion5);
+    if (!efs) return false;
+    AEGP_EffectRefH effH = nullptr;
+    if (efs->AEGP_GetLayerEffectByIndex(id, layerH, index1 - 1, &effH) != A_Err_NONE || !effH) return false;
+    MincWriteEffectArb(bp, id, effH, arb, configBase, working);
+    efs->AEGP_DisposeEffect(effH);
+    return true;
+}
+
 bool MincRemoveEffectAt(SPBasicSuite *bp, AEGP_PluginID id, AEGP_LayerH layerH, int index1) {
     Acq<AEGP_EffectSuite5> efs(bp, kAEGPEffectSuite, kAEGPEffectSuiteVersion5);
     if (!efs) return false;

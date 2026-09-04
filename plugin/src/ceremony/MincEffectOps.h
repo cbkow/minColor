@@ -21,6 +21,16 @@ bool MincEnumLayerEffects(SPBasicSuite *bp, AEGP_PluginID id, AEGP_LayerH layerH
 bool MincApplyMincWithName(SPBasicSuite *bp, AEGP_PluginID id, AEGP_LayerH layerH,
                            const std::string &grammarName, int targetIndex1);
 
+/* lean-v3 self-contained authoring: apply the XFORM variant AND write its arb (space + passport)
+   through the just-applied ref, before dispose/move (§34 ordering) — so the saved project carries
+   the render-truth with no name-walk. MincReauthorEffectAt writes the arb onto an effect already
+   at a 1-based parade index (after a rename-in-place). */
+bool MincApplyMincSelfContained(SPBasicSuite *bp, AEGP_PluginID id, AEGP_LayerH layerH,
+                                const std::string &grammarName, int targetIndex1,
+                                const MinColorArb *arb, const char *configBase, const char *working);
+bool MincReauthorEffectAt(SPBasicSuite *bp, AEGP_PluginID id, AEGP_LayerH layerH, int index1,
+                          const MinColorArb *arb, const char *configBase, const char *working);
+
 bool MincRenameEffectAt(SPBasicSuite *bp, AEGP_PluginID id, AEGP_LayerH layerH,
                         int index1, const std::string &newName);
 bool MincRemoveEffectAt(SPBasicSuite *bp, AEGP_PluginID id, AEGP_LayerH layerH, int index1);
