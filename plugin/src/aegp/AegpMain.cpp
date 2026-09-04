@@ -225,23 +225,18 @@ static void CmdUtility(void) {
 
 /* ---------------- hooks ---------------- */
 static A_Err IdleHook(AEGP_GlobalRefcon, AEGP_IdleRefcon, A_long *max_sleepPL) {
-    static unsigned long lastSyncedGen = 0;
     static bool keyScanned = false;
     static double lastDoctorMs = 0;
     static std::string lastDoctorJson;
     if (g_pica && g_id) {
         if (!keyScanned) { keyScanned = true; MincInstalledKey(g_pica, g_id); }   /* timed scan, once (RESULTS §31) */
-        MincAuthorityRefreshBp(g_pica, g_id);
-        MincAuthoritySnapshot s;                        /* project/preset changed -> names are the durable
-                                                           store: re-derive every instance's state */
+        MincAuthorityRefreshBp(g_pica, g_id);           /* read-only: feeds the doctor heartbeat */
+        MincAuthoritySnapshot s;
         bool haveSnap = MincAuthorityGet(&s);
-        if (haveSnap && s.generation != lastSyncedGen) {
-            lastSyncedGen = s.generation;
-            MincWriteMenus(g_pica, g_id);       /* menus follow the pin — fresh BEFORE the walk */
-            MincSyncFromNames(g_pica, g_id);
-            MincTouchActiveItem();              /* authority changed (incl. a MANUAL working-space
-                                                   change) -> re-render the current frame */
-        }
+        /* lean-v3: THE DAEMON IS GONE. No gen-change walk re-asserting minColor state — that was
+           the "active" re-assertion that fought a switch back to native ACES. Effects are now
+           self-contained (space in a saved param, read at render); ceremonies write plugin-menus
+           explicitly. The idle hook now only OBSERVES (authority + doctor), never mutates. */
         /* doctor heartbeat: the AEGP diagnoses on idle and writes the report ON CHANGE —
            the shell only READS it. A panel timer must never executeCommand: AE dispatch
            mid-startup/mid-project-load throws script errors and wedges launches (the
@@ -253,12 +248,8 @@ static A_Err IdleHook(AEGP_GlobalRefcon, AEGP_IdleRefcon, A_long *max_sleepPL) {
             std::string j = MincDoctorDiagnose(g_pica, g_id).toJson();
             if (j != lastDoctorJson) { lastDoctorJson = j; MincWriteReport("doctor", j); }
         }
-        char reason[32] = "";
-        if (MincConsumeWalkMarker(reason, sizeof(reason))) {
-            /* effect-armed walk (delete-first: a drop landing mid-walk re-creates the marker
-               for the next tick). "christen" names fresh default-named VIEW/RENDER variants. */
-            MincSyncFromNames(g_pica, g_id, strncmp(reason, "christen", 8) == 0);
-        }
+        /* lean-v3: no walk-marker consume — christening on raw drops is retired. Utility Layers
+           authors view/render; the effect's popup authors any layer's space directly. */
     }
     if (max_sleepPL) *max_sleepPL = 60;                 /* ~1 s at 60 ticks */
     return A_Err_NONE;
