@@ -1,11 +1,38 @@
 /* Config + processor caches and row application. All OCIO 2.5 usage is confined here. */
 #include "MincTypes.h"
+#include "MincEmbeddedConfigs.h"
 #include <OpenColorIO/OpenColorIO.h>
 #include <cstdio>
 #include <shared_mutex>
 #include <map>
+#include <memory>
 #include <string>
+#include <vector>
 namespace OCIO = OCIO_NAMESPACE;
+
+static std::string Basename(const char *p) {
+    if (!p) return std::string();
+    const char *b = p;
+    for (const char *q = p; *q; ++q) if (*q == '/' || *q == '\\') b = q + 1;
+    return std::string(b);
+}
+
+/* lean-v3 "plugin is the package": serve the config + its LUTs from the binary-embedded store
+   (zlib-inflated on demand) so rendering never touches the filesystem. Lookup by basename — LUT
+   basenames are unique across the config's search_path trees. */
+class MincEmbeddedProxy : public OCIO::ConfigIOProxy {
+    std::string cfg_;
+public:
+    explicit MincEmbeddedProxy(std::string cfg) : cfg_(std::move(cfg)) {}
+    std::vector<uint8_t> getLutData(const char *filepath) const override {
+        return MincEmbeddedLut(Basename(filepath));
+    }
+    std::string getConfigData() const override { return cfg_; }
+    std::string getFastLutFileHash(const char *filepath) const override {
+        std::string b = Basename(filepath);
+        return MincEmbeddedLut(b).empty() ? std::string() : b;   /* unique basename = the id */
+    }
+};
 
 struct ConfigEntry { std::string key; OCIO::ConstConfigRcPtr config; };
 static std::shared_mutex g_cfgMx;
@@ -35,6 +62,30 @@ static std::string StatKey(const char *path) {
 #endif
 
 static OCIO::ConstConfigRcPtr GetConfig(const char *path) {
+    if (!path || !path[0]) return nullptr;
+    /* EMBEDDED-FIRST: if the passport names a baked-in config, render from the binary (zero
+       filesystem). Cache key "e:<base>" — embedded content is immutable for the binary's life. */
+    std::string base = Basename(path);
+    if (MincEmbeddedHasConfig(base)) {
+        std::string ekey = "e:" + base;
+        {
+            std::shared_lock lk(g_cfgMx);
+            auto it = g_configs.find(ekey);
+            if (it != g_configs.end()) return it->second.config;
+        }
+        std::string text = MincEmbeddedConfig(base);
+        if (!text.empty()) {
+            OCIO::ConstConfigRcPtr cfg =
+                OCIO::Config::CreateFromConfigIOProxy(std::make_shared<MincEmbeddedProxy>(text));
+            if (cfg) {
+                std::unique_lock lk(g_cfgMx);
+                if (g_configs.size() > 6) g_configs.clear();
+                g_configs[ekey] = { ekey, cfg };
+                return cfg;
+            }
+        }
+        /* inflate/parse failed — fall through to the filesystem copy if present */
+    }
     std::string key = StatKey(path);
     if (key.empty()) return nullptr;
     {
@@ -44,7 +95,7 @@ static OCIO::ConstConfigRcPtr GetConfig(const char *path) {
     }
     OCIO::ConstConfigRcPtr cfg = OCIO::Config::CreateFromFile(path);   /* throws on failure */
     std::unique_lock lk(g_cfgMx);
-    if (g_configs.size() > 4) g_configs.clear();                        /* tiny LRU-ish bound */
+    if (g_configs.size() > 6) g_configs.clear();                        /* tiny LRU-ish bound */
     g_configs[path] = { key, cfg };
     return cfg;
 }
