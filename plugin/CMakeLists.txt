@@ -20,6 +20,23 @@ add_custom_target(buildstamp ALL
   BYPRODUCTS "${MINC_GEN_DIR}/MincBuildStamp.h"
   COMMENT "build stamp")
 
+# --- EMBEDDED CONFIGS: bake the preset OCIO configs + LUTs into the EFFECT (zlib-compressed) so
+#     rendering needs no filesystem ("the plugin is the package"). Generated .cpp, decompressed at
+#     load with the zlib OCIO already links. Regenerates when config/dist changes. ---
+find_program(MINC_PYTHON NAMES python3 python REQUIRED)
+set(MINC_CONFIG_DIST "${CMAKE_CURRENT_SOURCE_DIR}/../config/dist")
+set(MINC_EMBED_CPP "${MINC_GEN_DIR}/MincEmbeddedConfigs.cpp")
+file(GLOB MINC_EMBED_DEPS
+  "${MINC_CONFIG_DIST}/presets.json" "${MINC_CONFIG_DIST}/config-*.ocio"
+  "${MINC_CONFIG_DIST}/luts/*" "${MINC_CONFIG_DIST}/filmic/*" "${MINC_CONFIG_DIST}/icc/*")
+add_custom_command(
+  OUTPUT "${MINC_EMBED_CPP}"
+  COMMAND "${MINC_PYTHON}" "${CMAKE_CURRENT_SOURCE_DIR}/cmake/gen_embedded_configs.py"
+          "${MINC_EMBED_CPP}" "${MINC_CONFIG_DIST}"
+  DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/cmake/gen_embedded_configs.py" ${MINC_EMBED_DEPS}
+  COMMENT "embed OCIO configs + LUTs into the effect")
+set(MINC_ZLIB_INCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/external/build/ext/dist/include")
+
 # --- After Effects SDK (drop the unzipped SDK into plugin/sdk/) ---
 set(AE_SDK_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/sdk" CACHE PATH "After Effects SDK root")
 file(GLOB _ae_sdk_candidates "${AE_SDK_ROOT}" "${AE_SDK_ROOT}/*")
@@ -87,13 +104,14 @@ add_library(minColorCST MODULE
   src/SmartRender.cpp
   src/Ui.cpp
   src/EffectEdit.cpp
+  "${MINC_EMBED_CPP}"
   ${MINC_CORE_SOURCES}
   "${AE_SDK_EXAMPLES}/Util/AEFX_SuiteHelper.c"
   "${AE_SDK_EXAMPLES}/Util/Smart_Utils.cpp"
   "${AE_SDK_EXAMPLES}/Util/AEGP_Utils.cpp"
 )
 add_dependencies(minColorCST buildstamp)
-target_include_directories(minColorCST PRIVATE ${MINC_COMMON_INCLUDES} src)
+target_include_directories(minColorCST PRIVATE ${MINC_COMMON_INCLUDES} src "${MINC_ZLIB_INCLUDE}")
 target_compile_definitions(minColorCST PRIVATE MINC_LOG_BASENAME="minColorCST_authority")
 if(WIN32)
   file(GLOB OCIO_EXT_LIBS "${CMAKE_CURRENT_SOURCE_DIR}/external/build/ext/dist/lib/*.lib")
@@ -175,7 +193,6 @@ if(APPLE)
     src/ceremony/MincCeremonyProject.cpp
     src/ceremony/MincStrip.cpp
     src/ceremony/MincArchive.cpp
-    src/ceremony/MincTranslate.cpp
     src/ceremony/MincMenusWrite.cpp
     src/ceremony/MincArgs.cpp
     src/ceremony/MincUtility.cpp

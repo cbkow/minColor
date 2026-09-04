@@ -10,7 +10,7 @@
   }
   MincBase.savedProject("rep30");
   writeAnswers("acescg");
-  app.executeCommand(app.findMenuCommandId("minColor: Set Up Project"));
+  app.executeCommand(app.findMenuCommandId("minColor: Migrate Project"));
   var idRepair = app.findMenuCommandId("minColor: Repair");
   var idDoctor = app.findMenuCommandId("minColor: Doctor");
   if (!idRepair || !idDoctor) { MincBase.log("NATIVE REPAIR UNAVAILABLE"); MincBase.finish(N); return; }

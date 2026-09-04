@@ -1,22 +1,21 @@
 [migrate] backup=<dir>/mig10_premigrate_STAMP.aep
 [migrate] backups=[object Object]
 [migrate] bitsPerChannel=32
+[migrate] config=<dir>/config-lin709-interface.ocio
+[migrate] effectConfig=config-lin709.ocio
 [migrate] effectsFailed=0
 [migrate] effectsForeign=0
 [migrate] effectsRebuilt=0
 [migrate] effectsRemapped=0
 [migrate] effectsRemoved=0
 [migrate] gradesLeft=0
-[migrate] harvested=0
 [migrate] orphanLayers=0
-[migrate] pinLocus=central
+[migrate] pinLocus=sidecar (project-local)
 [migrate] preset=lin709
-[migrate] residual=1
-[migrate] stripped=0
 [migrate] strippedPipeline=0
 [migrate] viewRenderRetargeted=0
-[migrate] working=Linear/Linear Rec.709
-[state] project: items=5 working='Linear/Linear Rec.709' pin='config-lin709.ocio' bpc=32 engine=-
+[migrate] working=ACEScg
+[state] project: items=5 working='Linear/ACEScg' pin='config-lin709-interface.ocio' bpc=32 engine=-
 [after] comp 'mig' layers=3
   layer 1 'minColor VIEW (guide)' enabled=true guide=true adj=true
     fx 1 [MINC VIEW] 'minColor: view macOS Video View'

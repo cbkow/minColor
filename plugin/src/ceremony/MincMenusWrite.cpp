@@ -19,9 +19,11 @@ bool MincWriteMenus(SPBasicSuite *bp, AEGP_PluginID id) {
     (void)bp; (void)id;
     MincAuthoritySnapshot snap = {};
     MincAuthorityGet(&snap);
-    std::string pin = snap.configPath;
-    std::string pinBase = pin.substr(pin.find_last_of('/') == std::string::npos ? 0 : pin.find_last_of('/') + 1);
-    std::string preset = MincPresetFromConfigBase(pinBase);
+    /* lean-v3 Path 2: AE's pin is the lean INTERFACE config (1 space) — build the menus from the
+       FULL config (the effect's config) so the panel dropdowns + christening defaults are complete. */
+    std::string fullBase;
+    std::string pin = MincEffectConfigPath(snap.configPath, "", &fullBase);
+    std::string preset = MincPresetFromConfigBase(fullBase);
     if (preset.empty()) return false;                    /* not a minColor project: leave the file alone */
     MincMenuLists m = MincMenuListsFor(preset, pin);
     if (!m.valid) return false;

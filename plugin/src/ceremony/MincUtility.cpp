@@ -92,9 +92,27 @@ static void ConformSolidToComp(SPBasicSuite *bp, AEGP_PluginID id, AEGP_ItemSuit
 
 struct UpResult { std::string action = "created", lookAction = "none", effName, error; bool disabledOther = false; };
 
+/* lean-v3 self-contained authoring helpers */
+static MinColorArb VarArb(uint16_t dir, const std::string &space) {
+    MinColorArb a; memset(&a, 0, sizeof(a));
+    a.magic = MINC_ARB_MAGIC; a.version = MINC_ARB_VERSION; a.direction = dir;
+    snprintf(a.space, MINC_SPACE_LEN, "%s", space.c_str());
+    return a;
+}
+static std::string LookSpaceOf(const std::string &grammar) {   /* "minColor: look X" -> X */
+    const std::string p = "minColor: look ";
+    return grammar.compare(0, p.size(), p) == 0 ? grammar.substr(p.size()) : grammar;
+}
+static std::string CfgBaseOf(const std::string &pin) {
+    size_t s = pin.find_last_of('/');
+    return s == std::string::npos ? pin : pin.substr(s + 1);
+}
+
 static UpResult Upsert(SPBasicSuite *bp, AEGP_PluginID id, AEGP_CompH comp, AEGP_ItemH compItem,
-                       const char *kind, const std::string &space, const std::string &pin) {
+                       const char *kind, const std::string &space, const std::string &pin,
+                       const std::string &working) {
     UpResult r;
+    std::string cfgBase = CfgBaseOf(pin);
     bool isView = !strcmp(kind, "view");
     Acq<AEGP_ItemSuite9>  its(bp, kAEGPItemSuite,  kAEGPItemSuiteVersion9);
     Acq<AEGP_CompSuite12> cps(bp, kAEGPCompSuite,  kAEGPCompSuiteVersion12);
@@ -131,11 +149,13 @@ static UpResult Upsert(SPBasicSuite *bp, AEGP_PluginID id, AEGP_CompH comp, AEGP
                 AEGP_EffectRefH rfx = MincApplyByMatchWithName(bp, id, sol,
                                           isView ? MINC_MATCH_VIEW : MINC_MATCH_RENDER, newName, &endIdx);
                 if (!rfx) { r.error = "variant apply failed"; return r; }
+                { MinColorArb a = VarArb(MINC_DIR_FROM_WORKING, space);
+                  MincWriteEffectArb(bp, id, rfx, &a, cfgBase.c_str(), working.c_str()); }
                 { Acq<AEGP_EffectSuite5> ef5(bp, kAEGPEffectSuite, kAEGPEffectSuiteVersion5); if (ef5) ef5->AEGP_DisposeEffect(rfx); }
                 if (endIdx != idxL) MincMoveEffect(bp, id, sol, endIdx, idxL);
             } else {
             MincRenameEffectAt(bp, id, sol, ex.fxIndex1, newName);
-            if (mn == "ADBE OCIO Color Space Transform") {   /* panel's native fallback: retarget popups */
+            if (mn == "ADBE OCIO Color Space Transform") {   /* legacy native fallback: retarget popups */
                 Acq<AEGP_EffectSuite5> efs(bp, kAEGPEffectSuite, kAEGPEffectSuiteVersion5);
                 AEGP_EffectRefH effH = nullptr;
                 if (efs && efs->AEGP_GetLayerEffectByIndex(id, sol, ex.fxIndex1 - 1, &effH) == A_Err_NONE && effH) {
@@ -144,6 +164,9 @@ static UpResult Upsert(SPBasicSuite *bp, AEGP_PluginID id, AEGP_CompH comp, AEGP
                     MincSetPopupByName(bp, id, effH, 2, space, &e2);
                     efs->AEGP_DisposeEffect(effH);
                 }
+            } else {                                          /* our VIEW/RENDER variant: re-author its arb */
+                MinColorArb a = VarArb(MINC_DIR_FROM_WORKING, space);
+                MincReauthorEffectAt(bp, id, sol, ex.fxIndex1, &a, cfgBase.c_str(), working.c_str());
             }
             }
         }
@@ -169,6 +192,8 @@ static UpResult Upsert(SPBasicSuite *bp, AEGP_PluginID id, AEGP_CompH comp, AEGP
         AEGP_EffectRefH effH = MincApplyByMatchWithName(bp, id, sol,
                                    isView ? MINC_MATCH_VIEW : MINC_MATCH_RENDER, newName, &endIdx);
         if (!effH) { r.error = "variant apply failed"; return r; }
+        { MinColorArb a = VarArb(MINC_DIR_FROM_WORKING, space);
+          MincWriteEffectArb(bp, id, effH, &a, cfgBase.c_str(), working.c_str()); }
         { Acq<AEGP_EffectSuite5> efs(bp, kAEGPEffectSuite, kAEGPEffectSuiteVersion5); if (efs) efs->AEGP_DisposeEffect(effH); }
         /* look partner INHERIT (:1166-1176): a comp's look lives on whichever utility layer
            exists — a fresh sibling picks it up. Set/remove belongs to Apply Look.          */
@@ -177,6 +202,8 @@ static UpResult Upsert(SPBasicSuite *bp, AEGP_PluginID id, AEGP_CompH comp, AEGP
             int lend = 0;
             AEGP_EffectRefH lf = MincApplyByMatchWithName(bp, id, sol, MINC_MATCH_LOOK, sib.lookName, &lend);
             if (lf) {
+                { MinColorArb a = VarArb(MINC_DIR_LOOK, LookSpaceOf(sib.lookName));
+                  MincWriteEffectArb(bp, id, lf, &a, cfgBase.c_str(), working.c_str()); }
                 { Acq<AEGP_EffectSuite5> efs2(bp, kAEGPEffectSuite, kAEGPEffectSuiteVersion5); if (efs2) efs2->AEGP_DisposeEffect(lf); }
                 if (lend != 1) MincMoveEffect(bp, id, sol, lend, 1);   /* look-then-display */
                 r.lookAction = "inherited";
@@ -197,7 +224,8 @@ static UpResult Upsert(SPBasicSuite *bp, AEGP_PluginID id, AEGP_CompH comp, AEGP
     return r;
 }
 
-static std::string LookOnLayer(SPBasicSuite *bp, AEGP_PluginID id, MincUtilLayer &u, const std::string &look) {
+static std::string LookOnLayer(SPBasicSuite *bp, AEGP_PluginID id, MincUtilLayer &u, const std::string &look,
+                               const std::string &cfgBase, const std::string &working) {
     if (look.empty()) {                                      /* remove */
         if (u.lookIndex1 > 0) return MincRemoveEffectAt(bp, id, u.layer, u.lookIndex1) ? "removed" : "remove failed";
         return "none";
@@ -207,12 +235,16 @@ static std::string LookOnLayer(SPBasicSuite *bp, AEGP_PluginID id, MincUtilLayer
         int end = 0;
         AEGP_EffectRefH lf = MincApplyByMatchWithName(bp, id, u.layer, MINC_MATCH_LOOK, want, &end);
         if (!lf) return "add failed";
+        { MinColorArb a = VarArb(MINC_DIR_LOOK, look);
+          MincWriteEffectArb(bp, id, lf, &a, cfgBase.c_str(), working.c_str()); }
         { Acq<AEGP_EffectSuite5> efs(bp, kAEGPEffectSuite, kAEGPEffectSuiteVersion5); if (efs) efs->AEGP_DisposeEffect(lf); }
         if (end != 1) MincMoveEffect(bp, id, u.layer, end, 1);
         return "added";
     }
     if (u.lookName != want) {
         if (!MincRenameEffectAt(bp, id, u.layer, u.lookIndex1, want)) return "rename failed";
+        { MinColorArb a = VarArb(MINC_DIR_LOOK, look);
+          MincReauthorEffectAt(bp, id, u.layer, u.lookIndex1, &a, cfgBase.c_str(), working.c_str()); }
         if (u.lookIndex1 != 1) MincMoveEffect(bp, id, u.layer, u.lookIndex1, 1);
         return "updated";
     }
@@ -233,16 +265,22 @@ std::string MincApplyLook(SPBasicSuite *bp, AEGP_PluginID id, const std::string 
     AEGP_CompH comp = nullptr;
     cps->AEGP_GetCompFromItem(active, &comp);
     if (!comp) return "{ \"error\": \"open a comp\" }\n";
+    MincAuthorityRefreshBp(bp, id);
+    MincAuthoritySnapshot snap = {}; MincAuthorityGet(&snap);
+    std::string cfgBase;                                     /* lean-v3 Path 2: FULL config, not AE's interface pin */
+    MincEffectConfigPath(snap.configPath, "", &cfgBase);
+    std::string working = snap.workingSpace[0] ? std::string(snap.workingSpace)
+                                               : MincPresetMeta(MincPresetFromConfigBase(cfgBase)).working;
     std::string vAct = "absent", rAct = "absent";
     if (uts) uts->AEGP_StartUndoGroup("minColor apply look");
     MincUtilLayer ur = MincFindUtilityLayer(bp, id, comp, "render");
-    if (ur.found) rAct = LookOnLayer(bp, id, ur, look);
+    if (ur.found) rAct = LookOnLayer(bp, id, ur, look, cfgBase, working);
     MincUtilLayer uv = MincFindUtilityLayer(bp, id, comp, "view");
-    if (uv.found) vAct = LookOnLayer(bp, id, uv, look);
+    if (uv.found) vAct = LookOnLayer(bp, id, uv, look, cfgBase, working);
     if (uts) uts->AEGP_EndUndoGroup();
     if (vAct == "absent" && rAct == "absent")
         return "{ \"error\": \"no minColor view/render layers in this comp \xe2\x80\x94 add one first\" }\n";   /* :1234 verbatim */
-    MincSyncFromNames(bp, id);
+    /* lean-v3: effects authored self-contained above — no name-walk */
     return "{ \"view\": " + UJ(vAct) + ", \"render\": " + UJ(rAct) + " }\n";
 }
 
@@ -263,7 +301,8 @@ std::string MincEnsureUtilityLayers(SPBasicSuite *bp, AEGP_PluginID id,
     MincAuthorityRefreshBp(bp, id);
     MincAuthoritySnapshot snap = {};
     MincAuthorityGet(&snap);
-    std::string pin = snap.configPath;
+    std::string fullBase;                                    /* lean-v3 Path 2: FULL config for space-checks + passport */
+    std::string pin = MincEffectConfigPath(snap.configPath, "", &fullBase);
     std::string view = viewSpace, render = renderSpace;
     if (view.empty() || render.empty()) {                    /* family defaults from the menus file */
         MincMenus menus;
@@ -273,11 +312,13 @@ std::string MincEnsureUtilityLayers(SPBasicSuite *bp, AEGP_PluginID id,
         }
     }
     if (view.empty() || render.empty()) return "{ \"error\": \"no spaces given and no plugin-menus defaults\" }\n";
+    std::string working = snap.workingSpace[0] ? std::string(snap.workingSpace)
+                                               : MincPresetMeta(MincPresetFromConfigBase(fullBase)).working;
     if (uts) uts->AEGP_StartUndoGroup("minColor utility layers");
-    UpResult rr = Upsert(bp, id, comp, active, "render", render, pin);   /* render first, */
-    UpResult rv = Upsert(bp, id, comp, active, "view",   view,   pin);   /* view last -> view on, render off (:1356) */
+    UpResult rr = Upsert(bp, id, comp, active, "render", render, pin, working);   /* render first, */
+    UpResult rv = Upsert(bp, id, comp, active, "view",   view,   pin, working);   /* view last -> view on, render off (:1356) */
     if (uts) uts->AEGP_EndUndoGroup();
-    MincSyncFromNames(bp, id);
+    /* lean-v3: self-contained authoring above — no name-walk */
     if (!rr.error.empty()) return "{ \"error\": " + UJ(rr.error) + " }\n";
     if (!rv.error.empty()) return "{ \"error\": " + UJ(rv.error) + " }\n";
     /* ensureUtilityLayers return shape (:1358-1360) + look/disable detail */

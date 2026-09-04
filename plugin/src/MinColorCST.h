@@ -26,8 +26,8 @@
    five PiPLs, pulled in via MincCore.h -> MincTypes.h). Only the stage macro is C-only. */
 #define MINC_STAGE_VERSION PF_Stage_DEVELOP
 
-enum { MINC_INPUT = 0, MINC_ARB, MINC_SERIAL, MINC_NUM_PARAMS };
-enum { ARB_DISK_ID = 1, SERIAL_DISK_ID = 2 };
+enum { MINC_INPUT = 0, MINC_ARB, MINC_SERIAL, MINC_POPUP, MINC_NUM_PARAMS };
+enum { ARB_DISK_ID = 1, SERIAL_DISK_ID = 2, POPUP_DISK_ID = 3 };
 
 #include "MincCore.h"       /* shared core: types (incl. MincIds.h identities + MincVerb), log,
                                utf16, authority, mint, walk */

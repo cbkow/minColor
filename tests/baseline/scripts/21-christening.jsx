@@ -39,7 +39,7 @@
   MincBase.dumpComp("no-menus", findComp());
   // phase 2: set up the project -> menus exist -> christen via the Sync command
   writeAnswers("acescg");
-  app.executeCommand(app.findMenuCommandId("minColor: Set Up Project"));
+  app.executeCommand(app.findMenuCommandId("minColor: Migrate Project"));
   rmSettings("walk-pending");
   app.executeCommand(app.findMenuCommandId("minColor: Sync From Names"));
   // no walk-line capture here: idle ticks during the reopen can christen first (timing,

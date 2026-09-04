@@ -16,6 +16,29 @@
 #include "MincTypes.h"
 #include "MincBuildStamp.h"
 #include "MincSignal.h"     /* cross-bundle walk marker (effect arms, AEGP consumes) */
+#include <set>
+#include <string>
+#include <cstring>
+#include <cstdio>
+
+/* lean-v3 Path 2: the passport must name the FULL config (config-<preset>.ocio) the effect
+   renders from, but every authoring site stamps it from AE's LIVE pin — which is now the LEAN
+   INTERFACE config (config-<preset>-interface.ocio). Derive the basename and strip a trailing
+   "-interface" before ".ocio" so the passport names the full config. No-op for any basename
+   without the suffix (custom pins, legacy). Traversal-guarded. */
+static inline void MincPassportConfigBase(const char *path, char *out, size_t cap) {
+    if (!out || cap == 0) return;
+    out[0] = 0;
+    if (!path || !path[0]) return;
+    const char *b = path;
+    for (const char *p = path; *p; ++p) if (*p == '/' || *p == '\\') b = p + 1;   /* basename */
+    if (strstr(b, "..")) return;
+    std::string s(b);
+    const std::string sfx = "-interface.ocio";
+    if (s.size() > sfx.size() && s.compare(s.size() - sfx.size(), sfx.size(), sfx) == 0)
+        s = s.substr(0, s.size() - sfx.size()) + ".ocio";
+    snprintf(out, cap, "%s", s.c_str());
+}
 
 /* ---- MincLog.cpp — per-binary log file, basename via MINC_LOG_BASENAME compile def ---- */
 void        MincDebugLog(const char *fmt, ...);          /* compiled out unless MINC_DEBUG */
@@ -40,6 +63,14 @@ uint32_t MincMintInstanceId(void);
    plugin-menus.json defaults (never invents a space — no menus file, no christening) */
 void MincSyncFromNames(SPBasicSuite *bp, AEGP_PluginID aegpId, bool christen = false);
 bool MincParseGrammarVerb(MincVerb verb, const char *utf8, MinColorArb *out);
+/* The blessed arb-write transport (factored from the walk): write one effect instance's arb via
+   AEGP_EffectCallGeneric -> HandleGeneric (param + seq + registry), minting/adopting an instance
+   id as needed. avoidIds/nameForLog/counters are the walk's bookkeeping (optional — ceremonies
+   authoring a single fresh effect pass nullptr and get a plain write). */
+void MincWriteEffectArb(SPBasicSuite *bp, AEGP_PluginID aegpId, AEGP_EffectRefH effH,
+                        const MinColorArb *arb, const char *configBase, const char *passportWorking,
+                        std::set<uint32_t> *avoidIds = nullptr, const char *nameForLog = nullptr,
+                        int *wrote = nullptr, int *reminted = nullptr, int *placeholders = nullptr);
 
 /* tiny RAII suite acquire */
 template <typename SUITE>

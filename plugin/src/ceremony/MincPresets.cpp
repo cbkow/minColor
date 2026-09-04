@@ -56,7 +56,12 @@ std::string MincFamilyFor(const std::string &key) {
     return (m.valid && !m.family.empty()) ? m.family : "Linear";
 }
 
-std::string MincPresetFromConfigBase(const std::string &base) {
+std::string MincPresetFromConfigBase(const std::string &baseIn) {
+    /* lean-v3 Path 2: a lean INTERFACE pin (config-<preset>-interface.ocio) identifies the same
+       managed project as its full config — strip the suffix first so detection/preset-mapping
+       recognize it everywhere (Doctor, Archive/Package/Adopt, behind-check, menus). */
+    char st[MINC_CONFIGBASE_LEN]; MincPassportConfigBase(baseIn.c_str(), st, sizeof(st));
+    std::string base = st[0] ? std::string(st) : baseIn;
     /* Accepts BOTH the stable name config-<preset>.ocio (2026-09-03) and the legacy hashed
        config-<preset>-<hex>.ocio (old dev/shipped pins still resolve their preset). Preset
        keys are alphanumeric (no dash), so a trailing "-<hex>" is unambiguously a legacy hash. */
@@ -78,10 +83,12 @@ std::string MincPresetFromConfigBase(const std::string &base) {
     return preset;
 }
 
-bool MincPinBehind(const std::string &presetKey, const std::string &pinnedBase,
+bool MincPinBehind(const std::string &presetKey, const std::string &pinnedBaseIn,
                    std::string *pinnedOut, std::string *currentOut) {
     MincPresetInfo m = MincPresetMeta(presetKey);
-    if (!m.valid || m.retired || pinnedBase.empty()) return false;   /* mirror pinBehind(): live presets only */
+    if (!m.valid || m.retired || pinnedBaseIn.empty()) return false;   /* mirror pinBehind(): live presets only */
+    char st[MINC_CONFIGBASE_LEN]; MincPassportConfigBase(pinnedBaseIn.c_str(), st, sizeof(st));
+    std::string pinnedBase = st[0] ? std::string(st) : pinnedBaseIn;   /* lean-v3: interface pin is current, not behind */
     if (pinnedBase == m.config) return false;
     if (pinnedOut) *pinnedOut = pinnedBase;
     if (currentOut) *currentOut = m.config;
@@ -99,4 +106,14 @@ std::string MincFindConfigByName(const std::string &base, const std::string &pro
     cands[n++] = "/Users/Shared/minColor/configs/" + base;
     for (int i = 0; i < n; ++i) if (FileExists(cands[i])) return cands[i];
     return "";
+}
+
+std::string MincEffectConfigPath(const std::string &pinnedPath, const std::string &projPath,
+                                 std::string *fullBaseOut) {
+    char fb[MINC_CONFIGBASE_LEN] = "";
+    MincPassportConfigBase(pinnedPath.c_str(), fb, sizeof(fb));   /* basename, -interface stripped */
+    std::string fullBase = fb[0] ? std::string(fb) : pinnedPath;
+    if (fullBaseOut) *fullBaseOut = fullBase;
+    std::string p = MincFindConfigByName(fullBase, projPath);
+    return p.empty() ? pinnedPath : p;                           /* fall back to the pin if unresolved */
 }

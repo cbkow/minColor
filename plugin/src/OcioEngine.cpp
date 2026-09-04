@@ -1,11 +1,38 @@
 /* Config + processor caches and row application. All OCIO 2.5 usage is confined here. */
 #include "MincTypes.h"
+#include "MincEmbeddedConfigs.h"
 #include <OpenColorIO/OpenColorIO.h>
 #include <cstdio>
 #include <shared_mutex>
 #include <map>
+#include <memory>
 #include <string>
+#include <vector>
 namespace OCIO = OCIO_NAMESPACE;
+
+static std::string Basename(const char *p) {
+    if (!p) return std::string();
+    const char *b = p;
+    for (const char *q = p; *q; ++q) if (*q == '/' || *q == '\\') b = q + 1;
+    return std::string(b);
+}
+
+/* lean-v3 "plugin is the package": serve the config + its LUTs from the binary-embedded store
+   (zlib-inflated on demand) so rendering never touches the filesystem. Lookup by basename — LUT
+   basenames are unique across the config's search_path trees. */
+class MincEmbeddedProxy : public OCIO::ConfigIOProxy {
+    std::string cfg_;
+public:
+    explicit MincEmbeddedProxy(std::string cfg) : cfg_(std::move(cfg)) {}
+    std::vector<uint8_t> getLutData(const char *filepath) const override {
+        return MincEmbeddedLut(Basename(filepath));
+    }
+    std::string getConfigData() const override { return cfg_; }
+    std::string getFastLutFileHash(const char *filepath) const override {
+        std::string b = Basename(filepath);
+        return MincEmbeddedLut(b).empty() ? std::string() : b;   /* unique basename = the id */
+    }
+};
 
 struct ConfigEntry { std::string key; OCIO::ConstConfigRcPtr config; };
 static std::shared_mutex g_cfgMx;
@@ -35,6 +62,30 @@ static std::string StatKey(const char *path) {
 #endif
 
 static OCIO::ConstConfigRcPtr GetConfig(const char *path) {
+    if (!path || !path[0]) return nullptr;
+    /* EMBEDDED-FIRST: if the passport names a baked-in config, render from the binary (zero
+       filesystem). Cache key "e:<base>" — embedded content is immutable for the binary's life. */
+    std::string base = Basename(path);
+    if (MincEmbeddedHasConfig(base)) {
+        std::string ekey = "e:" + base;
+        {
+            std::shared_lock lk(g_cfgMx);
+            auto it = g_configs.find(ekey);
+            if (it != g_configs.end()) return it->second.config;
+        }
+        std::string text = MincEmbeddedConfig(base);
+        if (!text.empty()) {
+            OCIO::ConstConfigRcPtr cfg =
+                OCIO::Config::CreateFromConfigIOProxy(std::make_shared<MincEmbeddedProxy>(text));
+            if (cfg) {
+                std::unique_lock lk(g_cfgMx);
+                if (g_configs.size() > 6) g_configs.clear();
+                g_configs[ekey] = { ekey, cfg };
+                return cfg;
+            }
+        }
+        /* inflate/parse failed — fall through to the filesystem copy if present */
+    }
     std::string key = StatKey(path);
     if (key.empty()) return nullptr;
     {
@@ -44,7 +95,7 @@ static OCIO::ConstConfigRcPtr GetConfig(const char *path) {
     }
     OCIO::ConstConfigRcPtr cfg = OCIO::Config::CreateFromFile(path);   /* throws on failure */
     std::unique_lock lk(g_cfgMx);
-    if (g_configs.size() > 4) g_configs.clear();                        /* tiny LRU-ish bound */
+    if (g_configs.size() > 6) g_configs.clear();                        /* tiny LRU-ish bound */
     g_configs[path] = { key, cfg };
     return cfg;
 }
@@ -71,19 +122,35 @@ int MincOcioProbeStatus(const MincAuthoritySnapshot *auth, const MinColorArb *ar
 /* Token API: resolve ONCE per frame (the per-row path paid a stat + two map locks + string
    builds per row — ~2160 stats/frame at UHD). The token owns a heap shared_ptr so the
    processor survives cache clears for the duration of the frame. */
+/* The effect is self-reliant (Pole A): AE holds the config only to NEUTRALIZE its own colour
+   management (working space None), and hands us neutral pixels. So "working" comes from AE's
+   authority ONLY if it's actually set; otherwise the effect defines it from the config it
+   renders with — the config's scene_linear role. Never depends on AE's working space. */
+static void ResolveWorking(const MincAuthoritySnapshot *auth, const OCIO::ConstConfigRcPtr &cfg,
+                           char out[MINC_SPACE_LEN]) {
+    out[0] = 0;
+    if (auth->workingSpace[0]) { snprintf(out, MINC_SPACE_LEN, "%s", auth->workingSpace); return; }
+    try {
+        OCIO::ConstColorSpaceRcPtr ws = cfg->getColorSpace(OCIO::ROLE_SCENE_LINEAR);
+        if (ws) snprintf(out, MINC_SPACE_LEN, "%s", ws->getName());
+    } catch (...) {}
+}
+
 int MincOcioBegin(const MincAuthoritySnapshot *auth, const MinColorArb *arb, void **token) {
     *token = nullptr;
     if (!auth->ocioOn)          return MINC_STATUS_PASS_OCIO_OFF;
     if (!arb->space[0])         return MINC_STATUS_PASS_EMPTY;
-    if (!auth->configPath[0] || !auth->workingSpace[0]) return MINC_STATUS_PASS_CONFIG_ERROR;
+    if (!auth->configPath[0])   return MINC_STATUS_PASS_CONFIG_ERROR;
     try {
         OCIO::ConstConfigRcPtr cfg = GetConfig(auth->configPath);
         if (!cfg) return MINC_STATUS_PASS_CONFIG_ERROR;
+        char working[MINC_SPACE_LEN]; ResolveWorking(auth, cfg, working);
+        if (!working[0]) return MINC_STATUS_PASS_CONFIG_ERROR;
         bool isLook = (arb->direction == MINC_DIR_LOOK);
-        const char *src = isLook ? auth->workingSpace : (arb->direction == MINC_DIR_TO_WORKING) ? arb->space : auth->workingSpace;
-        const char *dst = isLook ? auth->workingSpace : (arb->direction == MINC_DIR_TO_WORKING) ? auth->workingSpace : arb->space;
+        const char *src = isLook ? working : (arb->direction == MINC_DIR_TO_WORKING) ? arb->space : working;
+        const char *dst = isLook ? working : (arb->direction == MINC_DIR_TO_WORKING) ? working : arb->space;
         if (isLook) {
-            if (!cfg->getLook(arb->space) || !cfg->getColorSpace(auth->workingSpace)) return MINC_STATUS_PASS_UNKNOWN_SPACE;
+            if (!cfg->getLook(arb->space) || !cfg->getColorSpace(working)) return MINC_STATUS_PASS_UNKNOWN_SPACE;
         } else if (!cfg->getColorSpace(src) || !cfg->getColorSpace(dst)) return MINC_STATUS_PASS_UNKNOWN_SPACE;
         /* dirTag prevents key collisions: a LOOK (src==dst==working) must never share a cache
            entry with an identity colorspace transform in the same working space */

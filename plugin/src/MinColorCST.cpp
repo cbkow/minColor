@@ -1,4 +1,6 @@
 #include "MinColorCST.h"
+#include "MincMenus.h"          /* per-verb popup choices (AEGP-written plugin-menus.json) */
+#include "AEFX_SuiteHelper.h"   /* AEFX_AcquireSuite for PF_TouchActiveItem */
 
 static const char *VerbEffectName(MincVerb verb) {
     switch (verb) {
@@ -23,8 +25,8 @@ static PF_Err About(MincVerb verb, PF_InData *in_data, PF_OutData *out_data) {
 static PF_Err GlobalSetup(PF_InData *in_data, PF_OutData *out_data) {
     out_data->my_version = PF_VERSION(MINC_MAJOR_VERSION, MINC_MINOR_VERSION,
                                       MINC_BUG_VERSION, MINC_STAGE_VERSION, MINC_BUILD_VERSION);
-    out_data->out_flags  = PF_OutFlag_CUSTOM_UI |
-                           PF_OutFlag_DEEP_COLOR_AWARE |
+    out_data->out_flags  = PF_OutFlag_DEEP_COLOR_AWARE |             /* lean-v3: CUSTOM_UI dropped — the
+                                                                        native popup replaces the badge */
                            PF_OutFlag_PIX_INDEPENDENT  |
                            PF_OutFlag_SEND_UPDATE_PARAMS_UI |
                            PF_OutFlag_SEQUENCE_DATA_NEEDS_FLATTENING;   /* render clones come from the flat snapshot — keep it fresh */
@@ -48,9 +50,11 @@ static PF_Err ParamsSetup(PF_InData *in_data, PF_OutData *out_data) {
     if (!err) {
         def.flags = 0;   /* CANNOT_TIME_VARY made AE serve the param from static storage, ignoring AEGP stream writes (M3 finding) */
         PF_ADD_ARBITRARY2("Transform",
-                          210, 30,                    /* the ECW badge (Ui.cpp) */
+                          0, 0,                       /* lean-v3: hidden truth store, no UI (was the ECW badge) */
                           0,
-                          PF_PUI_CONTROL,
+                          PF_PUI_NO_ECW_UI,           /* SDK: an ARBITRARY_DATA param MUST pair with NO_ECW (or
+                                                         TOPIC/CONTROL) — INVISIBLE alone = "Unsupported effect
+                                                         control!" at ECW build. NO_ECW_UI = no control at all. */
                           arbH,
                           ARB_DISK_ID,
                           NULL);
@@ -66,14 +70,13 @@ static PF_Err ParamsSetup(PF_InData *in_data, PF_OutData *out_data) {
         def.ui_flags = PF_PUI_INVISIBLE;
         PF_ADD_FLOAT_SLIDER("Sync Serial", 0, 1000000, 0, 1000000, 0, 0, PF_Precision_INTEGER, 0, 0, SERIAL_DISK_ID);
     }
-    if (!err) {                                                     /* register for ECW events */
-        PF_CustomUIInfo ci;
-        AEFX_CLR_STRUCT(ci);
-        ci.events = PF_CustomEFlag_EFFECT;
-        ci.comp_ui_width = ci.comp_ui_height = 0;  ci.comp_ui_alignment = PF_UIAlignment_NONE;
-        ci.layer_ui_width = ci.layer_ui_height = 0; ci.layer_ui_alignment = PF_UIAlignment_NONE;
-        ci.preview_ui_width = ci.preview_ui_height = 0; ci.preview_ui_alignment = PF_UIAlignment_NONE;
-        err = (*(in_data->inter.register_ui))(in_data->effect_ref, &ci);
+    if (!err) {
+        /* native colorspace popup — the list is rebuilt per-verb from the config in
+           UPDATE_PARAMS_UI; SUPERVISE fires USER_CHANGED_PARAM so a pick writes the arb.
+           A pure UI mirror: the NAME in the arb stays the render-truth (Phase 0 de-risk). */
+        AEFX_CLR_STRUCT(def);
+        def.flags = PF_ParamFlag_SUPERVISE;
+        PF_ADD_POPUP("Space", 1, 1, "(config)", POPUP_DISK_ID);
     }
     out_data->num_params = MINC_NUM_PARAMS;
     return err;
@@ -182,6 +185,96 @@ static PF_Err HandleGeneric(PF_InData *in_data, PF_OutData *out_data, PF_ParamDe
     return PF_Err_NONE;
 }
 
+/* ---- native colorspace popup (Phase 0 de-risk: UI mirror, name stays the truth) ---- */
+static uint16_t DirForVerb(MincVerb v) {
+    if (v == MINC_VERB_LOOK) return MINC_DIR_LOOK;
+    if (v == MINC_VERB_VIEW || v == MINC_VERB_RENDER) return MINC_DIR_FROM_WORKING;
+    return MINC_DIR_TO_WORKING;   /* XFORM/input, LEGACY */
+}
+
+/* Build the per-verb choice list (curated menus file, else live OCIO enumeration), append the
+   current arb.space if it isn't in the list, and report the 1-based selection. Populate + change
+   share this so index<->name never drift. Returns count; fills items[], *sdOut, *selOut.       */
+static int BuildVerbList(MincVerb verb, PF_InData *in_data, char items[][MINC_SPACE_LEN],
+                         MincSeqData *sdOut, int *selOut) {
+    MincSeqData sd; MincResolveSeq(in_data, &sd);
+    if (sdOut) *sdOut = sd;
+    MincAuthoritySnapshot live = {}; MincAuthorityGet(&live);
+    MincAuthoritySnapshot auth = {}; MincEffectiveAuthority(&live, &sd, &auth);
+    int n = 0;
+    MincMenus menus;
+    if (MincMenusGet(&menus)) {
+        const char (*src)[MINC_SPACE_LEN] = menus.inputSpaces; int cnt = menus.nInput;
+        if (verb == MINC_VERB_VIEW)   { src = menus.viewSpaces;   cnt = menus.nView; }
+        if (verb == MINC_VERB_RENDER) { src = menus.renderSpaces; cnt = menus.nRender; }
+        if (verb == MINC_VERB_LOOK)   { src = menus.looks;        cnt = menus.nLooks; }
+        for (int i = 0; i < cnt && n < MINC_MENU_MAX; ++i) { snprintf(items[n], MINC_SPACE_LEN, "%s", src[i]); ++n; }
+    }
+    if (n == 0) n = (verb == MINC_VERB_LOOK) ? MincOcioListLooks(&auth, items, MINC_MENU_MAX)
+                                             : MincOcioListSpaces(&auth, items, MINC_MENU_MAX);
+    int sel = 0;
+    for (int i = 0; i < n; ++i) if (sd.arb.space[0] && !strcmp(items[i], sd.arb.space)) { sel = i + 1; break; }
+    if (sel == 0 && sd.arb.space[0] && n < MINC_MENU_MAX) {   /* current space not offered — show it, selected */
+        snprintf(items[n], MINC_SPACE_LEN, "%s", sd.arb.space); ++n; sel = n;
+    }
+    if (sel == 0) sel = 1;
+    if (selOut) *selOut = sel;
+    return n;
+}
+
+static void PopulatePopup(MincVerb verb, PF_InData *in_data, PF_ParamDef *params[]) {
+    if (!params || !params[MINC_POPUP]) return;
+    static char items[MINC_MENU_MAX][MINC_SPACE_LEN];              /* UI is main-thread only */
+    static char joined[MINC_MENU_MAX * MINC_SPACE_LEN];           /* namesptr must persist after the call */
+    MincSeqData sd; int sel = 1;
+    int n = BuildVerbList(verb, in_data, items, &sd, &sel);
+    size_t off = 0; joined[0] = 0;
+    if (n == 0) { snprintf(joined, sizeof(joined), "(no config)"); n = 1; sel = 1; }
+    else for (int i = 0; i < n; ++i)
+        off += snprintf(joined + off, sizeof(joined) - off, "%s%s", i ? "|" : "", items[i]);
+    AEGP_SuiteHandler suites(in_data->pica_basicP);
+    PF_ParamDef pd = *params[MINC_POPUP];
+    pd.param_type = PF_Param_POPUP;
+    pd.u.pd.num_choices = (short)n;
+    pd.u.pd.u.namesptr  = joined;
+    pd.u.pd.value       = sel;
+    suites.ParamUtilsSuite3()->PF_UpdateParamUI(in_data->effect_ref, MINC_POPUP, &pd);
+    MincDebugLog("popup: populate verb=%d n=%d sel=%d space='%s'", (int)verb, n, sel, sd.arb.space);
+}
+
+static PF_Err HandleGeneric(PF_InData *, PF_OutData *, PF_ParamDef *[], void *);   /* fwd */
+
+static void OnPopupChanged(MincVerb verb, PF_InData *in_data, PF_OutData *out_data, PF_ParamDef *params[]) {
+    if (!params || !params[MINC_POPUP]) return;
+    static char items[MINC_MENU_MAX][MINC_SPACE_LEN];
+    MincSeqData sd; int sel = 1;
+    int n = BuildVerbList(verb, in_data, items, &sd, &sel);
+    int val = params[MINC_POPUP]->u.pd.value;                     /* 1-based */
+    if (val < 1 || val > n) { MincDebugLog("popup: change out-of-range val=%d n=%d", val, n); return; }
+    if (!strcmp(items[val - 1], sd.arb.space)) return;           /* no change */
+    /* write through the blessed transport (param + seq + registry + FORCE_RERENDER) */
+    MincSyncPayload pay; memset(&pay, 0, sizeof(pay));
+    pay.magic = MINC_ARB_MAGIC;
+    pay.arb.magic = MINC_ARB_MAGIC; pay.arb.version = MINC_ARB_VERSION;
+    pay.arb.direction = DirForVerb(verb);
+    pay.arb.instanceId = sd.arb.instanceId;
+    snprintf(pay.arb.space, MINC_SPACE_LEN, "%s", items[val - 1]);
+    pay.payVersion = 2;
+    MincAuthoritySnapshot live = {}; MincAuthorityGet(&live);
+    if (live.ocioOn && live.configPath[0]) {                      /* stamp the passport from live authority */
+        MincPassportConfigBase(live.configPath, pay.configBase, MINC_CONFIGBASE_LEN);  /* full config (strip -interface) */
+        snprintf(pay.passportWorking, MINC_SPACE_LEN, "%s", live.workingSpace);
+    }
+    HandleGeneric(in_data, out_data, params, &pay);
+    out_data->out_flags |= PF_OutFlag_FORCE_RERENDER | PF_OutFlag_REFRESH_UI;
+    PF_AdvItemSuite1 *adv = NULL;
+    if (!AEFX_AcquireSuite(in_data, out_data, kPFAdvItemSuite, kPFAdvItemSuiteVersion1, NULL, (void **)&adv) && adv) {
+        adv->PF_TouchActiveItem();
+        AEFX_ReleaseSuite(in_data, out_data, kPFAdvItemSuite, kPFAdvItemSuiteVersion1, NULL);
+    }
+    MincDebugLog("popup: changed -> space='%s' dir=%d id=%u", pay.arb.space, (int)pay.arb.direction, pay.arb.instanceId);
+}
+
 /* one implementation, five registered effects: the wrapper passes the verb statically.
    The verb is About-only until M2 step 2 (verb authority lands in the walk).            */
 static PF_Err EffectMainCommon(MincVerb verb, PF_Cmd cmd, PF_InData *in_data, PF_OutData *out_data,
@@ -196,12 +289,8 @@ static PF_Err EffectMainCommon(MincVerb verb, PF_Cmd cmd, PF_InData *in_data, PF
                 err = MincHandleArbitrary(in_data, out_data, params, output,
                                           reinterpret_cast<PF_ArbParamsExtra*>(extra));
                 break;
-            case PF_Cmd_SEQUENCE_SETUP:
-                /* FRESH instance (a drop, a paste): arm the AEGP's christening walk via the
-                   shared marker. RESETUP never arms — undo of a christening arrives as
-                   RESETUP, and the reverted default name must STAY reverted.              */
+            case PF_Cmd_SEQUENCE_SETUP:                   /* lean-v3: no christening marker — daemon is gone */
                 err = SequenceSetup(in_data, out_data);
-                MincTouchWalkMarker("christen");
                 MincAuthorityRefresh(in_data);
                 break;
             case PF_Cmd_SEQUENCE_RESETUP:    err = SequenceResetup(in_data, out_data); MincAuthorityRefresh(in_data); break;
@@ -210,10 +299,16 @@ static PF_Err EffectMainCommon(MincVerb verb, PF_Cmd cmd, PF_InData *in_data, PF
             case PF_Cmd_SEQUENCE_SETDOWN:    err = SequenceSetdown(in_data, out_data); break;
             case PF_Cmd_COMPLETELY_GENERAL:  err = HandleGeneric(in_data, out_data, params, extra); break;
             case PF_Cmd_UPDATE_PARAMS_UI:
-            case PF_Cmd_USER_CHANGED_PARAM:  MincAuthorityRefresh(in_data);         break;
-            case PF_Cmd_EVENT:
-                err = MincHandleEvent(verb, in_data, out_data, params, reinterpret_cast<PF_EventExtra*>(extra));
+                PopulatePopup(verb, in_data, params);
+                MincAuthorityRefresh(in_data);
                 break;
+            case PF_Cmd_USER_CHANGED_PARAM: {
+                PF_UserChangedParamExtra *uc = reinterpret_cast<PF_UserChangedParamExtra*>(extra);
+                if (uc && uc->param_index == MINC_POPUP)
+                    OnPopupChanged(verb, in_data, out_data, params);
+                MincAuthorityRefresh(in_data);
+                break;
+            }
             case PF_Cmd_SMART_PRE_RENDER:
                 err = MincSmartPreRender(in_data, out_data,
                                          reinterpret_cast<PF_PreRenderExtra*>(extra));

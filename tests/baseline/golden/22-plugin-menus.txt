@@ -186,4 +186,4 @@
     Rec.2100-HLG
     Rec.2100-PQ
     Rec.709 Gamma 2.2
-[state] project: items=0 working='Linear/ACEScg' pin='config-acescg.ocio' bpc=32 engine=-
+[state] project: items=0 working='Linear/ACEScg' pin='config-acescg-interface.ocio' bpc=32 engine=-

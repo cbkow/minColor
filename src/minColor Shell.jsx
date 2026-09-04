@@ -30,11 +30,12 @@
   function jstr(s) { return '"' + String(s).replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"'; }
 
   // ---- HARD GATE: the handshake is the contract (first-ever consumer) ----
+  /* only what the panel actually invokes — Set Up / Archive / Package / Adopt were retired from
+     the UI (the engine still registers them; the panel just no longer gates on them). */
   var REQUIRED = ["minColor: Sync From Names", "minColor: Doctor", "minColor: Interpret Timeline",
-                  "minColor: Interpret Selected", "minColor: Set Up Project", "minColor: Migrate Project",
-                  "minColor: Strip Foreign OCIO", "minColor: Strip ALL", "minColor: Archive Project",
-                  "minColor: Package for Any AE", "minColor: Utility Layers", "minColor: Apply Look",
-                  "minColor: Adopt Effects", "minColor: Repair", "minColor: Apply Render Preset"];
+                  "minColor: Interpret Selected", "minColor: Migrate Project",
+                  "minColor: Strip Foreign OCIO", "minColor: Strip ALL", "minColor: Utility Layers",
+                  "minColor: Apply Look", "minColor: Repair", "minColor: Apply Render Preset"];
   function gateCheck() {
     var hs = readJSON(SETTINGS + "/aegp-api.json");
     if (!hs) return { ok: false, why: "engine not found (no handshake file)" };
@@ -78,9 +79,11 @@
   }
   function cap(a) { return a.length <= 14 ? a.join("\n  ") : a.slice(0, 14).join("\n  ") + "\n  \u2026 and " + (a.length - 14) + " more"; }
   function guard(label, fn) {
+    $.global.__minColorBusy = true;                     /* the heartbeat yields while a command runs */
     try { log(label + "\u2026"); unstick(); } catch (eB) {}
     try { var r = fn(); log(label + ": " + (r === undefined ? "ok" : r)); refreshDoctor(); }
-    catch (e) { log(label + " FAILED: " + e.toString()); alert("minColor \u2014 " + label + " failed:\n" + e.toString()); unstick(); }
+    catch (e) { log(label + " FAILED: " + e.toString()); unstick(); }   /* status line only \u2014 no popups */
+    finally { $.global.__minColorBusy = false; }
   }
 
   // ---- dropdown feeds: plugin-menus.json (AEGP-written; menus follow the pin) ----
@@ -235,10 +238,6 @@
   var docText = rowDoc.add("statictext", undefined, "\u2026", { truncate: "end" }); docText.alignment = ["fill", "center"];
   var bRepair = flatButton(rowDoc, "Repair", { width: 60 }); bRepair.visible = false;
   bRepair.helpTip = "One-click fix: re-point the engine at this project's local config copy";
-  var bProj = iconize(rowDoc.add("iconbutton", undefined, undefined, { style: "toolbutton" }), GLYPH.gear,
-    "Project\u2026 \u2014 status, Archive / Package / Adopt");
-  bProj.preferredSize = [20, 20]; bProj.minimumSize = [20, 20]; bProj.maximumSize = [20, 20];
-  bProj.alignment = ["right", "center"];
 
   var currentPreset = null, currentPin = null;
   function doctorNow(passive) {
@@ -277,7 +276,10 @@
     try {
       var d = doctorNow(passive);
       if (!d) { if (!passive) docText.text = "no doctor report"; return; }
-      if (d.status === "yellow" && d.repairTarget && (!passive || d.__fresh)) { try { d = liveHeal(d); } catch (eAR) {} }
+      /* heal ONLY on a user-initiated check — NEVER from the heartbeat: a background
+         executeCommand collides with open modals ("can't run the script while a modal is
+         going") and mutates the project unbidden. Path 2's interface pin makes auto-heal moot. */
+      if (!passive && d.status === "yellow" && d.repairTarget) { try { d = liveHeal(d); } catch (eAR) {} }
       var pk = d.preset || null, pin = d.pin || null;
       if (pk !== currentPreset || pin !== currentPin) { try { repopulateMenus(); currentPreset = pk; currentPin = pin; } catch (eRp) {} }
       var colors = { green: [0.28, 0.82, 0.4, 1], yellow: [0.95, 0.78, 0.18, 1], red: [0.94, 0.32, 0.28, 1], unmanaged: [0.55, 0.55, 0.55, 1] };
@@ -300,47 +302,18 @@
     });
   };
 
-  // ---- Project dialog (gear): Archive / Package / Adopt via commands ----
-  bProj.onClick = function () {
-    try {
-      var dlg = new Window("dialog", "minColor \u2014 Project");
-      dlg.orientation = "column"; dlg.alignChildren = ["fill", "top"]; dlg.margins = 14; dlg.spacing = 8;
-      var d = doctorNow() || { status: "?", text: "?" };
-      function row(label, value) {
-        var g = dlg.add("group"); g.alignChildren = ["left", "top"];
-        var l = g.add("statictext", undefined, label); l.preferredSize.width = 80;
-        var v = g.add("statictext", undefined, String(value).substr(0, 90), { truncate: "middle" }); v.preferredSize.width = 330;
-      }
-      row("Status", d.status + " \u2014 " + d.text);
-      row("Engine", ENGINE.version + " (" + ENGINE.buildStamp + ")");
-      row("Pinned to", d.pin || "(no pin)");
-      row("Last heal", UIS.lastHeal || "\u2014");
-      var rowB = dlg.add("group"); rowB.alignment = ["fill", "top"];
-      var bArch2 = rowB.add("button", undefined, "Archive");
-      bArch2.helpTip = "Freeze dependencies, keep working: sidecar + provenance.json. Purely additive.";
-      var bPkg2 = rowB.add("button", undefined, "Package for any AE");
-      bPkg2.helpTip = "Deliberate exit: effects \u2192 Adobe, sidecar pinned, archive artifacts.";
-      var bAdopt2 = rowB.add("button", undefined, "Adopt minColor FX");
-      var managed = (d.status !== "unmanaged");
-      bArch2.enabled = managed; bPkg2.enabled = managed; bAdopt2.enabled = managed;
-      dlg.add("button", undefined, "Close", { name: "ok" });
-      bArch2.onClick = function () { dlg.close(); guard("Archive", function () { var r = runCmd("minColor: Archive Project", {}, "archive"); return "sidecar + provenance"; }); };
-      bPkg2.onClick = function () { dlg.close(); guard("Package", function () { var r = runCmd("minColor: Package for Any AE", {}, "package"); if (r.failed && r.failed.length) alert("minColor \u2014 package\n\n" + r.failed.join("\n").substr(0, 3000)); return r.translated + " effect(s) \u2192 Adobe, sidecar pinned"; }); };
-      bAdopt2.onClick = function () { dlg.close(); guard("Adopt", function () { var r = runCmd("minColor: Adopt Effects", {}, "adopt"); return "adopted " + r.converted + " effect(s)"; }); };
-      dlg.show();
-    } catch (eP) { alert("minColor: " + eP); }
-  };
 
-  // ---- Set Up / Migrate dialog ----
-  var pSetup = section("Setup Project", GLYPH.gear);
-  var bSetup = flatButton(pSetup, "Set Up / Migrate Project\u2026");
+  // ---- Migrate dialog (the single managed-project entry) ----
+  var pSetup = section("Project", GLYPH.gear);
+  var bSetup = flatButton(pSetup, "Migrate Project\u2026");
   bSetup.onClick = function () {
-    var dlg = new Window("dialog", "minColor \u2014 Set Up / Migrate");
+    if (!app.project || !app.project.file) { log("save the project first \u2014 Migrate writes a _minColor sidecar beside the .aep"); return; }
+    var dlg = new Window("dialog", "minColor \u2014 Migrate");
     dlg.orientation = "column"; dlg.alignChildren = ["fill", "top"]; dlg.margins = 14; dlg.spacing = 8;
     var hdr = dlg.add("group"); hdr.spacing = 6; hdr.alignChildren = ["left", "center"]; hdr.alignment = ["fill", "top"];
     var hic = hdr.add("iconbutton", undefined, undefined, { style: "toolbutton" }); hic.preferredSize = [18, 18];
     hic.onDraw = function () { GLYPH.gear(this.graphics); };
-    var hst = hdr.add("statictext", undefined, "Set Up / Migrate");
+    var hst = hdr.add("statictext", undefined, "Migrate");
     try { hst.graphics.font = ScriptUI.newFont("dialog", "BOLD", 11); } catch (eHd) {}
     var hln = hdr.add("panel"); hln.alignment = ["fill", "center"]; hln.preferredSize.height = 2; hln.minimumSize.width = 20;
     var r1 = dlg.add("group"); r1.add("statictext", undefined, "Working-space preset:");
@@ -357,59 +330,36 @@
     }
     if (dd.items.length) dd.selection = 0;
     bindDD(dd, "setupPreset");
-    dlg.add("statictext", undefined, "New Project: seeds a fresh project (asks where to save).");
-    dlg.add("statictext", undefined, "Migrate Current: strips footage assignments (harvested as suggestions),");
-    dlg.add("statictext", undefined, "sets working space + sidecar config, one save/backup/reopen.");
+    dlg.add("statictext", undefined, "Pins the OCIO config live (no restart) and rebuilds minColor effects.");
+    dlg.add("statictext", undefined, "Footage assignments are harvested as suggestions. Backs up first.");
     var r2 = dlg.add("group"); r2.alignment = ["right", "top"];
-    var bNew = flatButton(r2, "New Project", { width: 100 });
     var bMig = flatButton(r2, "Migrate Current", { width: 124, primary: true });
     var bCxl = flatButton(r2, "Cancel", { width: 72, outline: true });
     bCxl.onClick = function () { dlg.close(2); };
     try { dlg.cancelElement = bCxl; } catch (eCE) {}
-    var choice = null;
-    bNew.onClick = function () { choice = "new"; dlg.close(1); };
-    bMig.onClick = function () { choice = "migrate"; dlg.close(1); };
-    if (dlg.show() !== 1 || !choice || !dd.selection) return;
-    var presetKey = dd.selection.key, presetLabel = dd.selection.text;
-    if (choice === "new") {
-      guard("New Project", function () {                            // thin composition: new + save + native Set Up
-        var f = File.saveDialog("Save the new project", "After Effects:*.aep");
-        if (!f) return "cancelled";
-        var p = f.fsName; if (!/\.aep$/i.test(p)) p += ".aep";
-        app.newProject();
-        app.project.save(new File(p));
-        var r = runCmd("minColor: Set Up Project", { preset: presetKey }, "setup");
-        return "working=" + r.working;
-      });
-    } else {
-      guard("Migrate", function () {
-        // no confirm(): clicking "Migrate Current" in the dialog (which explains the op) IS the
-        // confirmation, and migrate backs up first — a second yes/no was one popup too many.
-        var r = runCmd("minColor: Migrate Project", { preset: presetKey }, "migrate");
-        try { runCmd("minColor: Utility Layers", { view: ddView.selection ? ddView.selection.text : null, render: ddRender.selection ? ddRender.selection.text : null }, "utility-layers"); } catch (eU) {}
-        try { repopulateMenus(); } catch (eRp2) {}
-        var warn = [];
-        if (r.effectsFailed && r.effectsFailed.length) warn.push("CST REBUILD FAILED:\n  " + r.effectsFailed.join("\n  "));
-        if (r.effectsRemapped && r.effectsRemapped.length) warn.push("REMAPPED to this preset's spaces (review):\n  " + r.effectsRemapped.join("\n  "));
-        if (r.effectsRemoved && r.effectsRemoved.length) warn.push("REMOVED \u2014 no equivalent in this preset:\n  " + r.effectsRemoved.join("\n  "));
-        if (r.strippedPipeline && r.strippedPipeline.length) warn.push("REMOVED non-minColor OCIO pipeline effects (project is backed up):\n  " + r.strippedPipeline.join("\n  "));
-        if (r.gradesLeft && r.gradesLeft.length) warn.push("OCIO CDL/File grades left in place (verify their look):\n  " + r.gradesLeft.join("\n  "));
-        if (r.orphanLayers && r.orphanLayers.length) warn.push("EMPTY minColor VIEW/RENDER layers (safe to delete):\n  " + r.orphanLayers.join("\n  "));
-        if (warn.length) alert("minColor \u2014 migrate warnings\n\n" + warn.join("\n\n").substr(0, 3000));
-        return "working=" + r.working + (r.bitsPerChannel ? " \u00b7 " + r.bitsPerChannel + " bpc" : "") +
-               " | pin: " + (r.pinLocus || "?") + " | stripped=" + r.stripped + " rebuilt=" + (r.effectsRebuilt || 0) +
-               " remapped=" + (r.effectsRemapped ? r.effectsRemapped.length : 0) +
-               " view/render retargeted=" + (r.viewRenderRetargeted || 0) + " residual=" + r.residual +
-               " | backups: " + (r.backups ? r.backups.count + " (" + r.backups.mb + " MB)" : "?");
-      });
-    }
+    bMig.onClick = function () { dlg.close(1); };
+    if (dlg.show() !== 1 || !dd.selection) return;
+    var presetKey = dd.selection.key;
+    guard("Migrate", function () {
+      // no confirm(): clicking "Migrate Current" in the dialog (which explains the op) IS the
+      // confirmation, and migrate backs up first — a second yes/no was one popup too many.
+      var r = runCmd("minColor: Migrate Project", { preset: presetKey }, "migrate");
+      try { runCmd("minColor: Utility Layers", { view: ddView.selection ? ddView.selection.text : null, render: ddRender.selection ? ddRender.selection.text : null }, "utility-layers"); } catch (eU) {}
+      try { repopulateMenus(); } catch (eRp2) {}
+      /* detail (rebuild failed / remapped / grades left / orphans) lives in reports/migrate-last.json;
+         the status line carries the summary. No popups. */
+      return "working=" + r.working + (r.bitsPerChannel ? " \u00b7 " + r.bitsPerChannel + " bpc" : "") +
+             " | pin: " + (r.pinLocus || "?") + " rebuilt=" + (r.effectsRebuilt || 0) +
+             " remapped=" + (r.effectsRemapped ? r.effectsRemapped.length : 0) +
+             " view/render=" + (r.viewRenderRetargeted || 0) +
+             " | backups: " + (r.backups ? r.backups.count + " (" + r.backups.mb + " MB)" : "?");
+    });
   };
 
   // ---- Interpret ----
   function interpretDetail(label, r) {
     /* success is silent \u2014 the summary lands on the status line (the return value below) and
        the full breakdown is in reports/interpret*-last.json. Only FAILURES pop a dialog. */
-    if (r.failed && r.failed.length) alert("minColor \u2014 " + label + " \u2014 failed\n\n  " + cap(r.failed));
     return "added " + (r.added ? r.added.length : 0) + ", failed " + (r.failed ? r.failed.length : 0) +
            ", identity " + (r.identity ? r.identity.length : 0) + ", skipped " + (r.skipped ? r.skipped.length : 0);
   }
@@ -447,7 +397,6 @@
     if (!confirm("minColor \u2014 Strip ALL OCIO\n\nRemove EVERY OCIO effect from this timeline and its precomps?\n\n\u2022 foreign AND minColor effects\n\u2022 CDL/FILE grades too (listed in the report)\n\u2022 minColor view/render layers deleted\n\u2022 contained precomps NOT spared\n\nOne undo reverses everything.")) return;
     guard("Strip ALL OCIO", function () {
       var r = runCmd("minColor: Strip ALL", {}, "strip-all");
-      if (r.failed.length) alert("minColor \u2014 strip ALL \u2014 failed\n\n  " + cap(r.failed));   /* success is silent */
       return "stripped " + r.stripped.length + ", layers removed " + r.layersRemoved.length;
     });
   };
@@ -455,7 +404,6 @@
   bStrip.onClick = function () {
     guard("Strip foreign OCIO", function () {
       var r = runCmd("minColor: Strip Foreign OCIO", {}, "strip-foreign");
-      if (r.failed.length) alert("minColor \u2014 strip \u2014 failed\n\n  " + cap(r.failed));   /* success is silent */
       return "stripped " + r.stripped.length + ", grades left " + r.gradesLeft.length;
     });
   };
@@ -596,15 +544,23 @@
   status.alignment = ["fill", "center"];
   status.helpTip = "minColor engine " + (ENGINE.version || "?") + " \u00b7 " + (ENGINE.buildStamp || "?");
 
-  docText.text = "checking\u2026";
-  /* NO refreshDoctor here: a docked panel initializes during AE STARTUP, and an
-     executeCommand fired there wedges the launch (spin of record, 2026-09-01). The first
-     check rides the heartbeat below; the lamp shows "checking..." for its first 5 s.     */
-  try { if ($.global.__minColorTask) app.cancelTask($.global.__minColorTask); } catch (eC) {}
-  $.global.__minColorTick = function () { try { if (win.visible) refreshDoctor(true); } catch (eK) {} };
-  try { $.global.__minColorTask = app.scheduleTask("if ($.global.__minColorTick) $.global.__minColorTick();", 5000, true); } catch (eS) {}
+  /* NO background heartbeat: a scheduled script fires even while AE has its OWN modal up
+     (project load/save, missing footage, colour prompts) -> "can't run the script while a
+     modal is already going". The panel is fully PASSIVE-until-clicked. Seed the lamp once from
+     the AEGP's doctor-last.json (a plain file read, never executeCommand -> safe at init); it
+     then refreshes on click (dot.onClick) and after every command (guard). Also cancel any
+     heartbeat a previous panel build left scheduled. */
+  try { if ($.global.__minColorTask) { app.cancelTask($.global.__minColorTask); $.global.__minColorTask = null; } } catch (eC) {}
+  try { refreshDoctor(true); } catch (eSeed) { docText.text = "click the lamp to check"; }
+  /* EVENT-DRIVEN redraw (no timer — a scheduled script would collide with AE's modals). AE
+     reflows a docked panel on project load / workspace swaps without firing onResize, leaving it
+     blank; re-lay-out whenever the panel resizes, is shown, or regains focus. onActivate is the
+     one that fires when you click back to the panel after swapping projects. */
+  function relayout() { try { win.layout.layout(true); win.layout.resize(); fitRows(); unstick(); } catch (eRL) {} }
   win.layout.layout(true); fitRows();
-  win.onResizing = win.onResize = function () { this.layout.resize(); fitRows(); };
+  win.onResizing = win.onResize = function () { relayout(); };
+  try { win.onActivate = function () { relayout(); }; } catch (eOA) {}
+  try { win.onShow = function () { relayout(); }; } catch (eOS) {}
   if (win instanceof Window) { win.center(); win.show(); }
  } catch (eTop) {
   try { var elog = new File(Folder.temp.fsName + "/minColor_shell_error.txt"); elog.open("w");

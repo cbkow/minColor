@@ -76,6 +76,50 @@ static bool ParseGrammar(MincVerb verb, const char *utf8, MinColorArb *out) {
     return out->space[0] != 0;
 }
 
+/* transport: CallGeneric -> seq data + registry. Factored verbatim from the walk so the
+   ceremonies can author a single effect the same way, without the project-wide name walk.
+   avoidIds (the walk's per-pass id set), nameForLog, and the counters are optional. */
+void MincWriteEffectArb(SPBasicSuite *bp, AEGP_PluginID aegpId, AEGP_EffectRefH effH,
+                        const MinColorArb *arb, const char *configBase, const char *passportWorking,
+                        std::set<uint32_t> *avoidIds, const char *nameForLog,
+                        int *wrote, int *reminted, int *placeholders) {
+    if (!effH || !arb) return;
+    Acq<AEGP_EffectSuite5> efs(bp, kAEGPEffectSuite, kAEGPEffectSuiteVersion5);
+    if (!efs) return;
+    const char *nm = nameForLog ? nameForLog : "";
+    MincSyncPayload pay; memset(&pay, 0, sizeof(pay));
+    pay.magic = MINC_ARB_MAGIC; pay.arb = *arb;
+    pay.payVersion = 3;
+    if (configBase && configBase[0]) {           /* refresh when healthy; empty = receiver keeps its passport */
+        strncpy(pay.configBase, configBase, sizeof(pay.configBase) - 1);
+        if (passportWorking) strncpy(pay.passportWorking, passportWorking, sizeof(pay.passportWorking) - 1);
+    }
+    A_Time tg = {0, 100};
+    if (efs->AEGP_EffectCallGeneric(aegpId, effH, &tg, PF_Cmd_COMPLETELY_GENERAL, &pay) == A_Err_NONE) {
+        /* registry is keyed by instanceId: an id already claimed belongs to another instance
+           (pre-1.3.1 mints restarted at 1 every session) -> re-mint */
+        if (pay.outId == 0 || (avoidIds && avoidIds->count(pay.outId))) {
+            uint32_t fresh = MincMintInstanceId();
+            while (avoidIds && avoidIds->count(fresh)) fresh = MincMintInstanceId();
+            uint32_t old = pay.outId;
+            pay.newId = fresh; pay.outId = 0;
+            if (efs->AEGP_EffectCallGeneric(aegpId, effH, &tg, PF_Cmd_COMPLETELY_GENERAL, &pay) == A_Err_NONE && pay.outId == fresh) {
+                if (wrote) ++*wrote; if (reminted) ++*reminted;
+                MincLog("sync: re-minted duplicate instance id %u -> %u ('%s')", old, fresh, nm);
+            } else if (old) {
+                if (wrote) ++*wrote;
+                MincLog("sync: re-mint FAILED for id %u ('%s')", old, nm);
+            } else {
+                /* handler never answered (outId stayed 0 twice): the effect binary isn't
+                   installed — a placeholder instance, not a real write */
+                if (placeholders) ++*placeholders;
+                MincLog("sync: no responder for '%s' (placeholder effect?)", nm);
+            }
+        } else { if (wrote) ++*wrote; }
+        if (pay.outId && avoidIds) avoidIds->insert(pay.outId);
+    }
+}
+
 static int SyncOnce(SPBasicSuite *bp, AEGP_PluginID aegpId, bool christen) {
     AEGP_SuiteHandler suites(bp);
     Acq<AEGP_ProjSuite6>          pjs(bp, kAEGPProjSuite,          kAEGPProjSuiteVersion6);
@@ -89,13 +133,15 @@ static int SyncOnce(SPBasicSuite *bp, AEGP_PluginID aegpId, bool christen) {
     /* passport source: the CURRENT healthy authority. Written into every synced instance so the
        .aep carries the content-addressed config basename + working space across platforms. */
     MincAuthoritySnapshot snap = {}; MincAuthorityGet(&snap);
-    bool authHealthy = snap.ocioOn && snap.configPath[0] && snap.workingSpace[0];
+    /* lean-v3 EMBRACE-NONE: a managed project's working space is None by design, so
+       snap.workingSpace is empty for a healthy project — it must NOT gate the passport.
+       ocioOn + a pinned config are sufficient to establish "managed"; the config-basename
+       passport is what the effect needs, and it resolves working from the config's
+       scene_linear role at render when passportWorking is empty (§42, proven headless). */
+    bool authHealthy = snap.ocioOn && snap.configPath[0];
     char passBase[MINC_CONFIGBASE_LEN] = "";
-    if (authHealthy) {
-        const char *b = snap.configPath;
-        for (const char *p = snap.configPath; *p; ++p) if (*p == '/' || *p == '\\') b = p + 1;
-        if (b[0] && !strstr(b, "..") && strlen(b) < sizeof(passBase)) strncpy(passBase, b, sizeof(passBase) - 1);
-    }
+    if (authHealthy)
+        MincPassportConfigBase(snap.configPath, passBase, sizeof(passBase));   /* full config (strip -interface); basename + traversal guard inside */
     int seen = 0, wrote = 0, badname = 0, reminted = 0, placeholders = 0, christened = 0;
     MincMenus menus;
     bool haveMenus = christen && MincMenusGet(&menus);   /* no menus file -> no christening, ever */
@@ -203,35 +249,8 @@ static int SyncOnce(SPBasicSuite *bp, AEGP_PluginID aegpId, bool christen) {
                                         if (strcmp(em, match) != 0) { MincLog("sync: index misalign '%s' vs '%s'", em, match); efs->AEGP_DisposeEffect(effH); effH = nullptr; }
                                     }
                                     if (effH) {
-                                        /* transport: CallGeneric -> seq data + registry (names are the durable store; auto-sync re-derives on project open) */
-                                        MincSyncPayload pay; memset(&pay, 0, sizeof(pay));
-                                        pay.magic = MINC_ARB_MAGIC; pay.arb = want;
-                                        pay.payVersion = 3;
-                                        if (passBase[0]) {           /* refresh when healthy; empty = receiver keeps its passport */
-                                            strncpy(pay.configBase, passBase, sizeof(pay.configBase) - 1);
-                                            strncpy(pay.passportWorking, snap.workingSpace, sizeof(pay.passportWorking) - 1);
-                                        }
-                                        A_Time tg = {0, 100};
-                                        if (efs->AEGP_EffectCallGeneric(aegpId, effH, &tg, PF_Cmd_COMPLETELY_GENERAL, &pay) == A_Err_NONE) {
-                                            /* registry is keyed by instanceId: an id already claimed in THIS walk belongs to
-                                               another instance (pre-1.3.1 mints restarted at 1 every session) -> re-mint */
-                                            if (pay.outId == 0 || idsThisWalk.count(pay.outId)) {
-                                                uint32_t fresh = MincMintInstanceId();
-                                                while (idsThisWalk.count(fresh)) fresh = MincMintInstanceId();
-                                                uint32_t old = pay.outId;
-                                                pay.newId = fresh; pay.outId = 0;
-                                                if (efs->AEGP_EffectCallGeneric(aegpId, effH, &tg, PF_Cmd_COMPLETELY_GENERAL, &pay) == A_Err_NONE && pay.outId == fresh) {
-                                                    ++wrote; ++reminted; MincLog("sync: re-minted duplicate instance id %u -> %u ('%s')", old, fresh, name8);
-                                                } else if (old) {
-                                                    ++wrote; MincLog("sync: re-mint FAILED for id %u ('%s')", old, name8);
-                                                } else {
-                                                    /* handler never answered (outId stayed 0 twice): the effect binary
-                                                       isn't installed — a placeholder instance, not a real write */
-                                                    ++placeholders; MincLog("sync: no responder for '%s' (placeholder effect?)", name8);
-                                                }
-                                            } else ++wrote;
-                                            if (pay.outId) idsThisWalk.insert(pay.outId);
-                                        }
+                                        MincWriteEffectArb(bp, aegpId, effH, &want, passBase, snap.workingSpace,
+                                                           &idsThisWalk, name8, &wrote, &reminted, &placeholders);
                                         efs->AEGP_DisposeEffect(effH);
                                     }
                                 } else if (name8[0]) { ++badname; MincLog("sync: unparsed name '%s'", name8); }

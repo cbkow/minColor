@@ -21,12 +21,13 @@
   try {
     app.beginSuppressDialogs();
     $.evalFile(BASE + "/lib/harness.jsxinc");
-    var scripts = ["01-doctor-unmanaged", "02-apply-preset", "03-interpret", "04-utility-layers",
-                   "05-apply-look", "06-render-preset", "07-translate-roundtrip", "08-strip",
-                   "09-doctor-repair", "10-migrate", "11-archive", "12-sync-from-names",
-                   // 13-19 (panel-vs-native equivalence) retired at the M3 contract flip
-                   "20-variant-sync", "21-christening", "22-plugin-menus", "23-variant-strip-translate", "24-remint-dup",
-                   "25-migrate-native-rebuild", "26-interpret-selected", "27-utility-layers", "28-apply-look", "29-adopt",
+    var scripts = ["01-doctor-unmanaged", "03-interpret", "04-utility-layers",
+                   "05-apply-look", "06-render-preset", "08-strip",
+                   "09-doctor-repair", "10-migrate", "12-sync-from-names",
+                   // 13-19 (panel-vs-native equivalence) retired at the M3 contract flip;
+                   // 02/07/11/23/25/29 retired with Set Up / Archive / Package / Adopt (lean-v3)
+                   "20-variant-sync", "21-christening", "22-plugin-menus", "24-remint-dup",
+                   "26-interpret-selected", "27-utility-layers", "28-apply-look",
                    "30-repair", "31-render-preset",
                    "33-legacy-placeholders",                                      // before 32 by design:
                    "32-suggestion-semantics"];   // 32 LAST: it rewrites the pinned ext table

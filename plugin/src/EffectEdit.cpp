@@ -50,13 +50,9 @@ bool MincApplyEdit(PF_InData *in_data, int verbI, const char *space) {
                 MincSyncPayload pay; memset(&pay, 0, sizeof(pay));
                 pay.magic = MINC_ARB_MAGIC; pay.arb = want; pay.payVersion = 3;
                 pay.newId = MincMintInstanceId();                    /* ALWAYS — see header comment */
-                if (snap.ocioOn && snap.configPath[0] && snap.workingSpace[0]) {
-                    const char *b = snap.configPath;
-                    for (const char *p = snap.configPath; *p; ++p) if (*p == '/' || *p == '\\') b = p + 1;
-                    if (b[0] && !strstr(b, "..") && strlen(b) < sizeof(pay.configBase)) {
-                        strncpy(pay.configBase, b, sizeof(pay.configBase) - 1);
-                        strncpy(pay.passportWorking, snap.workingSpace, sizeof(pay.passportWorking) - 1);
-                    }
+                if (snap.ocioOn && snap.configPath[0]) {
+                    MincPassportConfigBase(snap.configPath, pay.configBase, sizeof(pay.configBase));  /* full config (strip -interface) */
+                    strncpy(pay.passportWorking, snap.workingSpace, sizeof(pay.passportWorking) - 1);
                 }
                 A_Time tg = {0, 100};
                 ok = (efs->AEGP_EffectCallGeneric(aegpId, effH, &tg, PF_Cmd_COMPLETELY_GENERAL, &pay) == A_Err_NONE);

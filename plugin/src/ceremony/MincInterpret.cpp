@@ -43,6 +43,7 @@ struct IEnv {
     AEGP_FootageSuite5 *fts; AEGP_ProjSuite6 *pjs;
     MincSuggestCtx ctx;
     std::string pin;
+    std::string cfgBase, working;                 /* passport stamped into every authored effect */
     std::string explicitSpace;                    /* selection mode: bypass the suggestion engine */
     std::map<int32_t, std::string> detected, harvest;
     MincInterpretReport *rep;
@@ -96,6 +97,13 @@ static std::string ContainSpace(IEnv &e, AEGP_LayerH ly) {   /* :1020-1024 */
     return "";
 }
 
+static MinColorArb InputArb(const std::string &space) {   /* interpret authors input (-> working) only */
+    MinColorArb a; memset(&a, 0, sizeof(a));
+    a.magic = MINC_ARB_MAGIC; a.version = MINC_ARB_VERSION; a.direction = MINC_DIR_TO_WORKING;
+    snprintf(a.space, MINC_SPACE_LEN, "%s", space.c_str());
+    return a;
+}
+
 static void DoLayer(IEnv &e, AEGP_CompH compH, AEGP_LayerH ly, const std::string &compName) {
     AEGP_ItemH src = nullptr;
     if (e.lys->AEGP_GetLayerSourceItem(ly, &src) != A_Err_NONE || !src) return;   /* camera/light */
@@ -146,13 +154,17 @@ static void DoLayer(IEnv &e, AEGP_CompH compH, AEGP_LayerH ly, const std::string
                    would leave a dead effect wearing a live name — legacy falls through to
                    remove + re-author below (interpret's resurrection)                     */
                 MincRenameEffectAt(e.bp, e.id, ly, haveIdx, "minColor: " + r0.space + " \xe2\x86\x92 working");
+                { MinColorArb ar = InputArb(r0.space);
+                  MincReauthorEffectAt(e.bp, e.id, ly, haveIdx, &ar, e.cfgBase.c_str(), e.working.c_str()); }
                 if (wl0) MincSetLayerLocked(e.bp, ly, true);
                 e.rep->flagged.push_back(label + " \xe2\x80\x94 renamed " + r0.note);
                 return;
             }
             MincRemoveEffectAt(e.bp, e.id, ly, haveIdx);
             if (!r0.space.empty()) {
-                MincApplyMincWithName(e.bp, e.id, ly, "minColor: " + r0.space + " \xe2\x86\x92 working", 0);
+                { MinColorArb ar = InputArb(r0.space);
+                  MincApplyMincSelfContained(e.bp, e.id, ly, "minColor: " + r0.space + " \xe2\x86\x92 working", 0,
+                                             &ar, e.cfgBase.c_str(), e.working.c_str()); }
                 if (wl0) MincSetLayerLocked(e.bp, ly, true);
                 e.rep->flagged.push_back(label + " \xe2\x80\x94 rebuilt " + r0.note);
                 return;
@@ -191,7 +203,9 @@ static void DoLayer(IEnv &e, AEGP_CompH compH, AEGP_LayerH ly, const std::string
     if (!fx.empty())
         e.rep->flagged.push_back(label + " \xe2\x80\x94 existing effects present; CST placed " +
                                  (tgt > 1 ? "after the channel extractor" : "at the top") + ", review order");
-    bool ok = MincApplyMincWithName(e.bp, e.id, ly, "minColor: " + pick.space + " \xe2\x86\x92 working", tgt);
+    MinColorArb a = InputArb(pick.space);
+    bool ok = MincApplyMincSelfContained(e.bp, e.id, ly, "minColor: " + pick.space + " \xe2\x86\x92 working", tgt,
+                                         &a, e.cfgBase.c_str(), e.working.c_str());
     if (wasLocked) MincSetLayerLocked(e.bp, ly, true);
     if (!ok) { e.rep->failed.push_back(label + " \xe2\x80\x94 apply failed"); return; }
     e.rep->added.push_back(label + " \xe2\x86\x90 " + pick.space + " [" + pick.why + "]");
@@ -255,9 +269,14 @@ MincInterpretReport MincInterpretTimeline(SPBasicSuite *bp, AEGP_PluginID id) {
     MincAuthorityRefreshBp(bp, id);
     MincAuthoritySnapshot snap = {};
     MincAuthorityGet(&snap);
-    e.pin = snap.configPath;
-    std::string pinBase = e.pin.substr(e.pin.find_last_of('/') == std::string::npos ? 0 : e.pin.find_last_of('/') + 1);
-    e.ctx = MincBuildSuggestCtx(MincPresetFromConfigBase(pinBase), e.pin);
+    std::string fullBase;                                    /* lean-v3 Path 2: author against the FULL config */
+    std::string fullPath = MincEffectConfigPath(snap.configPath, "", &fullBase);
+    e.pin = fullPath;                                        /* FULL config path — space-checks (:197) + ctx, NOT AE's interface pin */
+    std::string preset = MincPresetFromConfigBase(fullBase);
+    e.ctx = MincBuildSuggestCtx(preset, fullPath);           /* suggestions read the FULL space list */
+    e.cfgBase = fullBase;                                    /* passport = full config basename */
+    e.working = snap.workingSpace[0] ? std::string(snap.workingSpace)
+                                     : MincPresetMeta(preset).working;
     /* detected + harvest: TEMP-COPY save (probe-E copy semantics — the user's file is untouched;
        mirrors the panel's data without its force-save) */
     {
@@ -293,7 +312,7 @@ MincInterpretReport MincInterpretTimeline(SPBasicSuite *bp, AEGP_PluginID id) {
     std::set<int32_t> seen;
     WalkComp(e, comp, seen);
     if (uts) uts->AEGP_EndUndoGroup();
-    MincSyncFromNames(bp, id);                               /* == panel's syncPluginNames() at the end */
+    /* lean-v3: effects author their own arb at apply time (self-contained) — no name-walk */
     return rep;
 }
 
@@ -345,9 +364,14 @@ MincInterpretReport MincInterpretSelection(SPBasicSuite *bp, AEGP_PluginID id, c
     MincAuthorityRefreshBp(bp, id);
     MincAuthoritySnapshot snap = {};
     MincAuthorityGet(&snap);
-    e.pin = snap.configPath;
-    std::string pinBase = e.pin.substr(e.pin.find_last_of('/') == std::string::npos ? 0 : e.pin.find_last_of('/') + 1);
-    e.ctx = MincBuildSuggestCtx(MincPresetFromConfigBase(pinBase), e.pin);
+    std::string fullBase;                                    /* lean-v3 Path 2: author against the FULL config */
+    std::string fullPath = MincEffectConfigPath(snap.configPath, "", &fullBase);
+    e.pin = fullPath;                                        /* FULL config path — space-checks (:197) + ctx, NOT AE's interface pin */
+    std::string preset = MincPresetFromConfigBase(fullBase);
+    e.ctx = MincBuildSuggestCtx(preset, fullPath);           /* suggestions read the FULL space list */
+    e.cfgBase = fullBase;                                    /* passport = full config basename */
+    e.working = snap.workingSpace[0] ? std::string(snap.workingSpace)
+                                     : MincPresetMeta(preset).working;
     if (space.empty()) {                                     /* suggestion path needs detected/harvest */
         AEGP_ProjectH projH = nullptr;
         pjs->AEGP_GetProjectByIndex(0, &projH);
@@ -381,6 +405,6 @@ MincInterpretReport MincInterpretSelection(SPBasicSuite *bp, AEGP_PluginID id, c
     if (uts) uts->AEGP_StartUndoGroup("minColor interpret");
     for (auto ly : layers) DoLayer(e, comp, ly, compName);
     if (uts) uts->AEGP_EndUndoGroup();
-    MincSyncFromNames(bp, id);
+    /* lean-v3: self-contained authoring at apply time — no name-walk */
     return rep;
 }

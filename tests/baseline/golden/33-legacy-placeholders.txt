@@ -2,21 +2,20 @@
 [migrate] backup=<dir>/legacy-minc_premigrate_STAMP.aep
 [migrate] backups=[object Object]
 [migrate] bitsPerChannel=32
+[migrate] config=<dir>/config-acescg-interface.ocio
+[migrate] effectConfig=config-acescg.ocio
 [migrate] effectsFailed=0
 [migrate] effectsForeign=0
 [migrate] effectsRebuilt=5
 [migrate] effectsRemapped=0
 [migrate] effectsRemoved=0
 [migrate] gradesLeft=0
-[migrate] harvested=0
 [migrate] orphanLayers=0
-[migrate] pinLocus=central
+[migrate] pinLocus=sidecar (project-local)
 [migrate] preset=acescg
-[migrate] residual=0
-[migrate] stripped=0
 [migrate] strippedPipeline=0
 [migrate] viewRenderRetargeted=0
-[migrate] working=Linear/ACEScg
+[migrate] working=ACEScg
 [resurrected] comp 'legacy' layers=1
   layer 1 'subject' enabled=true guide=false adj=false
     fx 1 [MINC XFORM] 'minColor: sRGB → working'

@@ -4,4 +4,4 @@
 [renamed-and-synced] comp 'sync' layers=1
   layer 1 'subject' enabled=true guide=false adj=false
     fx 1 [MINC XFORM] 'minColor: Display P3 → working'
-[state] project: items=3 working='Linear/ACEScg' pin='config-acescg.ocio' bpc=32 engine=-
+[state] project: items=3 working='Linear/ACEScg' pin='config-acescg-interface.ocio' bpc=32 engine=-
