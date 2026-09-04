@@ -25,8 +25,8 @@ static PF_Err About(MincVerb verb, PF_InData *in_data, PF_OutData *out_data) {
 static PF_Err GlobalSetup(PF_InData *in_data, PF_OutData *out_data) {
     out_data->my_version = PF_VERSION(MINC_MAJOR_VERSION, MINC_MINOR_VERSION,
                                       MINC_BUG_VERSION, MINC_STAGE_VERSION, MINC_BUILD_VERSION);
-    out_data->out_flags  = PF_OutFlag_CUSTOM_UI |
-                           PF_OutFlag_DEEP_COLOR_AWARE |
+    out_data->out_flags  = PF_OutFlag_DEEP_COLOR_AWARE |             /* lean-v3: CUSTOM_UI dropped — the
+                                                                        native popup replaces the badge */
                            PF_OutFlag_PIX_INDEPENDENT  |
                            PF_OutFlag_SEND_UPDATE_PARAMS_UI |
                            PF_OutFlag_SEQUENCE_DATA_NEEDS_FLATTENING;   /* render clones come from the flat snapshot — keep it fresh */
@@ -50,9 +50,9 @@ static PF_Err ParamsSetup(PF_InData *in_data, PF_OutData *out_data) {
     if (!err) {
         def.flags = 0;   /* CANNOT_TIME_VARY made AE serve the param from static storage, ignoring AEGP stream writes (M3 finding) */
         PF_ADD_ARBITRARY2("Transform",
-                          210, 30,                    /* the ECW badge (Ui.cpp) */
+                          0, 0,                       /* lean-v3: hidden truth store, no UI (was the ECW badge) */
                           0,
-                          PF_PUI_CONTROL,
+                          PF_PUI_INVISIBLE,
                           arbH,
                           ARB_DISK_ID,
                           NULL);
@@ -75,15 +75,6 @@ static PF_Err ParamsSetup(PF_InData *in_data, PF_OutData *out_data) {
         AEFX_CLR_STRUCT(def);
         def.flags = PF_ParamFlag_SUPERVISE;
         PF_ADD_POPUP("Space", 1, 1, "(config)", POPUP_DISK_ID);
-    }
-    if (!err) {                                                     /* register for ECW events */
-        PF_CustomUIInfo ci;
-        AEFX_CLR_STRUCT(ci);
-        ci.events = PF_CustomEFlag_EFFECT;
-        ci.comp_ui_width = ci.comp_ui_height = 0;  ci.comp_ui_alignment = PF_UIAlignment_NONE;
-        ci.layer_ui_width = ci.layer_ui_height = 0; ci.layer_ui_alignment = PF_UIAlignment_NONE;
-        ci.preview_ui_width = ci.preview_ui_height = 0; ci.preview_ui_alignment = PF_UIAlignment_NONE;
-        err = (*(in_data->inter.register_ui))(in_data->effect_ref, &ci);
     }
     out_data->num_params = MINC_NUM_PARAMS;
     return err;
@@ -297,12 +288,8 @@ static PF_Err EffectMainCommon(MincVerb verb, PF_Cmd cmd, PF_InData *in_data, PF
                 err = MincHandleArbitrary(in_data, out_data, params, output,
                                           reinterpret_cast<PF_ArbParamsExtra*>(extra));
                 break;
-            case PF_Cmd_SEQUENCE_SETUP:
-                /* FRESH instance (a drop, a paste): arm the AEGP's christening walk via the
-                   shared marker. RESETUP never arms — undo of a christening arrives as
-                   RESETUP, and the reverted default name must STAY reverted.              */
+            case PF_Cmd_SEQUENCE_SETUP:                   /* lean-v3: no christening marker — daemon is gone */
                 err = SequenceSetup(in_data, out_data);
-                MincTouchWalkMarker("christen");
                 MincAuthorityRefresh(in_data);
                 break;
             case PF_Cmd_SEQUENCE_RESETUP:    err = SequenceResetup(in_data, out_data); MincAuthorityRefresh(in_data); break;
@@ -321,9 +308,6 @@ static PF_Err EffectMainCommon(MincVerb verb, PF_Cmd cmd, PF_InData *in_data, PF
                 MincAuthorityRefresh(in_data);
                 break;
             }
-            case PF_Cmd_EVENT:
-                err = MincHandleEvent(verb, in_data, out_data, params, reinterpret_cast<PF_EventExtra*>(extra));
-                break;
             case PF_Cmd_SMART_PRE_RENDER:
                 err = MincSmartPreRender(in_data, out_data,
                                          reinterpret_cast<PF_PreRenderExtra*>(extra));

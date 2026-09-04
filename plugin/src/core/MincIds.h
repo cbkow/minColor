@@ -34,13 +34,14 @@
 #define MINC_MAJOR_VERSION   2
 #define MINC_MINOR_VERSION   0
 #define MINC_BUG_VERSION     0
-#define MINC_BUILD_VERSION   1
+#define MINC_BUILD_VERSION   2      /* lean-v3: bumped so AE re-scans after dropping CUSTOM_UI */
 
-/* PF_VERSION(2,0,0,PF_Stage_DEVELOP,1) — AE warns "version mismatch" per effect when the
+/* PF_VERSION(2,0,0,PF_Stage_DEVELOP,2) — AE warns "version mismatch" per effect when the
    PiPL value drifts from GLOBAL_SETUP's my_version.                                       */
-#define MINC_PIPL_VERSION_HEX 0x00100001
+#define MINC_PIPL_VERSION_HEX 0x00100002
 
 /* mirrors of GlobalSetup()'s out_flags / out_flags2 (MinColorCST.cpp) — AE compares these
-   at scan time and warns per effect on mismatch. All five PiPLs share one GlobalSetup.    */
-#define MINC_PIPL_OUTFLAGS    0x06008410
+   at scan time and warns per effect on mismatch. All five PiPLs share one GlobalSetup.
+   lean-v3: CUSTOM_UI (0x8000) dropped — the bespoke badge is retired for the native popup. */
+#define MINC_PIPL_OUTFLAGS    0x06000410
 #define MINC_PIPL_OUTFLAGS2   0x08A01400
