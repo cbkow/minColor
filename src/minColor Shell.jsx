@@ -82,7 +82,7 @@
     $.global.__minColorBusy = true;                     /* the heartbeat yields while a command runs */
     try { log(label + "\u2026"); unstick(); } catch (eB) {}
     try { var r = fn(); log(label + ": " + (r === undefined ? "ok" : r)); refreshDoctor(); }
-    catch (e) { log(label + " FAILED: " + e.toString()); alert("minColor \u2014 " + label + " failed:\n" + e.toString()); unstick(); }
+    catch (e) { log(label + " FAILED: " + e.toString()); unstick(); }   /* status line only \u2014 no popups */
     finally { $.global.__minColorBusy = false; }
   }
 
@@ -307,7 +307,7 @@
   var pSetup = section("Project", GLYPH.gear);
   var bSetup = flatButton(pSetup, "Migrate Project\u2026");
   bSetup.onClick = function () {
-    if (!app.project || !app.project.file) { alert("minColor \u2014 save the project first.\nMigrate writes a _minColor sidecar beside the .aep."); return; }
+    if (!app.project || !app.project.file) { log("save the project first \u2014 Migrate writes a _minColor sidecar beside the .aep"); return; }
     var dlg = new Window("dialog", "minColor \u2014 Migrate");
     dlg.orientation = "column"; dlg.alignChildren = ["fill", "top"]; dlg.margins = 14; dlg.spacing = 8;
     var hdr = dlg.add("group"); hdr.spacing = 6; hdr.alignChildren = ["left", "center"]; hdr.alignment = ["fill", "top"];
@@ -346,14 +346,8 @@
       var r = runCmd("minColor: Migrate Project", { preset: presetKey }, "migrate");
       try { runCmd("minColor: Utility Layers", { view: ddView.selection ? ddView.selection.text : null, render: ddRender.selection ? ddRender.selection.text : null }, "utility-layers"); } catch (eU) {}
       try { repopulateMenus(); } catch (eRp2) {}
-      var warn = [];
-      if (r.effectsFailed && r.effectsFailed.length) warn.push("CST REBUILD FAILED:\n  " + r.effectsFailed.join("\n  "));
-      if (r.effectsRemapped && r.effectsRemapped.length) warn.push("REMAPPED to this preset's spaces (review):\n  " + r.effectsRemapped.join("\n  "));
-      if (r.effectsRemoved && r.effectsRemoved.length) warn.push("REMOVED \u2014 no equivalent in this preset:\n  " + r.effectsRemoved.join("\n  "));
-      if (r.strippedPipeline && r.strippedPipeline.length) warn.push("REMOVED non-minColor OCIO pipeline effects (project is backed up):\n  " + r.strippedPipeline.join("\n  "));
-      if (r.gradesLeft && r.gradesLeft.length) warn.push("OCIO CDL/File grades left in place (verify their look):\n  " + r.gradesLeft.join("\n  "));
-      if (r.orphanLayers && r.orphanLayers.length) warn.push("EMPTY minColor VIEW/RENDER layers (safe to delete):\n  " + r.orphanLayers.join("\n  "));
-      if (warn.length) alert("minColor \u2014 migrate warnings\n\n" + warn.join("\n\n").substr(0, 3000));
+      /* detail (rebuild failed / remapped / grades left / orphans) lives in reports/migrate-last.json;
+         the status line carries the summary. No popups. */
       return "working=" + r.working + (r.bitsPerChannel ? " \u00b7 " + r.bitsPerChannel + " bpc" : "") +
              " | pin: " + (r.pinLocus || "?") + " rebuilt=" + (r.effectsRebuilt || 0) +
              " remapped=" + (r.effectsRemapped ? r.effectsRemapped.length : 0) +
@@ -366,7 +360,6 @@
   function interpretDetail(label, r) {
     /* success is silent \u2014 the summary lands on the status line (the return value below) and
        the full breakdown is in reports/interpret*-last.json. Only FAILURES pop a dialog. */
-    if (r.failed && r.failed.length) alert("minColor \u2014 " + label + " \u2014 failed\n\n  " + cap(r.failed));
     return "added " + (r.added ? r.added.length : 0) + ", failed " + (r.failed ? r.failed.length : 0) +
            ", identity " + (r.identity ? r.identity.length : 0) + ", skipped " + (r.skipped ? r.skipped.length : 0);
   }
@@ -404,7 +397,6 @@
     if (!confirm("minColor \u2014 Strip ALL OCIO\n\nRemove EVERY OCIO effect from this timeline and its precomps?\n\n\u2022 foreign AND minColor effects\n\u2022 CDL/FILE grades too (listed in the report)\n\u2022 minColor view/render layers deleted\n\u2022 contained precomps NOT spared\n\nOne undo reverses everything.")) return;
     guard("Strip ALL OCIO", function () {
       var r = runCmd("minColor: Strip ALL", {}, "strip-all");
-      if (r.failed.length) alert("minColor \u2014 strip ALL \u2014 failed\n\n  " + cap(r.failed));   /* success is silent */
       return "stripped " + r.stripped.length + ", layers removed " + r.layersRemoved.length;
     });
   };
@@ -412,7 +404,6 @@
   bStrip.onClick = function () {
     guard("Strip foreign OCIO", function () {
       var r = runCmd("minColor: Strip Foreign OCIO", {}, "strip-foreign");
-      if (r.failed.length) alert("minColor \u2014 strip \u2014 failed\n\n  " + cap(r.failed));   /* success is silent */
       return "stripped " + r.stripped.length + ", grades left " + r.gradesLeft.length;
     });
   };
@@ -553,15 +544,23 @@
   status.alignment = ["fill", "center"];
   status.helpTip = "minColor engine " + (ENGINE.version || "?") + " \u00b7 " + (ENGINE.buildStamp || "?");
 
-  docText.text = "checking\u2026";
-  /* NO refreshDoctor here: a docked panel initializes during AE STARTUP, and an
-     executeCommand fired there wedges the launch (spin of record, 2026-09-01). The first
-     check rides the heartbeat below; the lamp shows "checking..." for its first 5 s.     */
-  try { if ($.global.__minColorTask) app.cancelTask($.global.__minColorTask); } catch (eC) {}
-  $.global.__minColorTick = function () { try { if (win.visible && !$.global.__minColorBusy) refreshDoctor(true); } catch (eK) {} };
-  try { $.global.__minColorTask = app.scheduleTask("if ($.global.__minColorTick) $.global.__minColorTick();", 5000, true); } catch (eS) {}
+  /* NO background heartbeat: a scheduled script fires even while AE has its OWN modal up
+     (project load/save, missing footage, colour prompts) -> "can't run the script while a
+     modal is already going". The panel is fully PASSIVE-until-clicked. Seed the lamp once from
+     the AEGP's doctor-last.json (a plain file read, never executeCommand -> safe at init); it
+     then refreshes on click (dot.onClick) and after every command (guard). Also cancel any
+     heartbeat a previous panel build left scheduled. */
+  try { if ($.global.__minColorTask) { app.cancelTask($.global.__minColorTask); $.global.__minColorTask = null; } } catch (eC) {}
+  try { refreshDoctor(true); } catch (eSeed) { docText.text = "click the lamp to check"; }
+  /* EVENT-DRIVEN redraw (no timer — a scheduled script would collide with AE's modals). AE
+     reflows a docked panel on project load / workspace swaps without firing onResize, leaving it
+     blank; re-lay-out whenever the panel resizes, is shown, or regains focus. onActivate is the
+     one that fires when you click back to the panel after swapping projects. */
+  function relayout() { try { win.layout.layout(true); win.layout.resize(); fitRows(); unstick(); } catch (eRL) {} }
   win.layout.layout(true); fitRows();
-  win.onResizing = win.onResize = function () { this.layout.resize(); fitRows(); };
+  win.onResizing = win.onResize = function () { relayout(); };
+  try { win.onActivate = function () { relayout(); }; } catch (eOA) {}
+  try { win.onShow = function () { relayout(); }; } catch (eOS) {}
   if (win instanceof Window) { win.center(); win.show(); }
  } catch (eTop) {
   try { var elog = new File(Folder.temp.fsName + "/minColor_shell_error.txt"); elog.open("w");
