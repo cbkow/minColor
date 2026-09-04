@@ -16,6 +16,7 @@
 #include "MincTypes.h"
 #include "MincBuildStamp.h"
 #include "MincSignal.h"     /* cross-bundle walk marker (effect arms, AEGP consumes) */
+#include <set>
 
 /* ---- MincLog.cpp — per-binary log file, basename via MINC_LOG_BASENAME compile def ---- */
 void        MincDebugLog(const char *fmt, ...);          /* compiled out unless MINC_DEBUG */
@@ -40,6 +41,14 @@ uint32_t MincMintInstanceId(void);
    plugin-menus.json defaults (never invents a space — no menus file, no christening) */
 void MincSyncFromNames(SPBasicSuite *bp, AEGP_PluginID aegpId, bool christen = false);
 bool MincParseGrammarVerb(MincVerb verb, const char *utf8, MinColorArb *out);
+/* The blessed arb-write transport (factored from the walk): write one effect instance's arb via
+   AEGP_EffectCallGeneric -> HandleGeneric (param + seq + registry), minting/adopting an instance
+   id as needed. avoidIds/nameForLog/counters are the walk's bookkeeping (optional — ceremonies
+   authoring a single fresh effect pass nullptr and get a plain write). */
+void MincWriteEffectArb(SPBasicSuite *bp, AEGP_PluginID aegpId, AEGP_EffectRefH effH,
+                        const MinColorArb *arb, const char *configBase, const char *passportWorking,
+                        std::set<uint32_t> *avoidIds = nullptr, const char *nameForLog = nullptr,
+                        int *wrote = nullptr, int *reminted = nullptr, int *placeholders = nullptr);
 
 /* tiny RAII suite acquire */
 template <typename SUITE>
