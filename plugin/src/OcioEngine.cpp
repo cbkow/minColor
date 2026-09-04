@@ -71,19 +71,35 @@ int MincOcioProbeStatus(const MincAuthoritySnapshot *auth, const MinColorArb *ar
 /* Token API: resolve ONCE per frame (the per-row path paid a stat + two map locks + string
    builds per row — ~2160 stats/frame at UHD). The token owns a heap shared_ptr so the
    processor survives cache clears for the duration of the frame. */
+/* The effect is self-reliant (Pole A): AE holds the config only to NEUTRALIZE its own colour
+   management (working space None), and hands us neutral pixels. So "working" comes from AE's
+   authority ONLY if it's actually set; otherwise the effect defines it from the config it
+   renders with — the config's scene_linear role. Never depends on AE's working space. */
+static void ResolveWorking(const MincAuthoritySnapshot *auth, const OCIO::ConstConfigRcPtr &cfg,
+                           char out[MINC_SPACE_LEN]) {
+    out[0] = 0;
+    if (auth->workingSpace[0]) { snprintf(out, MINC_SPACE_LEN, "%s", auth->workingSpace); return; }
+    try {
+        OCIO::ConstColorSpaceRcPtr ws = cfg->getColorSpace(OCIO::ROLE_SCENE_LINEAR);
+        if (ws) snprintf(out, MINC_SPACE_LEN, "%s", ws->getName());
+    } catch (...) {}
+}
+
 int MincOcioBegin(const MincAuthoritySnapshot *auth, const MinColorArb *arb, void **token) {
     *token = nullptr;
     if (!auth->ocioOn)          return MINC_STATUS_PASS_OCIO_OFF;
     if (!arb->space[0])         return MINC_STATUS_PASS_EMPTY;
-    if (!auth->configPath[0] || !auth->workingSpace[0]) return MINC_STATUS_PASS_CONFIG_ERROR;
+    if (!auth->configPath[0])   return MINC_STATUS_PASS_CONFIG_ERROR;
     try {
         OCIO::ConstConfigRcPtr cfg = GetConfig(auth->configPath);
         if (!cfg) return MINC_STATUS_PASS_CONFIG_ERROR;
+        char working[MINC_SPACE_LEN]; ResolveWorking(auth, cfg, working);
+        if (!working[0]) return MINC_STATUS_PASS_CONFIG_ERROR;
         bool isLook = (arb->direction == MINC_DIR_LOOK);
-        const char *src = isLook ? auth->workingSpace : (arb->direction == MINC_DIR_TO_WORKING) ? arb->space : auth->workingSpace;
-        const char *dst = isLook ? auth->workingSpace : (arb->direction == MINC_DIR_TO_WORKING) ? auth->workingSpace : arb->space;
+        const char *src = isLook ? working : (arb->direction == MINC_DIR_TO_WORKING) ? arb->space : working;
+        const char *dst = isLook ? working : (arb->direction == MINC_DIR_TO_WORKING) ? working : arb->space;
         if (isLook) {
-            if (!cfg->getLook(arb->space) || !cfg->getColorSpace(auth->workingSpace)) return MINC_STATUS_PASS_UNKNOWN_SPACE;
+            if (!cfg->getLook(arb->space) || !cfg->getColorSpace(working)) return MINC_STATUS_PASS_UNKNOWN_SPACE;
         } else if (!cfg->getColorSpace(src) || !cfg->getColorSpace(dst)) return MINC_STATUS_PASS_UNKNOWN_SPACE;
         /* dirTag prevents key collisions: a LOOK (src==dst==working) must never share a cache
            entry with an identity colorspace transform in the same working space */
