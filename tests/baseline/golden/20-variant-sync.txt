@@ -7,4 +7,4 @@
     fx 4 [MINC RENDER] 'minColor: Video Render'
     fx 5 [MINC LOOK] 'minColor: look Some Look'
     fx 6 [MINC VIEW] 'minColor: render Video Render'
-[state] project: items=3 working='Linear/ACEScg' pin='config-acescg.ocio' bpc=32 engine=-
+[state] project: items=3 working='None' pin='config-acescg.ocio' bpc=32 engine=-

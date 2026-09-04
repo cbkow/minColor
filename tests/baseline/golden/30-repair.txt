@@ -4,16 +4,16 @@
 [broken] family=Linear
 [broken] pin=minc-ghost-config.ocio
 [broken] preset=acescg
-[broken] repairTarget=<dir>/Application Support<dir>/config-acescg.ocio
+[broken] repairTarget=<dir>/config-acescg.ocio
 [broken] status=yellow
 [broken] text=config path needs re-pointing
 [repaired] backup=<dir>/rep30_prerepair_STAMP.aep
-[repaired] repairedTo=<dir>/Application Support<dir>/config-acescg.ocio
+[repaired] repairedTo=<dir>/config-acescg.ocio
 [repaired] status=green
 [after] canRepair=false
 [after] family=Linear
 [after] pin=config-acescg.ocio
 [after] preset=acescg
 [after] status=green
-[after] text=acescg · Linear/ACEScg · central
-[state] project: items=0 working='Linear/ACEScg' pin='config-acescg.ocio' bpc=32 engine=-
+[after] text=acescg · Linear/ACEScg · sidecar
+[state] project: items=0 working='None' pin='config-acescg.ocio' bpc=32 engine=-

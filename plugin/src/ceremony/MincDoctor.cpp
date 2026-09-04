@@ -159,9 +159,12 @@ MincDoctorResult MincDoctorDiagnose(SPBasicSuite *bp, AEGP_PluginID id) {
     r.pin = BaseName(pin);
 
     bool cfgOk = FileExists(pin) && !info.configPath.empty() && pin == info.configPath;
-    bool wsOk = pr.valid ? (workingBare == pr.working) : (!workingBare.empty() && workingBare != "None");
+    /* embrace-None: the live config switch auto-nulls AE's working space to None by design.
+       None is now the CALM/healthy state — the pinned config is the truth, and the
+       self-contained effects target the preset's working space themselves. The working
+       space no longer gates green (was: wsOk). */
 
-    if (cmsOk && cfgOk && wsOk) {
+    if (cmsOk && cfgOk) {
         /* footage-level audit: reads the last-SAVED file (deliberate — same as panel :246-250) */
         if (!projPath.empty() && FileExists(projPath)) {
             MincAssignments a;
@@ -210,12 +213,6 @@ MincDoctorResult MincDoctorDiagnose(SPBasicSuite *bp, AEGP_PluginID id) {
         r.status = "green";
         std::string wsLabel = pr.valid ? pr.workingSpaceLabel : workingBare;
         r.text = info.preset + (pr.valid && pr.retired ? " (retired)" : "") + " \xc2\xb7 " + wsLabel + " \xc2\xb7 " + locus;
-        return r;
-    }
-    if (!wsOk) {
-        r.status = "red";
-        r.text = "working space is " + (workingBare.empty() ? std::string("None") : workingBare) +
-                 " (want " + (pr.valid ? pr.workingSpaceLabel : std::string("?")) + ") \xe2\x80\x94 run Set Up / Migrate";
         return r;
     }
     r.status = "yellow";

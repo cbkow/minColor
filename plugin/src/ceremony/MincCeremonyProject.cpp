@@ -459,26 +459,37 @@ std::string MincApplyPresetToCurrent(SPBasicSuite *bp, AEGP_PluginID id, const s
     if (projPath.empty()) return "{ \"error\": \"save the project first\" }\n";
     std::string cfg = MincCentralConfigsDir() + "/" + pr.config;
     if (!PathExists(cfg)) return "{ \"error\": " + JStr("config not in central store: " + pr.config) + " }\n";
-    if (!SaveTo(e, projPath)) return "{ \"error\": \"save failed\" }\n";
-    std::string berr, bpath = BackupCopy(projPath, "prepatch", &berr);
-    if (bpath.empty()) return "{ \"error\": " + JStr(berr) + " }\n";
-    std::vector<MincFootagePatch> none;
-    std::vector<MincXmpUpsert> xmp = { { "provenance", ProvenanceRecord(presetKey, pr.config) } };
-    std::string perr;
-    if (!MincRifxPatchProject(projPath.c_str(), cfg.c_str(), pr.pwcsJSON.c_str(), none, xmp, &perr))
-        return "{ \"error\": " + JStr("patch failed: " + perr) + " }\n";
-    if (!Reopen(e, projPath)) return "{ \"error\": \"reopen failed\" }\n";
+    /* lean-v3 EMBRACE-NONE: dump the config into <project>/_minColor, then switch AE's config LIVE
+       (which auto-nulls the working space to None) via the ExecuteScript bridge — NO reopen, NO
+       PwCs patch. AE holds the config only to NEUTRALIZE its own colour management; our
+       self-contained effects own all colour (working resolved from the config's scene_linear role).
+       The one "Profile None is missing" warning is expected — the re-migrate cue. */
+    std::string cfgTarget, serr;
+    if (!MincEnsureSidecar(projPath, presetKey, &cfgTarget, &serr))
+        return "{ \"error\": " + JStr(serr) + " }\n";
+    std::string js = "app.project.colorManagementSystem=1; app.project.ocioConfigurationFile=" + JStr(cfgTarget) + ";";
+    std::string scriptErr;
+    if (uts) {
+        AEGP_MemHandle resH = nullptr, errH = nullptr;
+        uts->AEGP_ExecuteScript(id, js.c_str(), FALSE, &resH, &errH);   /* no native config setter — bridge it */
+        if (errH) {
+            void *p = nullptr;
+            suites.MemorySuite1()->AEGP_LockMemHandle(errH, &p);
+            if (p && ((char *)p)[0]) scriptErr = (char *)p;
+            suites.MemorySuite1()->AEGP_UnlockMemHandle(errH);
+            suites.MemorySuite1()->AEGP_FreeMemHandle(errH);
+        }
+        if (resH) suites.MemorySuite1()->AEGP_FreeMemHandle(resH);
+    }
+    if (!scriptErr.empty()) return "{ \"error\": " + JStr("config switch failed: " + scriptErr) + " }\n";
     int bpc = 0;
-    SetBitDepth(e, pr.family, &bpc);                     /* family depth (Linear=32, Display=16) — the
-                                                            reopened project otherwise keeps AE's sticky
-                                                            depth (a lin2020 Set Up once landed at 16,
-                                                            found live 2026-09-02; Migrate always did this) */
+    SetBitDepth(e, pr.family, &bpc);                     /* live; AEGP_SetProjectBitDepth works under OCIO (§30) */
     MincAuthorityRefreshBp(bp, id);
-    MincWriteMenus(bp, id);                              /* menus follow the new pin immediately */
+    MincWriteMenus(bp, id);                              /* menus follow the new pin */
     char bpcS[16];
     snprintf(bpcS, sizeof(bpcS), "%d", bpc);
-    return "{ \"working\": " + JStr(pr.workingSpaceLabel) + ", \"bitsPerChannel\": " + bpcS +
-           ", \"backup\": " + JStr(bpath) + " }\n";
+    return "{ \"working\": \"None (neutralized)\", \"bitsPerChannel\": " + std::string(bpcS) +
+           ", \"config\": " + JStr(cfgTarget) + " }\n";
 }
 
 std::string MincMigrateProject(SPBasicSuite *bp, AEGP_PluginID id, const std::string &presetKey) {

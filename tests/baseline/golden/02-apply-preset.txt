@@ -1,10 +1,10 @@
-[apply] backup=<dir>/preset02_prepatch_STAMP.aep
 [apply] bitsPerChannel=32
-[apply] working=Linear/ACEScg
+[apply] config=<dir>/config-acescg.ocio
+[apply] working=None (neutralized)
 [state] project: items=0 working='Linear/ACEScg' pin='config-acescg.ocio' bpc=32 engine=-
 [doctor] canRepair=false
 [doctor] family=Linear
 [doctor] pin=config-acescg.ocio
 [doctor] preset=acescg
 [doctor] status=green
-[doctor] text=acescg · Linear/ACEScg · central
+[doctor] text=acescg · Linear/ACEScg · sidecar

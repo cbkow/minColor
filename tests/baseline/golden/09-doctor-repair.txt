@@ -3,7 +3,7 @@
 [doctor-before] pin=config-acescg.ocio
 [doctor-before] preset=acescg
 [doctor-before] status=green
-[doctor-before] text=acescg · Linear/ACEScg · central
+[doctor-before] text=acescg · Linear/ACEScg · sidecar
 [repair] action=none
 [repair] status=green
 [doctor-after] canRepair=false
@@ -11,4 +11,4 @@
 [doctor-after] pin=config-acescg.ocio
 [doctor-after] preset=acescg
 [doctor-after] status=green
-[doctor-after] text=acescg · Linear/ACEScg · central
+[doctor-after] text=acescg · Linear/ACEScg · sidecar
