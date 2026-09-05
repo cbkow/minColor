@@ -74,6 +74,16 @@ You can then use the minColor effects as a substitute for AE’s default OCIO ef
 
 ---
 
+## Healing
+
+The status line at the top of the panel is minColor's **Doctor** — it watches your project's OCIO pin. Green means the project is set up and pointing at the right config; yellow means something drifted; red spells out anything you need to fix by hand.
+
+The common drift is a project made on **another machine** (or moved), where the stored config path no longer resolves. minColor **heals that automatically** — it re-points the project at its own local config, live, with no restart. You can also hit **Repair** (or run `minColor: Repair`) to do it on demand, and yellow "update available" means a newer config exists for your preset — a Migrate to the same preset refreshes it.
+
+Because the real transforms live inside the plugin, healing is just re-pointing a pin — **nothing is rewritten on disk and nothing is backed up**; it's a live change a single undo reverts. And even if a pin never gets healed, your renders are still correct: the effects carry their own configs.
+
+---
+
 ## The Extras
 
 Regular `sRGB, rec.709, rec.1886, ACES`, and `Blender` workflows are supported, and all the view, looks, and media names you expect are present.
@@ -106,12 +116,6 @@ The AE SDK doesn't expose what you need to manage color space programmatically, 
 The minColor effect carries its own copy of every color transform, so it renders the same wherever the project lands — in the app and in `aerender` — with no config files to chase and no broken config paths.
 
 *There are community requests for more API control over the settings we want, so this could change in the future if Adobe allows it.*
-
-## Documentation
-
-- [Using minColor](docs/using.md)
-- [Technical overview](docs/overview.md)
-- [Building and releasing](docs/building.md)
 
 ## Credits
 
