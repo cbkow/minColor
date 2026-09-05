@@ -34,7 +34,7 @@
      the UI (the engine still registers them; the panel just no longer gates on them). */
   var REQUIRED = ["minColor: Sync From Names", "minColor: Doctor", "minColor: Interpret Timeline",
                   "minColor: Interpret Selected", "minColor: Migrate Project",
-                  "minColor: Strip Foreign OCIO", "minColor: Strip ALL", "minColor: Utility Layers",
+                  "minColor: Strip ALL", "minColor: Utility Layers",
                   "minColor: Apply Look", "minColor: Repair", "minColor: Apply Render Preset"];
   function gateCheck() {
     var hs = readJSON(SETTINGS + "/aegp-api.json");
@@ -169,25 +169,29 @@
         g.rectPath(x + h / 2, y, w - h, h);
         g.fillPath(g.newBrush(g.BrushType.SOLID_COLOR, col));
       }
-      /* Palette discipline: AE's drawing pipe remaps non-neutral hues to theme colors, so the
-         three states are built ONLY from reliables — grey fill, the theme-primary fill, and
-         NEUTRAL outline (rim + near-panel center): filled = act, outlined = remove/undo. */
-      var base = opts.primary ? [0.00784, 0.39608, 0.86275, 1] : [0.235, 0.235, 0.235, 1];  /* rgb(2,101,220) = Spectrum blue-900 accent-button fill */
-      if (opts.outline) {
-        var rimA = this.dn ? 0.55 : this.hov ? 0.45 : 0.32;
-        pill(0, 0, s[0], s[1], [1, 1, 1, rimA]);                     /* rim */
-        pill(1.5, 1.5, s[0] - 3, s[1] - 3, [0.13, 0.13, 0.13, 1]);   /* near-panel center = "transparent" */
+      /* Spectrum 2: ONE accent (blue, filled) + a "quiet" secondary for everything else. Grey is a
+         HOVER state, never a resting button. AE's pipe remaps non-neutral hues, so states are built
+         from the accent fill + NEUTRAL white-alpha rim / grey center only. */
+      var accent = [0.00784, 0.39608, 0.86275, 1];                    /* rgb(2,101,220) Spectrum blue-900 accent */
+      if (opts.primary) {
+        var fill = this.dn ? [accent[0] * 0.68, accent[1] * 0.68, accent[2] * 0.68, 1]           /* press = deepest */
+                 : this.hov ? [accent[0] * 0.82, accent[1] * 0.82, accent[2] * 0.82, 1]          /* hover = darker (Spectrum accent darkens on hover) */
+                 : accent;
+        var rim = fill;                                              /* rim follows the fill so the whole pill shifts together */
+        pill(0, 0, s[0], s[1], rim);                                 /* blue is never ringed in grey */
+        pill(1, 1, s[0] - 2, s[1] - 2, fill);
       } else {
-        var fill = this.dn ? [base[0] * 0.72, base[1] * 0.72, base[2] * 0.72, 1]
-                 : this.hov ? [base[0] + 0.06, base[1] + 0.06, base[2] + 0.06, 1] : base;   /* equal bump = hue-preserving lighten (no green cast on grey) */
-        /* border: on a PRIMARY (blue) button the rim is the accent itself (AE never rings the
-           blue button in grey); a neutral button keeps a faint white rim for edge definition. */
-        pill(0, 0, s[0], s[1], opts.primary ? [base[0], base[1], base[2], 1] : [1, 1, 1, 0.16]);
-        pill(1, 1, s[0] - 2, s[1] - 2, fill);                          /* inset fill = clean 1px rim, no stroke seams */
+        /* quiet secondary: transparent + soft grey outline at rest; grey FILL only on hover. Rim is
+           dimmer and 2px thick (was a brighter, thin 1px white line). */
+        var rimA = this.dn ? 0.34 : this.hov ? 0.32 : 0.26;
+        var center = this.dn ? [0.24, 0.24, 0.24, 1] : this.hov ? [0.30, 0.30, 0.30, 1] : [0.13, 0.13, 0.13, 1];
+        pill(0, 0, s[0], s[1], [1, 1, 1, rimA]);                     /* outer rim */
+        pill(2, 2, s[0] - 4, s[1] - 4, center);                      /* 2px ring; transparent center at rest, grey on hover */
       }
       var f = ScriptUI.newFont("dialog", opts.primary ? "BOLD" : "REGULAR", 11);
       var ts = g.measureString(this.textLabel, f);
-      g.drawString(this.textLabel, g.newPen(g.PenType.SOLID_COLOR, [1, 1, 1, 1], 1),
+      var textCol = opts.primary ? [0.97, 0.97, 0.97, 1] : [0.86, 0.86, 0.86, 1];   /* softer than pure white */
+      g.drawString(this.textLabel, g.newPen(g.PenType.SOLID_COLOR, textCol, 1),
                    Math.max(2, (s[0] - ts.width) / 2), Math.max(0, (s[1] - ts.height) / 2 - 1), f);
     };
     b.addEventListener("mouseover", function () { this.hov = true;  try { this.window.update(); } catch (e) {} });
@@ -307,7 +311,7 @@
 
   // ---- Migrate dialog (the single managed-project entry) ----
   var pSetup = section("Project", GLYPH.gear);
-  var bSetup = flatButton(pSetup, "Migrate Project\u2026");
+  var bSetup = flatButton(pSetup, "Migrate Project\u2026", { primary: true });   /* one of the two accent actions */
   bSetup.onClick = function () {
     if (!app.project || !app.project.file) { log("save the project first \u2014 Migrate writes a _minColor sidecar beside the .aep"); return; }
     var dlg = new Window("dialog", "minColor \u2014 Migrate");
@@ -377,12 +381,11 @@
   };
   var pTL = section("Interpret Timeline", GLYPH.bars);
   var rowA = hrow(pTL);
-  var bComp = flatButton(rowA, "Interpret timeline", { primary: true });
+  var bComp = flatButton(rowA, "Interpret timeline", { primary: true });   /* full width: alone in the row */
   bComp.helpTip = "Active comp + nested precomps, auto-suggested per item; contained precomps are treated as media";
-  var bMatches = flatButton(rowA, "Matches\u2026", { width: 90 });
-  var rowSt = hrow(pTL);
-  var bStrip = flatButton(rowSt, "Strip foreign OCIO", { outline: true });
-  var bStripAll = flatButton(rowSt, "Strip ALL", { width: 90, outline: true });
+  var rowSt = hrow(pTL);                                                    /* Matches + Strip ALL below the full-width Interpret */
+  var bMatches = flatButton(rowSt, "Matches\u2026");
+  var bStripAll = flatButton(rowSt, "Strip OCIO", { outline: true });
   bComp.onClick = function () {
     guard("Interpret timeline", function () {
       var comp = app.project.activeItem; if (!(comp instanceof CompItem)) throw new Error("open a comp");
@@ -398,13 +401,6 @@
     guard("Strip ALL OCIO", function () {
       var r = runCmd("minColor: Strip ALL", {}, "strip-all");
       return "stripped " + r.stripped.length + ", layers removed " + r.layersRemoved.length;
-    });
-  };
-  bStrip.helpTip = "Remove non-minColor OCIO pipeline effects (Display/Look/CST) from this timeline + precomps. File grades and minColor effects stay; contained precomps are skipped. Undoable.";
-  bStrip.onClick = function () {
-    guard("Strip foreign OCIO", function () {
-      var r = runCmd("minColor: Strip Foreign OCIO", {}, "strip-foreign");
-      return "stripped " + r.stripped.length + ", grades left " + r.gradesLeft.length;
     });
   };
   bMatches.onClick = function () {                                  // extension table: pure settings CRUD, shell-owned
@@ -464,7 +460,7 @@
   var ddView = rowV.add("dropdownlist", undefined, MENUS.viewSpaces || []); if (ddView.items.length) ddView.selection = 0;
   ddView.alignment = ["fill", "center"]; ddView.preferredSize.width = 150;
   bindDD(ddView, "viewSpace");
-  var bView = flatButton(rowV, "Apply", { width: 80, primary: true });
+  var bView = flatButton(rowV, "Apply", { width: 80 });
   bView.helpTip = "Apply this VIEW to the comp's guide layer \u2014 viewport only, never renders";
   bView.onClick = function () {
     guard("View guide", function () {
@@ -478,7 +474,7 @@
   if (ddRender.items.length) ddRender.selection = 0;
   if (MENUS.defaultRender) for (var rdi = 0; rdi < ddRender.items.length; rdi++) if (ddRender.items[rdi].text === MENUS.defaultRender) { ddRender.selection = rdi; break; }
   bindDD(ddRender, "renderSpace");
-  var bRender = flatButton(rowR, "Apply", { width: 80, primary: true });
+  var bRender = flatButton(rowR, "Apply", { width: 80 });
   bRender.helpTip = "Apply this RENDER to the comp's render layer (NOT a guide \u2014 it renders): working space \u2192 delivery space";
   bRender.onClick = function () {
     guard("Render layer", function () {
