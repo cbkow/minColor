@@ -3,20 +3,30 @@
 ## Build
 
 ```
-python3 config/generate.py                              # configs -> config/dist/
+python3 config/generate.py                              # configs -> config/dist/ (build input)
 plugin/external/build.sh                                # static OCIO, once (build.bat on Windows)
-cmake -S plugin -B plugin/build && cmake --build plugin/build   # BOTH bundles (effects + AEGP)
-python3 build/build.py                                  # dist-panel/: shell, configs, plugins, zip
+cmake -S plugin -B plugin/build && cmake --build plugin/build   # BOTH bundles (effect + AEGP)
+python3 build/build.py                                  # dist-panel/: shell + zip
 ```
 
-To test a build locally, `plugin/scripts/dev-install-both.sh` copies the effects bundle into
-MediaCore **and** the ceremonies AEGP into the After Effects app's Plug-ins folder (the second
-copy asks for an administrator). Quit After Effects first; restart it after.
+The CMake build runs two Python codegens (so **Python 3 must be on PATH**): one bakes the configs +
+LUTs into the effect, the other bakes the metadata (`presets.json`, `extension-defaults.json`,
+`render-presets.json`, config text) into the AEGP. Nothing else is installed to disk — the binaries
+are the package.
 
-The Windows plugin (.aex, five effects including legacy `MINC CST`) is built with Visual Studio
-2022 and committed at `plugin/prebuilt/windows/` so a Mac can build the full release zip. The
-0.9.x panel keeps shipping for Windows (from `private/attic/`, inlined by `build.py`) until the
-2.0 engine lands there.
+To test a build locally:
+- **macOS:** `plugin/scripts/dev-install-both.sh` copies the effect into MediaCore **and** the
+  ceremonies AEGP into the After Effects app's Plug-ins folder (the second copy asks for an
+  administrator), and installs the shell for the current user.
+- **Windows:** `plugin\scripts\dev-install.bat` (effect + AEGP, self-elevates) then
+  `plugin\scripts\dev-install-panel.bat` (the shell, per-user). The panel script also purges any old
+  0.9.x panel so AE loads only the 2.0 shell.
+
+Quit After Effects first; restart it after.
+
+The Windows plugins (`minColorCST.aex` + `minColorAEGP.aex`, five effects including legacy
+`MINC CST`) are built with Visual Studio 2022 and committed at `plugin/prebuilt/windows/` so a Mac can
+build the full release zip. See `plugin/WINDOWS.md` for the Windows build in full.
 
 ## Versions
 
@@ -34,13 +44,17 @@ NOTARY_PROFILE=<profile> plugin/scripts/notarize.sh
 ```
 
 `<profile>` is a notarytool keychain profile you've set up once with
-`xcrun notarytool store-credentials`. Do this before `build/build.py`.
+`xcrun notarytool store-credentials`. It signs + notarizes + staples **both** bundles. Do this before
+`build/build.py` and `build-pkg.sh`.
 
 ## Installers
 
+The installer payload is the two binaries + the shell — no config store, no settings seed (the AEGP
+seeds settings from its embed on first launch).
+
 - **macOS:** `NOTARY_PROFILE=<profile> packaging/macos/build-pkg.sh` builds
   `dist-panel/minColor-<ver>.pkg`, signed and notarized if a Developer ID Installer certificate
-  is in the keychain. It installs the effects into MediaCore, the AEGP into every
+  is in the keychain. It installs the effect into MediaCore, the AEGP into every
   After Effects ≥ 2025 in /Applications, and the panel for the current user.
   `packaging/macos/uninstall.command` removes everything.
 - **Windows:** `powershell -ExecutionPolicy Bypass -File packaging\windows\build.ps1` builds
@@ -48,15 +62,17 @@ NOTARY_PROFILE=<profile> plugin/scripts/notarize.sh
 
 ## Release
 
-1. Regenerate configs and commit them (never delete old ones).
-2. Bump `MINC_VERSION`, rebuild the plugin on both platforms, commit the Windows prebuilt.
-3. Mac: notarize → `build.py` → `build-pkg.sh`. Windows: `build.py` → `build.ps1`.
+1. Regenerate configs (`config/generate.py`) and commit `config/dist` — the build input the codegens
+   embed.
+2. Bump `MINC_VERSION`, rebuild both bundles on both platforms, commit the Windows prebuilt.
+3. Mac: notarize → `build.py` → `build-pkg.sh`. Windows: refresh prebuilt → `build.py` → `build.ps1`.
 4. Tag `vX.Y.Z` and upload the pkg, the msi and the zip.
 
 ## Checking a build
 
-- `tests/baseline/run.sh --check` runs the 26-scenario suite against the installed pair
-  (quit After Effects first; `--record` re-records goldens — only after a reviewed change).
+- `tests/baseline/run.sh --check` runs the 20-scenario suite against the installed pair
+  (quit After Effects first; `--record` re-records goldens — only after a reviewed change). It's
+  store-independent: it passes with or without a config store on disk.
 - `plugin/tools/probe-engine <config> <working> to|from <space> r g b` runs the plugin's engine
   outside After Effects.
 - `plugin/tools/sdat-scan.py <project.aep>` lists every minColor effect stored in a project.

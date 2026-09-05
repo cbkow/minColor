@@ -2,12 +2,13 @@
 
 minColor 2.0 lives in three places that are really one thing:
 
-- **Effects on your layers** — the interface you'll touch most. Every minColor effect shows a
-  status badge; clicking the badge opens a menu to change that effect's color space in place.
-- **Menu commands** — every ceremony (Set Up, Migrate, Interpret, Strip, Archive, Package,
-  Repair…) is a native After Effects menu command, scriptable and shortcut-able.
+- **Effects on your layers** — the interface you'll touch most. Every minColor effect has a **Space**
+  dropdown in Effect Controls; change it to set that effect's color space in place.
+- **Menu commands** — every ceremony (Migrate, Interpret, Utility Layers, Apply Look, Apply Render
+  Preset, Strip, Doctor/Repair…) is a native After Effects menu command, scriptable and shortcut-able.
 - **The panel** (Window → minColor.jsx) — a thin dashboard over those commands: a Doctor status
-  line, the ceremonies as buttons, and dropdowns fed by your project's config.
+  line, the ceremonies as buttons, and dropdowns fed by your project's config. It's passive — it
+  acts only when you click.
 
 The panel needs the plug-ins: if the engine isn't installed (or is older than the panel), the
 panel says so and stays out of the way.
@@ -20,17 +21,18 @@ project that came from another machine) — the panel heals it in place, and **m
 does the same from the menu. Yellow "update available" means the project is pinned to an older
 config of its preset; Migrate to the same preset updates it. Red spells out what to fix by hand.
 
-## Set Up and Migrate
+## Migrate
 
-**Set Up Project** / **Migrate Project** — choose a preset:
+**Migrate Project** — choose a preset:
 
 - Linear presets (`ACEScg, ACES2065-1, Linear Rec.709, Linear Rec.2020`) for CG, VFX and HDR work.
 - **SDR** (`Rec.709 Gamma 2.2`) for an OCIO workflow similar to Adobe color space.
 
-Migrate remaps existing minColor effects to the new preset (removing ones that become
-identity), sets the working space and config, and gives the open comp its view and render
-layers — one save, backup and reopen. Projects made with minColor 1.x migrate the same way:
-their old effects are rebuilt as the current ones, names and positions kept.
+Migrate is the single managed-project entry (on a fresh project it just sets things up). It switches
+the project's config **live — no reopen** — sets the working space, remaps existing minColor effects
+to the new preset (removing ones that become identity), and gives the open comp its view and render
+layers, backing up the `.aep` to `_minColor` first. Projects made with minColor 1.x migrate the same
+way: their old effects are rebuilt as the current ones, names and positions kept.
 
 ## Interpret
 
@@ -60,17 +62,13 @@ layers always match the comp — size, pixel aspect, the lot — even after you 
 layers. **Apply Render Preset** sets view, render and look in one click from your saved recipes
 (`settings/render-presets.json`).
 
-## Names are the truth
+## What each effect remembers
 
-Every minColor effect's display name says what it does — `minColor: ARRI LogC4 → working`,
-`minColor: view macOS Video View`. Rename one (or click its badge and pick from the menu) and
-the plugin follows. **Sync From Names** re-reads every name on demand; the plug-in also does it
-automatically as you work.
+Every minColor effect stores its color space in its own saved parameter (the **Space** dropdown),
+and renders straight from it — no names to keep in sync, no background bookkeeping. The display name
+mirrors the choice (`minColor: ARRI LogC4 → working`, `minColor: view macOS Video View`) so the
+timeline stays readable, but the saved parameter is what renders, which is why a project renders
+correctly on a farm with nothing installed but the effect.
 
-## Archive and Package
-
-**Archive Project** freezes the project's config and LUTs next to the project file with a note
-of the versions used. **Package for Any AE** converts every effect to Adobe-native OCIO effects
-so the project opens on any After Effects 2025+ without minColor installed — package a version
-increment, not your working copy. **Adopt Effects** is the reverse: it brings minColor-named
-Adobe effects back home as minColor effects.
+If you rename effects by hand and want the saved parameters brought back in line with the names,
+**Sync From Names** re-derives them on demand — a rescue for hand-edited or older projects.

@@ -5,20 +5,20 @@
                                  keeps the 0.9.x install name so the Window menu entry and
                                  per-user install path stay stable). Gates on the AEGP handshake.
   dist-panel/plugin-macOS/       minColorCST.plugin (MediaCore) + minColorAEGP.plugin (app
-                                 Plug-ins) + configs — the two-bundle engine, one version.
-  dist-panel/plugin-windows/     minColor/minColorCST.aex (+ configs) + minColorAEGP.aex — the
-                                 same two bundles, from plugin/prebuilt/windows (committed by the
-                                 Windows session). The AEGP is present once the Windows port lands.
+                                 Plug-ins) — the two-bundle engine, one version.
+  dist-panel/plugin-windows/     minColor/minColorCST.aex + minColorAEGP.aex — the same two
+                                 bundles, from plugin/prebuilt/windows (committed by the Windows
+                                 session).
 
-The effect embeds its OCIO configs, so the configs folder beside it is for the AEGP's disk reads,
-not the effect. The 0.9.x windows-panel + minColor-data payload are retired: Windows runs the same
-2.0 shell + AEGP as mac. Run packaging/macos/build-pkg.sh afterwards for the mac .pkg.
+STORE-LESS: the effect embeds its OCIO configs+LUTs and the AEGP embeds its metadata (seeding
+settings/ on launch), so NO config store ships — the binaries are the package. The 0.9.x
+windows-panel + minColor-data payload are retired: Windows runs the same 2.0 shell + AEGP as mac.
+Run packaging/macos/build-pkg.sh afterwards for the mac .pkg.
 """
 import os, re, shutil, zipfile
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 SRC = os.path.join(ROOT, "src")
-DIST = os.path.join(ROOT, "config", "dist")
 OUT = os.path.join(ROOT, "dist-panel")
 
 def plugin_version():
@@ -42,18 +42,12 @@ def main():
     shell = open(os.path.join(SRC, "minColor Shell.jsx"), encoding="utf-8").read()
     open(os.path.join(OUT, "minColor.jsx"), "w", encoding="utf-8").write(inline(shell, SRC))
 
-    # config-master-*.ocio are OCIO-2.5 QCView/Blender/tooling masters, NOT AE presets — they must
-    # NOT reach AE's MediaCore config store (AE's OCIO <=2.4 can abort loading a 2.5 config;
-    # RESULTS §40). The effect embeds its configs anyway; the store is for the AEGP's disk reads.
-    AE_STORE_SKIP = shutil.ignore_patterns("config-master-*.ocio")
-
     # ---- macOS engine: effect (MediaCore) + AEGP (app Plug-ins) ----
     plugin_src = os.path.join(ROOT, "plugin", "build", "minColorCST.plugin")
     aegp_src = os.path.join(ROOT, "plugin", "build", "minColorAEGP.plugin")
     if os.path.isdir(plugin_src):
         mac_root = os.path.join(OUT, "plugin-macOS", "minColor")
         shutil.copytree(plugin_src, os.path.join(mac_root, "minColorCST.plugin"))
-        shutil.copytree(DIST, os.path.join(mac_root, "configs"), ignore=AE_STORE_SKIP)
         if os.path.isdir(aegp_src):
             shutil.copytree(aegp_src, os.path.join(OUT, "plugin-macOS", "minColorAEGP.plugin"))
 
@@ -68,8 +62,7 @@ def main():
         for name in ("minColorCST.aex", "version.txt"):
             p = os.path.join(win_src, name)
             if os.path.exists(p): shutil.copy(p, win_media)
-        shutil.copytree(DIST, os.path.join(win_media, "configs"), ignore=AE_STORE_SKIP)
-        aegp_aex = os.path.join(win_src, "minColorAEGP.aex")          # -> app Plug-ins (once the port lands)
+        aegp_aex = os.path.join(win_src, "minColorAEGP.aex")          # -> app Plug-ins
         if os.path.exists(aegp_aex):
             shutil.copy(aegp_aex, os.path.join(OUT, "plugin-windows"))
 

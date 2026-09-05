@@ -15,24 +15,24 @@ timeline instead, one effect per layer, named for what they do:
 | minColor Render | `minColor: render Video Render` | the comp's Render layer (what gets output) |
 | minColor Look | `minColor: look <name>` | an OCIO look, applied before the transform |
 
-The names are the truth. Rename an effect — or click its badge and pick from the menu — and the
-plugin follows. Which effect it is (its match name) says what it's *for*; the display name says
-which space it uses.
+Each effect stores its color space in its own saved parameter — pick it from the **Space** dropdown
+in Effect Controls. The display name mirrors that choice (which effect it is, its *match name*, says
+what it's *for*; the display name says which space it uses), so the timeline reads clearly, but the
+saved parameter is the truth: the effect renders from it with no external state to consult.
 
 ## The plug-ins
 
 Two bundles, one build, one version:
 
-- **minColorCST.plugin** (MediaCore) carries the effects. Each stores only a color space name
-  and a direction; when it renders it asks After Effects for the project's OCIO config and
-  working space, then runs the transform with its own built-in OCIO 2.5.2. It also remembers
-  the config it was last synced with (the "passport"), so a project that arrives on a machine
-  where the config path doesn't exist still renders the same — in the app and in aerender.
-  Adobe's own OCIO Color Space Transform gives identical pixels; **Package for Any AE** swaps
-  every effect over to it.
-- **minColorAEGP.plugin** (each After Effects' own Plug-ins folder) carries the ceremonies as
-  menu commands, watches the project to keep effect names and settings in sync, and writes the
-  handshake file the panel checks at startup (`settings/aegp-api.json`).
+- **minColorCST** (MediaCore) carries the effects. Each stores a color space name and a direction,
+  and renders with its own built-in OCIO 2.5.2 from a **copy of the config baked into the binary** —
+  it does not read AE's project config or any file on disk. It knows which config to use from its
+  "passport" (the config's basename), so a project renders the same wherever it lands — in the app
+  and in `aerender` — even where no config files exist.
+- **minColorAEGP** (each After Effects' own Plug-ins folder) carries the ceremonies as menu
+  commands, writes the handshake file the panel checks at startup (`settings/aegp-api.json`), and
+  seeds the panel's settings from its own embedded copies on first launch. It runs only when you
+  invoke a command — nothing watches or rewrites the project in the background.
 
 Projects made with minColor 1.x open fine: their `MINC CST` effects appear as placeholders and
 **Migrate Project** rebuilds each one as the current effect with the same name and position.
@@ -40,9 +40,15 @@ Projects made with minColor 1.x open fine: their `MINC CST` effects appear as pl
 ## The configs
 
 Generated from a Blender 5.2 config plus ACES 2.0 pieces, then trimmed to OCIO 2.4 because that's
-what After Effects ships with. Each preset is its own config file, named by a hash of its
-contents. Old versions are never deleted: a project always finds the config it was set up with,
-and the Doctor tells you when a newer one is available.
+what After Effects ships with. Every preset's full config **and its LUTs are embedded in the effect
+binary** (and the metadata in the AEGP), so nothing is installed to disk.
+
+After Effects still needs an OCIO config to be in a managed state, so Migrate writes a lean
+per-preset **interface config** into a `_minColor` folder beside the project and points AE at it.
+That config exposes only the preset's working space (its `scene_linear`) and a passthrough view — a
+neutralizer. AE composites in that space; the minColor effects own all the real color, from their
+embedded configs. The Doctor tells you when a newer preset config is available (Migrate, same preset,
+updates it).
 
 The SDR config uses a Rec. 709 gamma 2.2 working space with plain matrix and curve transforms —
 no tone mapping. The platform views (`macOS Desktop View`, `macOS Video View`, and the Windows
@@ -53,14 +59,16 @@ are sRGB and Rec. 1886 outputs.
 
 | | macOS | Windows |
 |---|---|---|
-| Effects + configs | `/Library/Application Support/Adobe/Common/Plug-ins/7.0/MediaCore/minColor/` | `C:\Program Files\Adobe\Common\Plug-ins\7.0\MediaCore\minColor\` |
-| Ceremonies (mac) | `/Applications/Adobe After Effects <ver>/Plug-ins/minColorAEGP.plugin` | — until the 2.0 engine lands on Windows |
+| Effect | `/Library/Application Support/Adobe/Common/Plug-ins/7.0/MediaCore/minColor/` | `C:\Program Files\Adobe\Common\Plug-ins\7.0\MediaCore\minColor\` |
+| Ceremonies (AEGP) | `/Applications/Adobe After Effects <ver>/Plug-ins/minColorAEGP.plugin` | `…\Adobe After Effects <ver>\Support Files\Plug-ins\minColorAEGP.aex` |
 | Panel | `~/Library/Preferences/Adobe/After Effects/<ver>/Scripts/ScriptUI Panels/` | `%APPDATA%\Adobe\After Effects\<ver>\Scripts\ScriptUI Panels\` |
 | Your settings | `/Users/Shared/minColor/settings/` | `C:\ProgramData\minColor\settings\` |
 
-## Archive and Package
+No config store is installed — the configs live in the binaries. The settings folder is seeded by the
+AEGP at first launch (your own edits there survive updates).
 
-**Archive** copies the project's config and LUTs next to the project file, with a note of the
-versions used. **Package for Any AE** does that and converts every effect to Adobe-native, so the
-project opens on any After Effects 2025+ without minColor installed. Package a version increment,
-not your working copy.
+## The `_minColor` sidecar
+
+Migrate writes a `_minColor` folder beside the project: the lean interface config AE pins, and a
+timestamped `.aep` backup taken before any change. It travels with the project, and holds no LUTs or
+full configs — the effect carries those.
