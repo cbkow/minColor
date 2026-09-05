@@ -5,7 +5,11 @@
 #include <sys/stat.h>
 #include <map>
 
+#ifdef AE_OS_WIN
+static const char *CENTRAL_ROOT = "C:/Program Files/Adobe/Common/Plug-ins/7.0/MediaCore/minColor";
+#else
 static const char *CENTRAL_ROOT = "/Library/Application Support/Adobe/Common/Plug-ins/7.0/MediaCore/minColor";
+#endif
 
 static bool FileExists(const std::string &p) { struct stat st; return !p.empty() && stat(p.c_str(), &st) == 0; }
 static std::string BaseName(const std::string &p) {
@@ -196,7 +200,7 @@ MincDoctorResult MincDoctorDiagnose(SPBasicSuite *bp, AEGP_PluginID id) {
                 if (bad > 0) {
                     r.status = "red";
                     char t[256];
-                    snprintf(t, sizeof(t), "%d footage item(s) carry footage-level assignments \xe2\x80\x94 run Set Up / Migrate to strip", bad);
+                    snprintf(t, sizeof(t), "%d footage item(s) carry footage-level assignments \xe2\x80\x94 run Migrate to strip", bad);
                     r.text = t;
                     return r;
                 }
@@ -207,7 +211,7 @@ MincDoctorResult MincDoctorDiagnose(SPBasicSuite *bp, AEGP_PluginID id) {
         if (MincPinBehind(info.preset, BaseName(pin), &bp2, &bc)) {
             r.status = "yellow";
             r.behind = true; r.behindPinned = bp2; r.behindCurrent = bc;
-            r.text = info.preset + " \xc2\xb7 pinned " + TrimCfg(bp2) + " \xe2\x86\x92 update available (" + TrimCfg(bc) + "): Set Up / Migrate, same preset";
+            r.text = info.preset + " \xc2\xb7 pinned " + TrimCfg(bp2) + " \xe2\x86\x92 update available (" + TrimCfg(bc) + "): Migrate, same preset";
             return r;
         }
         r.status = "green";

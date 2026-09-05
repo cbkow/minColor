@@ -93,6 +93,23 @@ set(MINC_COMMON_INCLUDES
   "${MINC_GEN_DIR}"
 )
 
+# ceremony sources are shared by BOTH platform AEGP targets; the preset picker is the one
+# per-platform file (MincPicker.mm mac / MincPicker.cpp Windows), added beside this list
+set(MINC_CEREMONY_SOURCES
+  src/ceremony/MincSettings.cpp
+  src/ceremony/MincEffectOps.cpp
+  src/ceremony/MincPresets.cpp
+  src/ceremony/MincDoctor.cpp
+  src/ceremony/MincSuggest.cpp
+  src/ceremony/MincInterpret.cpp
+  src/ceremony/MincCeremonyProject.cpp
+  src/ceremony/MincStrip.cpp
+  src/ceremony/MincArchive.cpp
+  src/ceremony/MincMenusWrite.cpp
+  src/ceremony/MincArgs.cpp
+  src/ceremony/MincUtility.cpp
+)
+
 # ============================== bundle 1: the effect ==============================
 add_library(minColorCST MODULE
   src/MinColorCST.cpp
@@ -183,24 +200,10 @@ if(APPLE)
   # ============================== bundle 2: the ceremonies AEGP ==============================
   # AEgx package type, app Plug-ins folder, loads at AE launch. No OCIO — the admin-installed
   # bundle stays tiny; all colour math stays in the effect.
-  set(MINC_CEREMONY_SOURCES
-    src/ceremony/MincSettings.cpp
-    src/ceremony/MincEffectOps.cpp
-    src/ceremony/MincPresets.cpp
-    src/ceremony/MincDoctor.cpp
-    src/ceremony/MincSuggest.cpp
-    src/ceremony/MincInterpret.cpp
-    src/ceremony/MincCeremonyProject.cpp
-    src/ceremony/MincStrip.cpp
-    src/ceremony/MincArchive.cpp
-    src/ceremony/MincMenusWrite.cpp
-    src/ceremony/MincArgs.cpp
-    src/ceremony/MincUtility.cpp
-    src/ceremony/MincPicker.mm
-  )
   add_library(minColorAEGP MODULE
     src/aegp/AegpMain.cpp
     ${MINC_CEREMONY_SOURCES}
+    src/ceremony/MincPicker.mm
     ${MINC_CORE_SOURCES}
   )
   add_dependencies(minColorAEGP buildstamp)
@@ -216,7 +219,6 @@ if(APPLE)
   minc_mac_bundle(minColorAEGP src/aegp/MinColorAEGP_PiPL.r src/aegp/InfoAEGP.plist.in MincAegpEntry)
 elseif(WIN32)
   # a .aex is a plain DLL; EffectMain is the only __declspec(dllexport) (static OCIO exports nothing)
-  # (the AEGP companion is mac-only in M0; Windows parity is milestone M4)
   set_target_properties(minColorCST PROPERTIES PREFIX "" SUFFIX ".aex")
   target_include_directories(minColorCST PRIVATE "${AE_SDK_HEADERS}/Win" "${AE_SDK_EXAMPLES}/Resources")
   target_compile_definitions(minColorCST PRIVATE MSWindows WIN32 _WINDOWS _CRT_SECURE_NO_WARNINGS)
@@ -243,4 +245,45 @@ elseif(WIN32)
   add_custom_command(TARGET minColorCST POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E echo "${MINC_VERSION}" > "$<TARGET_FILE_DIR:minColorCST>/version.txt"
     COMMENT "version.txt = ${MINC_VERSION}" VERBATIM)
+
+  # ============================== bundle 2: the ceremonies AEGP (M4) ==============================
+  # Same ceremony/core C++ as the mac bundle (std::filesystem via MincFs.h), the portable
+  # MincPicker.cpp instead of the NSAlert .mm. A plain DLL renamed .aex; MincAegpEntry is the
+  # one DllExport. OCIO links like the effect (the linker drops what the ceremonies don't use).
+  add_library(minColorAEGP MODULE
+    src/aegp/AegpMain.cpp
+    ${MINC_CEREMONY_SOURCES}
+    src/ceremony/MincPicker.cpp
+    ${MINC_CORE_SOURCES}
+  )
+  add_dependencies(minColorAEGP buildstamp)
+  target_include_directories(minColorAEGP PRIVATE ${MINC_COMMON_INCLUDES}
+    "${AE_SDK_HEADERS}/Win" "${AE_SDK_EXAMPLES}/Resources")
+  target_compile_definitions(minColorAEGP PRIVATE
+    MSWindows WIN32 _WINDOWS _CRT_SECURE_NO_WARNINGS MINC_LOG_BASENAME="minColorAEGP")
+  target_link_libraries(minColorAEGP PRIVATE OpenColorIO::OpenColorIO ${OCIO_EXT_LIBS})
+  set_target_properties(minColorAEGP PROPERTIES
+    CXX_VISIBILITY_PRESET hidden
+    VISIBILITY_INLINES_HIDDEN ON
+    PREFIX "" SUFFIX ".aex"
+    OUTPUT_NAME "minColorAEGP"
+  )
+
+  # --- AEGP PiPL through the same .r -> cl /EP -> PiPLtool -> .rc path (basenames differ, so
+  #     the shared WORK dir is collision-free) ---
+  set(AEGP_PIPL_RC "${CMAKE_CURRENT_BINARY_DIR}/minColorAEGP_PiPL.rc")
+  add_custom_command(OUTPUT "${AEGP_PIPL_RC}"
+    COMMAND ${CMAKE_COMMAND}
+            -DCL=${CMAKE_CXX_COMPILER}
+            -DPIPLTOOL=${AE_SDK_EXAMPLES}/Resources/PiPLtool.exe
+            -DINC=${AE_SDK_HEADERS}
+            -DINC2=${CMAKE_CURRENT_SOURCE_DIR}/src/core
+            -DIN_R=${CMAKE_CURRENT_SOURCE_DIR}/src/aegp/MinColorAEGP_PiPL.r
+            -DOUT_RC=${AEGP_PIPL_RC}
+            -DWORK=${CMAKE_CURRENT_BINARY_DIR}
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/BuildPiPL.cmake"
+    DEPENDS src/aegp/MinColorAEGP_PiPL.r src/core/MincIds.h cmake/BuildPiPL.cmake
+    COMMENT "AEGP PiPL (cl /EP -> PiPLtool -> rc)"
+    VERBATIM)
+  target_sources(minColorAEGP PRIVATE "${AEGP_PIPL_RC}")
 endif()

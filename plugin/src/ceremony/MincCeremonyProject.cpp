@@ -131,7 +131,7 @@ static bool AcquireEnv(SPBasicSuite *bp, AEGP_PluginID id, AEGP_SuiteHandler &su
 struct SyncRow { int32_t id; std::string item, current; bool ok; };
 static bool BuildSyncRows(PEnv &e, const std::string &projPath, std::vector<SyncRow> *rows, std::string *workName) {
     /* temp-copy read: identical data to the panel's forced save, user's file untouched */
-    std::string tmp = "/tmp/minColor-migrate-scan.aep";
+    std::string tmp = mfs::tempPath("minColor-migrate-scan.aep");
     if (!SaveTo(e, tmp)) return false;
     MincAssignments a;
     bool ok = MincRifxReadAssignments(tmp.c_str(), &a);
@@ -600,7 +600,7 @@ std::string MincRepairProject(SPBasicSuite *bp, AEGP_PluginID id) {
     MincDoctorResult d = MincDoctorDiagnose(bp, id);
     if (d.status == "green") return "{ \"status\": \"green\", \"action\": \"none\" }\n";
     if (d.repairTarget.empty())
-        return "{ \"error\": " + JStr("cannot repair (" + d.status + ": " + d.text + ") \xe2\x80\x94 run Set Up / Migrate") + " }\n";
+        return "{ \"error\": " + JStr("cannot repair (" + d.status + ": " + d.text + ") \xe2\x80\x94 run Migrate") + " }\n";
     if (!SaveTo(e, projPath)) return "{ \"error\": \"save failed\" }\n";
     std::string berr, bpath = BackupCopy(projPath, "prerepair", &berr);
     if (bpath.empty()) return "{ \"error\": " + JStr(berr) + " }\n";

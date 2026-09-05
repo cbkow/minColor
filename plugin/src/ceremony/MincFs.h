@@ -32,6 +32,16 @@ inline std::vector<DirEnt> listFiles(const std::string &dir) {
     return out;
 }
 
+/* scratch-file path in the platform temp dir. The mac keeps its field-verified /tmp; Windows uses
+   %TEMP% (an unelevated AE cannot create files at the root of C:, where "/tmp/x" would land). */
+inline std::string tempPath(const std::string &name) {
+#ifdef _WIN32
+    std::error_code ec; return (fs::temp_directory_path(ec) / name).string();
+#else
+    return "/tmp/" + name;
+#endif
+}
+
 inline void localTime(const std::time_t *t, std::tm *out) {
 #ifdef _WIN32
     localtime_s(out, t);
