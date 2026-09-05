@@ -37,6 +37,20 @@ add_custom_command(
   COMMENT "embed OCIO configs + LUTs into the effect")
 set(MINC_ZLIB_INCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/external/build/ext/dist/include")
 
+# --- EMBEDDED META: bake the TEXT metadata the AEGP reads (presets.json, extension-defaults.json,
+#     config-*.ocio YAML — NO LUTs) into the AEGP binary so the panel's dropdowns/looks/interpret
+#     work with no config store on disk. Raw (uncompressed) so the mac AEGP needs no zlib. Readers
+#     are disk-FIRST, embedded-fallback (a real store still wins). Regenerates when config changes. ---
+set(MINC_META_CPP "${MINC_GEN_DIR}/MincEmbeddedMeta.cpp")
+file(GLOB MINC_META_DEPS "${MINC_CONFIG_DIST}/presets.json" "${MINC_CONFIG_DIST}/config-*.ocio"
+  "${CMAKE_CURRENT_SOURCE_DIR}/../config/extension-defaults.json")
+add_custom_command(
+  OUTPUT "${MINC_META_CPP}"
+  COMMAND "${MINC_PYTHON}" "${CMAKE_CURRENT_SOURCE_DIR}/cmake/gen_embedded_meta.py"
+          "${MINC_META_CPP}" "${CMAKE_CURRENT_SOURCE_DIR}/../config"
+  DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/cmake/gen_embedded_meta.py" ${MINC_META_DEPS}
+  COMMENT "embed presets.json + extension-defaults.json + config text into the AEGP")
+
 # --- After Effects SDK (drop the unzipped SDK into plugin/sdk/) ---
 set(AE_SDK_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/sdk" CACHE PATH "After Effects SDK root")
 file(GLOB _ae_sdk_candidates "${AE_SDK_ROOT}" "${AE_SDK_ROOT}/*")
@@ -204,10 +218,11 @@ if(APPLE)
     src/aegp/AegpMain.cpp
     ${MINC_CEREMONY_SOURCES}
     src/ceremony/MincPicker.mm
+    "${MINC_META_CPP}"
     ${MINC_CORE_SOURCES}
   )
   add_dependencies(minColorAEGP buildstamp)
-  target_include_directories(minColorAEGP PRIVATE ${MINC_COMMON_INCLUDES})
+  target_include_directories(minColorAEGP PRIVATE ${MINC_COMMON_INCLUDES} src)
   target_compile_definitions(minColorAEGP PRIVATE MINC_LOG_BASENAME="minColorAEGP")
   set_source_files_properties(src/ceremony/MincPicker.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
   target_link_libraries(minColorAEGP PRIVATE "-framework AppKit")
@@ -254,10 +269,11 @@ elseif(WIN32)
     src/aegp/AegpMain.cpp
     ${MINC_CEREMONY_SOURCES}
     src/ceremony/MincPicker.cpp
+    "${MINC_META_CPP}"
     ${MINC_CORE_SOURCES}
   )
   add_dependencies(minColorAEGP buildstamp)
-  target_include_directories(minColorAEGP PRIVATE ${MINC_COMMON_INCLUDES}
+  target_include_directories(minColorAEGP PRIVATE ${MINC_COMMON_INCLUDES} src
     "${AE_SDK_HEADERS}/Win" "${AE_SDK_EXAMPLES}/Resources")
   target_compile_definitions(minColorAEGP PRIVATE
     MSWindows WIN32 _WINDOWS _CRT_SECURE_NO_WARNINGS MINC_LOG_BASENAME="minColorAEGP")

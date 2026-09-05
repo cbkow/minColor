@@ -1,6 +1,7 @@
 #include "MincPresets.h"
 #include "MincCore.h"
 #include "MincJson.h"
+#include "MincEmbeddedMeta.h"
 #include <sys/stat.h>
 
 static bool FileExists(const std::string &p) { struct stat st; return stat(p.c_str(), &st) == 0; }
@@ -34,11 +35,16 @@ static MincJsonPtr Load(void) {
         MincJsonPtr j = MincJsonParseFile(cands[i]);
         if (j) { g_presets = j; g_usedPath = cands[i]; break; }
     }
+    if (!g_presets) {                                    /* no store on disk -> the baked-in copy */
+        MincJsonPtr j = MincJsonParse(MincEmbeddedMetaText("presets.json"));
+        if (j) { g_presets = j; g_usedPath = "<embedded>/presets.json"; }
+    }
     MincLog("presets: %s", g_usedPath.empty() ? "NOT FOUND" : g_usedPath.c_str());
     return g_presets;
 }
 
 std::string MincPresetsFileUsed(void) { Load(); return g_usedPath; }
+MincJsonPtr MincPresetsJson(void) { return Load(); }   /* the loaded doc (disk or embedded) */
 
 MincPresetInfo MincPresetMeta(const std::string &key) {
     MincPresetInfo out;
@@ -127,5 +133,8 @@ std::string MincEffectConfigPath(const std::string &pinnedPath, const std::strin
     std::string fullBase = fb[0] ? std::string(fb) : pinnedPath;
     if (fullBaseOut) *fullBaseOut = fullBase;
     std::string p = MincFindConfigByName(fullBase, projPath);
-    return p.empty() ? pinnedPath : p;                           /* fall back to the pin if unresolved */
+    if (!p.empty()) return p;
+    if (MincEmbeddedMetaHas(fullBase)) return fullBase;          /* no store on disk -> basename; the
+                                                                    text readers resolve it to the embed */
+    return pinnedPath;                                           /* last resort: the pin */
 }

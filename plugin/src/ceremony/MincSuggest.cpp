@@ -2,14 +2,25 @@
 #include "MincPresets.h"
 #include "MincSettings.h"
 #include "MincJson.h"
+#include "MincEmbeddedMeta.h"
 #include <cstdio>
 #include <cstring>
 #include <cctype>
 
+/* Read a config's YAML text: the disk copy if present (a real store, custom/edited configs win),
+   else the AEGP's baked-in copy by basename — so looks and space-filtering work with no store. */
+static std::string MincReadConfigText(const std::string &path) {
+    std::string s = MincReadTextFile(path);
+    if (!s.empty()) return s;
+    size_t sl = path.find_last_of("/\\");
+    std::string base = (sl == std::string::npos) ? path : path.substr(sl + 1);
+    return MincEmbeddedMetaText(base);
+}
+
 /* ---- configSpaces (:32-47): names + aliases of a .ocio, "    name: X" / "    aliases: [..]" ---- */
 static std::map<std::string, bool> ConfigSpaces(const std::string &path) {
     std::map<std::string, bool> set;
-    std::string s = MincReadTextFile(path);
+    std::string s = MincReadConfigText(path);
     size_t pos = 0;
     while (pos < s.size()) {
         size_t eol = s.find('\n', pos);
@@ -84,7 +95,7 @@ static void JsonList(MincJsonPtr node, const char *key, std::vector<std::string>
 
 std::vector<std::string> MincConfigLooks(const std::string &pinPath) {  /* configLooks port (:1201) */
     std::vector<std::string> names;
-    std::string s = MincReadTextFile(pinPath);
+    std::string s = MincReadConfigText(pinPath);
     size_t li = s.find("\nlooks:");
     if (li == std::string::npos) return names;
     std::string tail = s.substr(li + 7);
@@ -122,8 +133,7 @@ MincMenuLists MincMenuListsFor(const std::string &presetKey, const std::string &
     m.defView = "macOS Video View";                              /* platform video view (:874) */
 #endif
     m.defRender = "Video Render";
-    MincJsonPtr j = MincJsonParseFile(MincPresetsFileUsed().empty() ? std::string("/dev/null") : MincPresetsFileUsed());
-    if (!j) { MincPresetMeta(presetKey); j = MincJsonParseFile(MincPresetsFileUsed()); }  /* force discovery */
+    MincJsonPtr j = MincPresetsJson();   /* the loaded doc (disk or embedded) — never re-parse by path */
     if (!j) return m;
     MincJsonPtr live = j->get("presets");
     MincJsonPtr pr = (live && !presetKey.empty()) ? live->get(presetKey) : nullptr;
@@ -183,6 +193,7 @@ MincSuggestCtx MincBuildSuggestCtx(const std::string &presetKey, const std::stri
     for (auto &v : m.render) ctx.validAll[v] = true;
     /* extension table (extDefaults :813) */
     MincJsonPtr ed = MincJsonParseFile(MincSettingsDir() + "/extension-defaults.json");
+    if (!ed) ed = MincJsonParse(MincEmbeddedMetaText("extension-defaults.json"));  /* seed absent -> baked-in */
     if (ed) {
         MincJsonPtr d = ed->get("defaults");
         if (d && d->type == MincJsonValue::Object)

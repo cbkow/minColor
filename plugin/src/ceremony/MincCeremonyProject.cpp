@@ -8,6 +8,7 @@
 #include "MincMenusWrite.h"
 #include "MincDoctor.h"
 #include "MincJson.h"
+#include "MincEmbeddedMeta.h"
 #include "../core/MincRifx.h"
 #include <cstdio>
 #include <ctime>
@@ -457,7 +458,8 @@ std::string MincMigrateProject(SPBasicSuite *bp, AEGP_PluginID id, const std::st
     std::string projPath = ProjPath(e);
     if (projPath.empty()) return "{ \"error\": \"save the project first\" }\n";
     std::string cfg = MincCentralConfigsDir() + "/" + pr.config;
-    if (!PathExists(cfg)) return "{ \"error\": " + JStr("config not in central store: " + pr.config) + " }\n";
+    if (!PathExists(cfg) && !MincEmbeddedMetaHas(pr.config))     /* disk store OR the AEGP's baked-in copy */
+        return "{ \"error\": " + JStr("config not available (no store on disk, not embedded): " + pr.config) + " }\n";
 
     /* lean-v3 EMBRACE-NONE migrate: sidecar the config, switch AE LIVE (auto-None working; no
        reopen, no PwCs working-space patch, no footage native-reprofile — AE just neutralizes;
@@ -604,6 +606,13 @@ std::string MincRepairProject(SPBasicSuite *bp, AEGP_PluginID id) {
     if (!SaveTo(e, projPath)) return "{ \"error\": \"save failed\" }\n";
     std::string berr, bpath = BackupCopy(projPath, "prerepair", &berr);
     if (bpath.empty()) return "{ \"error\": " + JStr(berr) + " }\n";
+    /* Path 2: (re)generate the portable lean interface config so d.repairTarget resolves, then pin
+       THAT — AE only ever pins the neutralizer; the effect renders from its own (embedded) config. */
+    if (!d.preset.empty()) {
+        std::string ifp, ierr;
+        if (!MincWriteInterfaceConfig(projPath, d.preset, &ifp, &ierr))
+            return "{ \"error\": " + JStr("cannot rebuild interface config: " + ierr + " \xe2\x80\x94 run Migrate") + " }\n";
+    }
     std::vector<MincFootagePatch> none;
     std::vector<MincXmpUpsert> noXmp;
     std::string perr;

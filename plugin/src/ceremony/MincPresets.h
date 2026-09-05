@@ -3,6 +3,7 @@
    disk; both generated from the same source). Logged which was used.                       */
 #pragma once
 #include <string>
+#include <memory>
 
 struct MincPresetInfo {
     bool        valid = false;
@@ -12,6 +13,7 @@ struct MincPresetInfo {
 
 std::string   MincCentralConfigsDir(void);               /* MediaCore/minColor/configs */
 std::string   MincPresetsFileUsed(void);                 /* the presets.json actually loaded ("" if none) */
+struct MincJsonValue; std::shared_ptr<MincJsonValue> MincPresetsJson(void);  /* loaded doc (disk or embedded) */
 MincPresetInfo MincPresetMeta(const std::string &key);   /* live OR retired record */
 std::string   MincFamilyFor(const std::string &key);     /* "Linear" | "Display" (default Linear) */
 

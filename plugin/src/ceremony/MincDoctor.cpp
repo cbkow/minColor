@@ -222,7 +222,15 @@ MincDoctorResult MincDoctorDiagnose(SPBasicSuite *bp, AEGP_PluginID id) {
     r.status = "yellow";
     r.text = std::string(!cmsOk ? "engine fell back to Adobe mode; " : "") + (!cfgOk ? "config path needs re-pointing" : "");
     r.canRepair = !info.configPath.empty() || !MincFindConfigByName(info.config, projPath).empty();
-    if (r.canRepair)                                     /* the heal's target (panel repair :275) */
-        r.repairTarget = !info.configPath.empty() ? info.configPath : MincFindConfigByName(info.config, projPath);
+    if (r.canRepair) {                                   /* the heal's target (panel repair :275) */
+        /* Path 2: repair restores the PORTABLE lean INTERFACE pin in _minColor (the neutralizer AE
+           pins) — never the full config. Repair regenerates it from the preset before patching, so
+           the target is valid even when only the effect's embedded config is present. */
+        size_t s = projPath.find_last_of('/');
+        if (!info.preset.empty() && s != std::string::npos)
+            r.repairTarget = projPath.substr(0, s) + "/_minColor/config-" + info.preset + "-interface.ocio";
+        else
+            r.repairTarget = !info.configPath.empty() ? info.configPath : MincFindConfigByName(info.config, projPath);
+    }
     return r;
 }

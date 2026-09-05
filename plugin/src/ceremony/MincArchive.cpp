@@ -36,13 +36,12 @@ bool MincEnsureSidecar(const std::string &projPath, const std::string &preset,
     std::string projName = projPath.substr(sl + 1);
     std::string sd = projDir + "/_minColor";
     mfs::mkdirs(sd);
-    std::string root = MincCentralConfigsDir();
-    const char *trees[] = { "luts", "filmic", "icc" };
-    for (int i = 0; i < 3; ++i) ACopyTree(root + "/" + trees[i], sd + "/" + trees[i]);
-    std::string cfgTarget = sd + "/" + pr.config;
-    if (!AExists(cfgTarget)) {
-        if (!ACopy(root + "/" + pr.config, cfgTarget)) { if (errOut) *errOut = "config copy failed"; return false; }
-    }
+    /* lean-v3: the effect renders from its EMBEDDED config + LUTs, and AE pins the generated lean
+       interface config (MincWriteInterfaceConfig, references no LUTs) — so _minColor no longer
+       carries the full config or the icc/luts/filmic trees (~20 MB of dead weight per project).
+       cfgOut points at the CENTRAL config for looks/menus; those readers fall back to the AEGP's
+       baked-in copy when no store is on disk, so it resolves whether or not a store is installed. */
+    std::string cfgTarget = MincCentralConfigsDir() + "/" + pr.config;
     {   /* minColor.json v2 merge: per-project entries keyed by display name */
         MincJsonPtr j = MincJsonParseFile(sd + "/minColor.json");
         std::string parts;

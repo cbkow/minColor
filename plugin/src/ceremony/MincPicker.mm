@@ -26,8 +26,7 @@ bool MincPickPreset(const char *commandLabel, std::string *keyOut) {
         return true;
     }
     @autoreleasepool {
-        MincJsonPtr j = MincJsonParseFile(MincPresetsFileUsed());
-        if (!j) { MincPresetMeta("acescg"); j = MincJsonParseFile(MincPresetsFileUsed()); }
+        MincJsonPtr j = MincPresetsJson();   /* loaded doc (disk or embedded) */
         MincJsonPtr live = j ? j->get("presets") : nullptr;
         if (!live || live->obj.empty()) return false;
         NSPopUpButton *pop = [[NSPopUpButton alloc] initWithFrame:NSMakeRect(0, 0, 260, 26) pullsDown:NO];
