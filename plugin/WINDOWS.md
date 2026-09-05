@@ -11,33 +11,30 @@ If you last built before this, your panel "couldn't see the OCIO profiles" becau
 `presets.json` off disk and a bundles-only install had no store. That's fixed: the AEGP now carries
 the metadata and seeds what the shell reads. **Rebuild the AEGP and the symptom goes away.**
 
-## Updating to 2.0.1 (do this now)
+## Updating to 2.0.2 (do this now)
 
-Both the **plugin** and the **script** changed since the last Windows prebuilt (which was 2.0.0 on
-`f3fc318`). What landed on `main`:
-- **`7751067` — version → 2.0.1 + an AEGP fix.** `MincInterpret.cpp`: an explicit space from the
-  panel's Apply / Interpret Selected now RE-ASSIGNS a layer that already has a minColor effect
-  (before, the pick was silently ignored — "already interpreted"). This is in the **AEGP**, so the
-  AEGP must be rebuilt. The version bump also means both bundles now stamp **2.0.1** (rebuild both so
-  `version.txt` reads 2.0.1 for the MSI's DefaultVersion).
-- **`11175ad` — panel theme + layout (the SHELL, `src/minColor Shell.jsx`).** Spectrum-2 quiet
-  secondary buttons (grey only on hover), accent blue darkens on hover, two accent buttons only
-  (Migrate Project + Interpret timeline), full-width Interpret timeline, "Strip foreign OCIO" button
-  removed, "Strip ALL" button renamed **Strip OCIO**. This is a script-only change — no engine
-  dependency — but the MSI ships the shell, so rebuild the installer (or re-run the panel script) to
-  pick it up.
+Since the last Windows prebuilt (**2.0.1 @ee04c3b**), BOTH the **plugin** and the **script** changed —
+so rebuild the bundles *and* refresh the shell. What landed on `main`:
+- **`f35e681` — Repair goes live + all `.aep` backups removed (AEGP change).** Repair no longer
+  RIFX-patches the project file and reopens — it does a **live re-pin** via the same
+  `AEGP_ExecuteScript` bridge Migrate uses. And Migrate + Repair no longer force-save or write a
+  `_minColor\backups` copy: **nothing edits or backs up the `.aep` anymore** (both are live, AE-undo
+  covered until the user saves). This is in the **AEGP**, so it must be rebuilt.
+- **`src/minColor Shell.jsx` (the SCRIPT) changed with it.** The Migrate dialog now reads *"Live —
+  undo before you save to revert"* (was "Backs up first") and the migrate summary drops the backups
+  count. The MSI ships the shell, so it must be refreshed too.
+- **Version → 2.0.2** — rebuild both bundles so `version.txt` reads 2.0.2 (the MSI's DefaultVersion).
 
 **Update checklist (details in the numbered sections below):**
-1. `git checkout main && git pull` (need `7751067` + `11175ad`).
+1. `git checkout main && git pull`.
 2. Rebuild **both** bundles: `cmake --build plugin\build --config Release` (§2). Confirm
-   `plugin\build\Release\version.txt` now reads **2.0.1**.
+   `plugin\build\Release\version.txt` reads **2.0.2**.
 3. Refresh the prebuilt + commit (§3): copy `minColorCST.aex`, `minColorAEGP.aex`, `version.txt`
    from `plugin\build\Release` to `plugin\prebuilt\windows\`.
-4. Rebuild the MSI (§4): `python build\build.py` then `build.ps1`. `build.py` re-inlines the updated
-   shell into `dist-panel\minColor.jsx`, which the MSI ships — so the new panel look ships too.
-5. Verify (§5): About/version shows **2.0.1**; the panel shows two blue buttons + **Strip OCIO** +
-   a full-width Interpret timeline; and Interpret-Selected on a layer that already has a minColor
-   effect now **changes** its space instead of doing nothing.
+4. Rebuild the MSI (§4): `python build\build.py` (re-inlines the updated shell into
+   `dist-panel\minColor.jsx`, which the MSI ships) then `build.ps1`.
+5. Verify (§5): version **2.0.2**; **Repair** re-points a broken pin live (no reopen); and neither
+   Migrate nor Repair creates a `_minColor\backups` folder.
 
 For a quick dev loop instead of the MSI: `dev-install.bat` (both bundles) + `dev-install-panel.bat`
 (the updated shell) — §2b.
@@ -46,7 +43,7 @@ For a quick dev loop instead of the MSI: `dev-install.bat` (both bundles) + `dev
 
 ```
 git checkout main
-git pull                     # need through 7751067 (2.0.1: AEGP embed/self-seed, store-less, interpret fix, panel theme)
+git pull                     # need through the 2.0.2 bump (Repair live + backups removed; also 2.0.1 interpret fix + panel theme)
 ```
 
 ## 1. Prereqs
