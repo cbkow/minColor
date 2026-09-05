@@ -24,19 +24,17 @@ Download `minColor-<version>.pkg` from [Releases](https://github.com/cbkow/minCo
 
 Download `minColor-<version>.msi` from [Releases](https://github.com/cbkow/minColor/releases/latest), quit After Effects, and run it. The installer is unsigned, so Windows will ask for permission to run it.
 
-The installer places two plug-ins and the panel — nothing else. minColor's color configs are baked into the plug-in, so there is no config folder to manage, and projects render correctly even on a machine (or a render farm) that has never seen the configs.
-
 ---
 
 ## The Basics
 
 Since 2.0, minColor is plugin-first on both macOS and Windows: every operation is a native After Effects menu command, the effects on your layers are the interface (each has a **Space** dropdown in Effect Controls), and the panel is a thin dashboard over both.
 
-1. **Migrate a project** by selecting a working color space. If you pick ACEScg, the working space and default media space are ACEScg. Migrate switches the project live — no restart. Projects made with minColor 1.x migrate cleanly: old effects are rebuilt as current ones, and names and positions are kept.
+1. **Migrate a project** by selecting a working color space. If you pick ACEScg, the working space and default media space are ACEScg. 
 2. **Interpret Timeline** is the most useful part of this plugin. It walks the active comp and every precomp under it, matching all files to color spaces based on presets. Edit these presets with the **Matches** button.
    ![mC_009.png](images/mC_009.png)
-3. Use **Interpret Selected** to manually set chosen layers' color spaces, or change any minColor effect's **Space** dropdown in Effect Controls to set it in place.
-4. Set your **View** adjustment layer to what you want to see while working, and your **Render** adjustment layer to what you want to output. Only one of the two renders at a time, and **Render Presets** set view, render, and look in one click.
+3. Use **Interpret Footage** to manually set chosen layers' color spaces, or change any minColor effect's **Space** dropdown in Effect Controls to set it in place.
+4. Set your **View** adjustment layer to what you want to see while working, and your **Render** adjustment layer to what you want to output. Use the buttons to quickly toggle between working and rendering.
 
 ---
 
@@ -57,7 +55,7 @@ If you are working in post-production in an offline/online flow, you will most l
 - **Windows or macOS Video Views** are what people will see when they watch videos online or via a desktop video player. *Pick your poison (and lament the state of video today).*
 - **Video Render** is what you will be outputting to offline editors and online finishing artists.
 
-To be extra clear, except for the macOS flavors, these are all aliases for common settings like `sRGB` but are helpful for artists who are unfamiliar. The macOS views counteract a bug in how macOS communicates to macOS. If you are curious:
+To be extra clear, except for the macOS flavors, these are all aliases for common settings like `sRGB` but are helpful for artists who are unfamiliar. The macOS views counteract a bug in how macOS communicates to macOS. What is this bug?
 
 > AE's macOS viewport hands content to a Display P3 macOS surface without applying proper conversion — sRGB projects don't get the sRGB→P3 primary matrix applied, and P3 projects don't get the encoding curve adjusted to match what the macOS compositor actually decodes, producing wrong colors in the first case and wrong midtones in the second.
 
@@ -67,7 +65,7 @@ To be extra clear, except for the macOS flavors, these are all aliases for commo
 
 #### ***How minColor sets your color management***
 
-The AE SDK doesn't expose what you need to manage color space programmatically, so minColor sets the project's OCIO config for you through After Effects' own scripting bridge. **Migrate** switches it live — no reopen — and writes a small `_minColor` folder next to your project (the lean config AE pins, plus a timestamped backup of the `.aep` taken before it made any change). Backups are always there, just in case.
+The AE SDK doesn't expose what you need to manage color space programmatically, so minColor sets the project's OCIO config for you through After Effects' own scripting bridge. **Migrate** writes a small `_minColor` folder next to your project and saves a time-stamped backup.
 
 The minColor effect carries its own copy of every color transform, so it renders the same wherever the project lands — in the app and in `aerender` — with no config files to chase and no broken config paths.
 
