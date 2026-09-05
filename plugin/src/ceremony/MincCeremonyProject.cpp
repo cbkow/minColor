@@ -600,7 +600,7 @@ std::string MincRepairProject(SPBasicSuite *bp, AEGP_PluginID id) {
     MincDoctorResult d = MincDoctorDiagnose(bp, id);
     if (d.status == "green") return "{ \"status\": \"green\", \"action\": \"none\" }\n";
     if (d.repairTarget.empty())
-        return "{ \"error\": " + JStr("cannot repair (" + d.status + ": " + d.text + ") \xe2\x80\x94 run Set Up / Migrate") + " }\n";
+        return "{ \"error\": " + JStr("cannot repair (" + d.status + ": " + d.text + ") \xe2\x80\x94 run Migrate") + " }\n";
     if (!SaveTo(e, projPath)) return "{ \"error\": \"save failed\" }\n";
     std::string berr, bpath = BackupCopy(projPath, "prerepair", &berr);
     if (bpath.empty()) return "{ \"error\": " + JStr(berr) + " }\n";

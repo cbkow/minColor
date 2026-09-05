@@ -123,7 +123,7 @@ static UpResult Upsert(SPBasicSuite *bp, AEGP_PluginID id, AEGP_CompH comp, AEGP
         std::string preset = MincPresetFromConfigBase(pinBase), pinned, current;
         bool behind = !preset.empty() && MincPinBehind(preset, pinBase, &pinned, &current);
         r.error = "'" + space + "' is not in this project's pinned config" +
-                  (behind ? " (" + pinned + "; current is " + current + ") \xe2\x80\x94 Set Up / Migrate to the same preset updates the pin" : "");
+                  (behind ? " (" + pinned + "; current is " + current + ") \xe2\x80\x94 Migrate to the same preset updates the pin" : "");
         return r;
     }
     std::string newName = std::string("minColor: ") + kind + " " + space;

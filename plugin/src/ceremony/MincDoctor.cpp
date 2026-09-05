@@ -200,7 +200,7 @@ MincDoctorResult MincDoctorDiagnose(SPBasicSuite *bp, AEGP_PluginID id) {
                 if (bad > 0) {
                     r.status = "red";
                     char t[256];
-                    snprintf(t, sizeof(t), "%d footage item(s) carry footage-level assignments \xe2\x80\x94 run Set Up / Migrate to strip", bad);
+                    snprintf(t, sizeof(t), "%d footage item(s) carry footage-level assignments \xe2\x80\x94 run Migrate to strip", bad);
                     r.text = t;
                     return r;
                 }
@@ -211,7 +211,7 @@ MincDoctorResult MincDoctorDiagnose(SPBasicSuite *bp, AEGP_PluginID id) {
         if (MincPinBehind(info.preset, BaseName(pin), &bp2, &bc)) {
             r.status = "yellow";
             r.behind = true; r.behindPinned = bp2; r.behindCurrent = bc;
-            r.text = info.preset + " \xc2\xb7 pinned " + TrimCfg(bp2) + " \xe2\x86\x92 update available (" + TrimCfg(bc) + "): Set Up / Migrate, same preset";
+            r.text = info.preset + " \xc2\xb7 pinned " + TrimCfg(bp2) + " \xe2\x86\x92 update available (" + TrimCfg(bc) + "): Migrate, same preset";
             return r;
         }
         r.status = "green";
