@@ -6,7 +6,19 @@
 static bool FileExists(const std::string &p) { struct stat st; return stat(p.c_str(), &st) == 0; }
 
 std::string MincCentralConfigsDir(void) {
+#ifdef AE_OS_WIN
+    return "C:/Program Files/Adobe/Common/Plug-ins/7.0/MediaCore/minColor/configs";
+#else
     return "/Library/Application Support/Adobe/Common/Plug-ins/7.0/MediaCore/minColor/configs";
+#endif
+}
+
+static std::string SharedConfigsDir(void) {
+#ifdef AE_OS_WIN
+    return "C:/ProgramData/minColor/configs";
+#else
+    return "/Users/Shared/minColor/configs";
+#endif
 }
 
 static std::string     g_usedPath;
@@ -17,7 +29,7 @@ static MincJsonPtr Load(void) {
     if (g_loaded) return g_presets;
     g_loaded = true;
     const std::string cands[] = { MincCentralConfigsDir() + "/presets.json",
-                                  "/Users/Shared/minColor/configs/presets.json" };
+                                  SharedConfigsDir() + "/presets.json" };
     for (int i = 0; i < 2; ++i) {
         MincJsonPtr j = MincJsonParseFile(cands[i]);
         if (j) { g_presets = j; g_usedPath = cands[i]; break; }
@@ -103,7 +115,7 @@ std::string MincFindConfigByName(const std::string &base, const std::string &pro
         size_t s = projPath.find_last_of('/');
         if (s != std::string::npos) cands[n++] = projPath.substr(0, s) + "/_minColor/" + base;
     }
-    cands[n++] = "/Users/Shared/minColor/configs/" + base;
+    cands[n++] = SharedConfigsDir() + "/" + base;
     for (int i = 0; i < n; ++i) if (FileExists(cands[i])) return cands[i];
     return "";
 }

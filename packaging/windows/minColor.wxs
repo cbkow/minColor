@@ -34,8 +34,8 @@
         <Directory Id="PDSETTINGS" Name="settings" />
       </Directory>
     </StandardDirectory>
-    <Directory Id="AE2025DIR" Name="AE2025"><Directory Name="Scripts"><Directory Id="AE2025PANELS" Name="ScriptUI Panels"><Directory Id="AE2025DATA" Name="minColor-data" /></Directory></Directory></Directory>
-    <Directory Id="AE2026DIR" Name="AE2026"><Directory Name="Scripts"><Directory Id="AE2026PANELS" Name="ScriptUI Panels"><Directory Id="AE2026DATA" Name="minColor-data" /></Directory></Directory></Directory>
+    <Directory Id="AE2025DIR" Name="AE2025"><Directory Name="Scripts"><Directory Id="AE2025PANELS" Name="ScriptUI Panels" /></Directory><Directory Id="AE2025PLUGINS" Name="Plug-ins" /></Directory>
+    <Directory Id="AE2026DIR" Name="AE2026"><Directory Name="Scripts"><Directory Id="AE2026PANELS" Name="ScriptUI Panels" /></Directory><Directory Id="AE2026PLUGINS" Name="Plug-ins" /></Directory>
 
     <!-- engine. The .aex carries no VERSIONINFO resource, so MSI would treat it as a data file and keep any
          pre-existing copy whose mtime != ctime ("unversioned but modified" — every dev-install / zip copy).
@@ -59,15 +59,17 @@
       <Component Permanent="yes" NeverOverwrite="yes"><File Source="$(var.Config)\extension-defaults.json" /></Component>
       <Component Permanent="yes" NeverOverwrite="yes"><File Source="$(var.Config)\render-presets.json" /></Component>
     </ComponentGroup>
-    <!-- panel per installed AE. Gated by feature level, not component conditions: <Files> (the harvested
-         minColor-data tree) cannot carry a Condition, and a level-0 feature keeps the whole group out. -->
+    <!-- per installed AE, feature-gated: the 2.0 shell (ScriptUI Panels) + the ceremonies AEGP
+         (Support Files\Plug-ins — InstallPath already ends in "Support Files\"). The shell gates on
+         the AEGP's settings/aegp-api.json handshake, so they ship together or not at all. The AEGP
+         .aex is as unversioned as the engine — same DefaultVersion trick (see the Engine comment). -->
     <ComponentGroup Id="Panel2025">
       <Component Directory="AE2025PANELS"><File Source="$(var.Panel2025)\minColor.jsx" /></Component>
-      <Files Include="$(var.Panel2025)\minColor-data\**" Directory="AE2025DATA" />
+      <Component Directory="AE2025PLUGINS"><File Source="$(var.Panel2025)\minColorAEGP.aex" DefaultVersion="$(var.EngineVersion)" /></Component>
     </ComponentGroup>
     <ComponentGroup Id="Panel2026">
       <Component Directory="AE2026PANELS"><File Source="$(var.Panel2026)\minColor.jsx" /></Component>
-      <Files Include="$(var.Panel2026)\minColor-data\**" Directory="AE2026DATA" />
+      <Component Directory="AE2026PLUGINS"><File Source="$(var.Panel2026)\minColorAEGP.aex" DefaultVersion="$(var.EngineVersion)" /></Component>
     </ComponentGroup>
 
     <Feature Id="Main" Title="minColor" Level="1" AllowAbsent="no">

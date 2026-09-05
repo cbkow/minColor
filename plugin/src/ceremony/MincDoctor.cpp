@@ -5,7 +5,11 @@
 #include <sys/stat.h>
 #include <map>
 
+#ifdef AE_OS_WIN
+static const char *CENTRAL_ROOT = "C:/Program Files/Adobe/Common/Plug-ins/7.0/MediaCore/minColor";
+#else
 static const char *CENTRAL_ROOT = "/Library/Application Support/Adobe/Common/Plug-ins/7.0/MediaCore/minColor";
+#endif
 
 static bool FileExists(const std::string &p) { struct stat st; return !p.empty() && stat(p.c_str(), &st) == 0; }
 static std::string BaseName(const std::string &p) {

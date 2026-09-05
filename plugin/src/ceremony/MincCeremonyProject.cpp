@@ -131,7 +131,7 @@ static bool AcquireEnv(SPBasicSuite *bp, AEGP_PluginID id, AEGP_SuiteHandler &su
 struct SyncRow { int32_t id; std::string item, current; bool ok; };
 static bool BuildSyncRows(PEnv &e, const std::string &projPath, std::vector<SyncRow> *rows, std::string *workName) {
     /* temp-copy read: identical data to the panel's forced save, user's file untouched */
-    std::string tmp = "/tmp/minColor-migrate-scan.aep";
+    std::string tmp = mfs::tempPath("minColor-migrate-scan.aep");
     if (!SaveTo(e, tmp)) return false;
     MincAssignments a;
     bool ok = MincRifxReadAssignments(tmp.c_str(), &a);

@@ -20,15 +20,17 @@ $Stage = "$Root\dist-panel\msi-stage"
 function Mirror($From, $To) { robocopy $From $To /MIR /NFL /NDL /NJH /NJS /NP | Out-Null; if ($LASTEXITCODE -ge 8) { throw "robocopy $From -> $To failed ($LASTEXITCODE)" } }
 Mirror "$Root\config\dist" "$Stage\configs-central"
 Mirror "$Root\config\dist" "$Stage\configs-shared"
+# AEGP .aex (ceremonies) — built by the Windows CMake WIN32 minColorAEGP target and committed to
+# plugin\prebuilt\windows. Staged per-AE beside the shell (distinct staged paths, same rule as the
+# config trees) for the installer's per-AE Plug-ins components (see minColor.wxs).
+$Aegp = "$Root\plugin\prebuilt\windows\minColorAEGP.aex"
+if (-not (Test-Path $Aegp)) { throw "minColorAEGP.aex not in plugin\prebuilt\windows: without it the panel installs but stays gated (no ceremonies, no aegp-api.json handshake). Build the WIN32 AEGP target first (plugin\WINDOWS.md section 3). [ASCII only in this file: PS 5.1 reads it ANSI, so an em dash mojibakes into a string-closing smart quote]" }
 foreach ($ae in "2025", "2026") {
   # lean-v3: ONE shell for both platforms (the 0.9.2 windows-panel + minColor-data are retired).
+  New-Item -ItemType Directory -Force "$Stage\panel-$ae" | Out-Null   # build.py wipes dist-panel, so the stage starts empty
   Copy-Item "$Root\dist-panel\minColor.jsx" "$Stage\panel-$ae\minColor.jsx" -Force
+  Copy-Item $Aegp "$Stage\panel-$ae\minColorAEGP.aex" -Force
 }
-# AEGP .aex (ceremonies) — staged for the installer's AEGP component (see minColor.wxs). Built by
-# the Windows CMake WIN32 minColorAEGP target and committed to plugin\prebuilt\windows.
-if (Test-Path "$Root\plugin\prebuilt\windows\minColorAEGP.aex") {
-  Copy-Item "$Root\plugin\prebuilt\windows\minColorAEGP.aex" "$Stage\minColorAEGP.aex" -Force
-} else { Write-Warning "minColorAEGP.aex not in plugin\prebuilt\windows — the .msi will install the effect + panel but NO ceremonies, and the panel will stay gated. Build the WIN32 AEGP target first (plugin\WINDOWS.md §3)." }
 $Out = "$Root\dist-panel\minColor-$Ver.msi"
 wix build "$PSScriptRoot\minColor.wxs" -ext WixToolset.Util.wixext -arch x64 `
   -d "Version=$Ver" -d "EngineVersion=$EngineVer" -d "Prebuilt=$Root\plugin\prebuilt\windows" -d "Config=$Root\config" `

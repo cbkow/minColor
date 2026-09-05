@@ -1,5 +1,6 @@
 #include "MincSettings.h"
 #include "MincCore.h"
+#include "MincMenus.h"
 #include "MincFs.h"
 #include <cstdio>
 #include <sys/stat.h>
@@ -12,10 +13,10 @@ static bool EnsureDir(const std::string &p) {
 std::string MincSettingsDir(void) {
     static std::string dir;
     if (dir.empty()) {
-        EnsureDir("/Users/Shared/minColor");
-        EnsureDir("/Users/Shared/minColor/settings");
-        EnsureDir("/Users/Shared/minColor/settings/reports");
-        dir = "/Users/Shared/minColor/settings";
+        std::string d = MincSharedSettingsDir();   /* platform-aware (core): /Users/Shared vs ProgramData */
+        EnsureDir(d);                              /* mkdirs creates the minColor parent too */
+        EnsureDir(d + "/reports");
+        dir = d;
     }
     return dir;
 }

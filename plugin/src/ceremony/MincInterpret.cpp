@@ -289,7 +289,7 @@ MincInterpretReport MincInterpretTimeline(SPBasicSuite *bp, AEGP_PluginID id) {
                 MincUtf16HandleToUtf8(suites, ph, pbuf, sizeof(pbuf));
         }
         if (pbuf[0] && projH) {                              /* unsaved project -> empty maps (panel parity) */
-            std::string tmp = "/tmp/minColor-interpret-scan.aep";
+            std::string tmp = mfs::tempPath("minColor-interpret-scan.aep");
             A_UTF16Char t16[512];
             MincU8ToU16(tmp.c_str(), t16, 512);
             if (pjs->AEGP_SaveProjectToPath(projH, t16) == A_Err_NONE) {
@@ -382,7 +382,7 @@ MincInterpretReport MincInterpretSelection(SPBasicSuite *bp, AEGP_PluginID id, c
                 MincUtf16HandleToUtf8(suites, ph, pbuf, sizeof(pbuf));
         }
         if (pbuf[0] && projH) {
-            std::string tmp = "/tmp/minColor-interpret-scan.aep";
+            std::string tmp = mfs::tempPath("minColor-interpret-scan.aep");
             A_UTF16Char t16[512];
             MincU8ToU16(tmp.c_str(), t16, 512);
             if (pjs->AEGP_SaveProjectToPath(projH, t16) == A_Err_NONE) {
