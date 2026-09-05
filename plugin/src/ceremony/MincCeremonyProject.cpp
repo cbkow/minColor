@@ -63,7 +63,7 @@ static std::string ProjPath(PEnv &e) {
     AEGP_MemHandle ph = nullptr;
     char b[2048] = "";
     if (e.pjs->AEGP_GetProjectPath(projH, &ph) == A_Err_NONE)
-        MincUtf16HandleToUtf8(*e.suites, ph, b, sizeof(b));
+        MincUtf16HandleToUtf8Path(*e.suites, ph, b, sizeof(b));
     return b;
 }
 static bool SaveTo(PEnv &e, const std::string &path) {
@@ -155,7 +155,7 @@ static bool BuildSyncRows(PEnv &e, const std::string &projPath, std::vector<Sync
             if (e.fts->AEGP_GetMainFootageFromItem(itH, &ftg) == A_Err_NONE && ftg) {
                 AEGP_MemHandle ph = nullptr;
                 if (e.fts->AEGP_GetFootagePath(ftg, 0, AEGP_FOOTAGE_MAIN_FILE_INDEX, &ph) == A_Err_NONE)
-                    MincUtf16HandleToUtf8(*e.suites, ph, fpath, sizeof(fpath));
+                    MincUtf16HandleToUtf8Path(*e.suites, ph, fpath, sizeof(fpath));
             }
             if (fpath[0]) {                              /* FileSource-with-file filter (:693) */
                 SyncRow r;

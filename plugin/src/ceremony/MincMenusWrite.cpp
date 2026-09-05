@@ -2,6 +2,7 @@
 #include "MincSuggest.h"
 #include "MincPresets.h"
 #include "MincSettings.h"
+#include "MincFs.h"
 #include <cstdio>
 
 static std::string JEsc(const std::string &s) {
@@ -39,7 +40,7 @@ bool MincWriteMenus(SPBasicSuite *bp, AEGP_PluginID id) {
     std::string dst = MincSettingsDir() + "/plugin-menus.json";
     std::string tmp = dst + ".tmp";
     if (!MincWriteTextFile(tmp, json)) { MincLog("menus: tmp write failed"); return false; }
-    if (rename(tmp.c_str(), dst.c_str()) != 0) { MincLog("menus: rename failed"); return false; }
+    if (!mfs::replaceFile(tmp, dst)) { MincLog("menus: rename failed"); return false; }
     MincLog("menus: wrote plugin-menus.json preset=%s input=%d view=%d render=%d looks=%d",
             m.preset.c_str(), (int)m.input.size(), (int)m.view.size(), (int)m.render.size(), (int)m.looks.size());
     return true;

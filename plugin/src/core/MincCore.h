@@ -48,6 +48,9 @@ const char *MincLogPath(void);
 
 /* ---- MincUtf16.cpp ---- */
 void MincUtf16HandleToUtf8(AEGP_SuiteHandler &suites, AEGP_MemHandle h, char *out, size_t outLen);
+/* same, for a PATH AE hands us (project, footage, pinned config): Windows AE returns backslashes,
+   and every ceremony path split/compare is written with '/'. Normalized once here, at ingest. */
+void MincUtf16HandleToUtf8Path(AEGP_SuiteHandler &suites, AEGP_MemHandle h, char *out, size_t outLen);
 void MincU8ToU16(const char *s, A_UTF16Char *out, int cap);   /* BMP-only, mirrors the reader */
 
 /* ---- MincAuthority.cpp — snapshot of AE's current OCIO state (per-binary instance) ---- */

@@ -49,7 +49,7 @@ void MincAuthorityRefreshBp(SPBasicSuite *bp, AEGP_PluginID aegpId) {
         if (next.ocioOn) {
             AEGP_MemHandle pathH = nullptr, wsH = nullptr;
             if (cs->AEGP_GetOCIOConfigurationFilePath(aegpId, &pathH) == A_Err_NONE)
-                MincUtf16HandleToUtf8(suites, pathH, next.configPath, sizeof(next.configPath));
+                MincUtf16HandleToUtf8Path(suites, pathH, next.configPath, sizeof(next.configPath));
             if (cs->AEGPD_GetOCIOWorkingColorSpace(aegpId, &wsH) == A_Err_NONE)
                 MincUtf16HandleToUtf8(suites, wsH, next.workingSpace, sizeof(next.workingSpace));
         }

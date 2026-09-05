@@ -117,7 +117,7 @@ static void DoLayer(IEnv &e, AEGP_CompH compH, AEGP_LayerH ly, const std::string
     {
         AEGP_MemHandle ph = nullptr;
         if (e.fts->AEGP_GetFootagePath(ftg, 0, AEGP_FOOTAGE_MAIN_FILE_INDEX, &ph) == A_Err_NONE)
-            MincUtf16HandleToUtf8(*e.suites, ph, fpath, sizeof(fpath));
+            MincUtf16HandleToUtf8Path(*e.suites, ph, fpath, sizeof(fpath));
     }
     if (!fpath[0]) return;
     std::string label = compName + "/" + LayerName(e, ly);
@@ -286,7 +286,7 @@ MincInterpretReport MincInterpretTimeline(SPBasicSuite *bp, AEGP_PluginID id) {
         if (projH) {
             AEGP_MemHandle ph = nullptr;
             if (pjs->AEGP_GetProjectPath(projH, &ph) == A_Err_NONE)
-                MincUtf16HandleToUtf8(suites, ph, pbuf, sizeof(pbuf));
+                MincUtf16HandleToUtf8Path(suites, ph, pbuf, sizeof(pbuf));
         }
         if (pbuf[0] && projH) {                              /* unsaved project -> empty maps (panel parity) */
             std::string tmp = mfs::tempPath("minColor-interpret-scan.aep");
@@ -379,7 +379,7 @@ MincInterpretReport MincInterpretSelection(SPBasicSuite *bp, AEGP_PluginID id, c
         if (projH) {
             AEGP_MemHandle ph = nullptr;
             if (pjs->AEGP_GetProjectPath(projH, &ph) == A_Err_NONE)
-                MincUtf16HandleToUtf8(suites, ph, pbuf, sizeof(pbuf));
+                MincUtf16HandleToUtf8Path(suites, ph, pbuf, sizeof(pbuf));
         }
         if (pbuf[0] && projH) {
             std::string tmp = mfs::tempPath("minColor-interpret-scan.aep");

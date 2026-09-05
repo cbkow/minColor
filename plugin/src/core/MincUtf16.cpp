@@ -19,6 +19,13 @@ void MincUtf16HandleToUtf8(AEGP_SuiteHandler &suites, AEGP_MemHandle h, char *ou
     suites.MemorySuite1()->AEGP_FreeMemHandle(h);
 }
 
+void MincUtf16HandleToUtf8Path(AEGP_SuiteHandler &suites, AEGP_MemHandle h, char *out, size_t outLen) {
+    MincUtf16HandleToUtf8(suites, h, out, outLen);
+#ifdef _WIN32
+    for (char *p = out; *p; ++p) if (*p == '\\') *p = '/';
+#endif
+}
+
 void MincU8ToU16(const char *s, A_UTF16Char *out, int cap) {  /* BMP-only, mirrors the reader */
     int o = 0; const unsigned char *p = (const unsigned char *)s;
     while (*p && o < cap - 1) {

@@ -117,7 +117,7 @@ MincDoctorResult MincDoctorDiagnose(SPBasicSuite *bp, AEGP_PluginID id) {
         AEGP_MemHandle ph = nullptr;
         if (pjs->AEGP_GetProjectPath(projH, &ph) == A_Err_NONE) {
             char buf[2048] = "";
-            MincUtf16HandleToUtf8(suites, ph, buf, sizeof(buf));
+            MincUtf16HandleToUtf8Path(suites, ph, buf, sizeof(buf));
             projPath = buf;
         }
     }
@@ -141,7 +141,7 @@ MincDoctorResult MincDoctorDiagnose(SPBasicSuite *bp, AEGP_PluginID id) {
                 AEGP_MemHandle pH = nullptr, wH = nullptr;
                 char buf[2048] = "";
                 if (cs->AEGP_GetOCIOConfigurationFilePath(id, &pH) == A_Err_NONE) {
-                    MincUtf16HandleToUtf8(suites, pH, buf, sizeof(buf)); pin = buf;
+                    MincUtf16HandleToUtf8Path(suites, pH, buf, sizeof(buf)); pin = buf;
                 }
                 if (cs->AEGPD_GetOCIOWorkingColorSpace(id, &wH) == A_Err_NONE) {
                     buf[0] = 0; MincUtf16HandleToUtf8(suites, wH, buf, sizeof(buf)); workingBare = buf;
