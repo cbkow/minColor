@@ -2,7 +2,7 @@
 
 **minColor** is an OCIO-based color setup and a workflow plugin for Adobe After Effects. It manages your media and timeline color spaces —  bypassing AE's "Interpret Media" workflow.
 
-> minColor's approach — assigning color per layer with OCIO effects on the timeline — follows the trail blazed by **Brendan Bolles' [fnordware OpenColorIO plug-in](https://www.fnord.com) for After Effects**. No fnordware code is used; the debt is one of ideas, gratefully acknowledged. See [Credits & third-party notices](THIRD-PARTY-NOTICES.md).
+> minColor's approach is inspired by **Brendan Bolles' [fnordware OpenColorIO plug-in](https://www.fnord.com) for After Effects**. See [Credits & third-party notices](THIRD-PARTY-NOTICES.md).
 
 **Two OCIO-based workflows are included:**
 - **Linear** workflows with common `ACES` and `Blender` staples — a hybrid of ACES 2.0 and Blender 5.2 configs made compatible with After Effects' current legacy OCIO 2.4 setup. These have familiar settings for anyone comfortable with `ACES` or `Blender` setups.
