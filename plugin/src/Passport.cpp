@@ -6,6 +6,7 @@
    carried in sequence data inside the .aep) is dereferenced against the local store — the
    hashed filename is content identity, so pixels are exact wherever it resolves. */
 #include "MincTypes.h"
+#include "MincEmbeddedConfigs.h"   /* MincEmbeddedHasConfig — the passport resolves store-less */
 #include <cstring>
 #include <cstdio>
 #include <string>
@@ -72,14 +73,23 @@ bool MincEffectiveAuthority(const MincAuthoritySnapshot *live, const MincSeqData
     bool passportOk = sd && sd->configBase[0] &&
                       !strchr(sd->configBase, '/') && !strchr(sd->configBase, '\\') &&
                       !strstr(sd->configBase, "..");
-    const char *store = MincLocalStoreConfigDir();
-    if (passportOk && store[0]) {
-        char cand[2600];
-        snprintf(cand, sizeof(cand), "%s/%s", store, sd->configBase);
-        if (MincPathExists(cand)) {
+    if (passportOk) {
+        /* EMBEDDED-FIRST: the preset config is baked into the binary, so the passport resolves with
+           NO filesystem — the effect renders correctly even when the config store is gone ("the
+           plugin is the package"). A disk copy, when the store IS present, wins so a user's edited or
+           custom config still applies; otherwise the basename lets OcioEngine load the embedded one.
+           Only a genuinely unknown config (neither embedded nor on disk) falls back to AE's live. */
+        char cand[2600] = "";
+        const char *store = MincLocalStoreConfigDir();
+        bool onDisk = false;
+        if (store[0]) {
+            snprintf(cand, sizeof(cand), "%s/%s", store, sd->configBase);
+            onDisk = MincPathExists(cand);
+        }
+        if (onDisk || MincEmbeddedHasConfig(sd->configBase)) {
             memset(out, 0, sizeof(*out));
             out->ocioOn = true;
-            snprintf(out->configPath, sizeof(out->configPath), "%s", cand);
+            snprintf(out->configPath, sizeof(out->configPath), "%s", onDisk ? cand : sd->configBase);
             snprintf(out->workingSpace, sizeof(out->workingSpace), "%s", sd->passportWorking);
             out->generation = live->generation;
             return true;
