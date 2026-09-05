@@ -90,3 +90,23 @@ So the Windows session only needs the **toolchain wiring**:
 
 Portability rules unchanged: platform code behind `#ifdef AE_OS_WIN` (defined by the Windows CMake
 branch alongside `MSWindows`); never fork shared logic.
+
+## 4. The panel/installer — Windows is on the 2.0 shell now (the 0.9.2 lane is retired)
+
+There is **one panel**: `src/minColor Shell.jsx` (mac and Windows). The old `minColor Panel.jsx`
+(from `private/attic`) and its `minColor-data` payload are gone from the build. `build/build.py`
+and `packaging/windows/build.ps1` are already updated (they ship `dist-panel/minColor.jsx` for
+Windows and stage `minColorAEGP.aex` for the installer). The shell **gates on the AEGP handshake**
+(`settings/aegp-api.json`), so it does nothing until the Windows AEGP (§3) is installed — that's
+why a lean-v3 Windows install needs the AEGP, not just the effect.
+
+**`packaging/windows/minColor.wxs` still needs two edits (WiX, build+test on Windows):**
+1. **Drop `minColor-data`:** remove the `AE2025DATA`/`AE2026DATA` directories and the
+   `<Files Include="…\minColor-data\**" …>` lines from `Panel2025`/`Panel2026`. The `minColor.jsx`
+   component stays (now the 2.0 shell).
+2. **Add the AEGP component:** install the staged `minColorAEGP.aex` into each AE's
+   `…\Adobe After Effects <ver>\Support Files\Plug-ins\` (a new per-AE `Plug-ins` Directory +
+   Component, feature-gated like the panels). Without it the panel installs but stays gated.
+
+`build.ps1` warns if `plugin\prebuilt\windows\minColorAEGP.aex` is missing, so build the WIN32 AEGP
+target (§3) and commit it to `plugin\prebuilt\windows` before cutting the .msi.

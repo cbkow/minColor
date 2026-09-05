@@ -1,24 +1,23 @@
 #!/usr/bin/env python3
-"""Build the distributable (minColor 2.0: plugin-first, thin shell).
+"""Build the distributable (minColor 2.0 lean: plugin-first, one thin shell, embedded configs).
 
-  dist-panel/minColor.jsx        the thin shell (zero includes — the 2.0 panel IS one file;
+  dist-panel/minColor.jsx        the thin shell — ONE panel for both platforms (zero includes;
                                  keeps the 0.9.x install name so the Window menu entry and
-                                 per-user install path stay stable)
+                                 per-user install path stay stable). Gates on the AEGP handshake.
   dist-panel/plugin-macOS/       minColorCST.plugin (MediaCore) + minColorAEGP.plugin (app
-                                 Plug-ins) + configs — the two-bundle engine, one version
-  dist-panel/plugin-windows/     prebuilt .aex (five effects incl. legacy) + configs
-  dist-panel/windows-panel/      the 0.9.2 panel, inlined from private/attic — Windows has
-                                 no AEGP until M4, so the legacy panel keeps shipping there
-  dist-panel/minColor-data/      the 0.9.x panel payload (configs + settings seeds) — the
-                                 Windows panel still needs it; the 2.0 mac shell does not
+                                 Plug-ins) + configs — the two-bundle engine, one version.
+  dist-panel/plugin-windows/     minColor/minColorCST.aex (+ configs) + minColorAEGP.aex — the
+                                 same two bundles, from plugin/prebuilt/windows (committed by the
+                                 Windows session). The AEGP is present once the Windows port lands.
 
-Run packaging/macos/build-pkg.sh afterwards for the mac .pkg (or copy by hand).
+The effect embeds its OCIO configs, so the configs folder beside it is for the AEGP's disk reads,
+not the effect. The 0.9.x windows-panel + minColor-data payload are retired: Windows runs the same
+2.0 shell + AEGP as mac. Run packaging/macos/build-pkg.sh afterwards for the mac .pkg.
 """
 import os, re, shutil, zipfile
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 SRC = os.path.join(ROOT, "src")
-ATTIC = os.path.join(ROOT, "private", "attic")
 DIST = os.path.join(ROOT, "config", "dist")
 OUT = os.path.join(ROOT, "dist-panel")
 
@@ -28,7 +27,7 @@ def plugin_version():
     return m.group(1)
 
 def inline(panel_text, src_dir):
-    """resolve #include lines; the shell has none (no-op by design), the attic panel has two"""
+    """resolve #include lines; the 2.0 shell has none (no-op by design)"""
     def repl(m):
         inc = open(os.path.join(src_dir, m.group(1)), encoding="utf-8").read()
         return "// ==== inlined: %s ====\n%s\n" % (m.group(1), inc)
@@ -39,68 +38,60 @@ def main():
         shutil.rmtree(OUT)
     os.makedirs(OUT)
     ver = plugin_version()                              # the plugin IS the product version (2.0)
-    # ---- mac panel: the thin shell, stable install name ----
+    # ---- the one shell (both platforms), stable install name ----
     shell = open(os.path.join(SRC, "minColor Shell.jsx"), encoding="utf-8").read()
     open(os.path.join(OUT, "minColor.jsx"), "w", encoding="utf-8").write(inline(shell, SRC))
-    # ---- windows panel lane (0.9.2, from the attic — retires in M4) ----
-    win_panel_src = os.path.join(ATTIC, "minColor Panel.jsx")
-    if os.path.exists(win_panel_src):
-        wp = os.path.join(OUT, "windows-panel")
-        os.makedirs(wp)
-        open(os.path.join(wp, "minColor.jsx"), "w", encoding="utf-8").write(
-            inline(open(win_panel_src, encoding="utf-8").read(), ATTIC))
-    win_ver_path = os.path.join(ROOT, "plugin", "prebuilt", "windows", "version.txt")
-    win_ver = open(win_ver_path, encoding="utf-8").read().strip() if os.path.exists(win_ver_path) else "none"
-    open(os.path.join(OUT, "README.txt"), "w", encoding="utf-8").write(
-        "minColor " + ver + " — install\n"
-        "engine: " + ver + " (mac) / " + win_ver + " (windows prebuilt)\n"
-        "requires: After Effects 2025 or later\n\n"
-        "macOS (2.0): prefer the .pkg. By hand, three copies:\n\n"
-        "1) EFFECT — plugin-macOS/minColor -> /Library/Application Support/Adobe/Common/Plug-ins/7.0/MediaCore/\n"
-        "2) CEREMONIES — plugin-macOS/minColorAEGP.plugin -> /Applications/Adobe After Effects <version>/Plug-ins/\n"
-        "   (every AE version you use; this folder needs an administrator)\n"
-        "3) PANEL — minColor.jsx ->\n"
-        "   ~/Library/Preferences/Adobe/After Effects/<version>/Scripts/ScriptUI Panels/\n"
-        "   (delete any minColor-data/ folder there from earlier versions — 2.0 doesn't use it)\n\n"
-        "Windows (0.9.x panel until the 2.0 engine arrives there):\n\n"
-        "1) PANEL — windows-panel/minColor.jsx and minColor-data/ ->\n"
-        "   %APPDATA%\\Adobe\\After Effects\\<version>\\Scripts\\ScriptUI Panels\\\n"
-        "2) ENGINE — plugin-windows/minColor -> C:\\Program Files\\Adobe\\Common\\Plug-ins\\7.0\\MediaCore\\\n\n"
-        "Restart After Effects. The panel appears under Window > minColor.jsx.\n\n"
-        "Your choices and settings live outside the install and survive updates:\n"
-        "   macOS:   /Users/Shared/minColor/settings/\n"
-        "   Windows: C:\\ProgramData\\minColor\\settings\\\n")
-    # engine dirs mirror their DESTINATION: users copy "minColor" into MediaCore and the
-    # OS merges — no folder creation, no separate configs step (each carries the store).
+
+    # config-master-*.ocio are OCIO-2.5 QCView/Blender/tooling masters, NOT AE presets — they must
+    # NOT reach AE's MediaCore config store (AE's OCIO <=2.4 can abort loading a 2.5 config;
+    # RESULTS §40). The effect embeds its configs anyway; the store is for the AEGP's disk reads.
+    AE_STORE_SKIP = shutil.ignore_patterns("config-master-*.ocio")
+
+    # ---- macOS engine: effect (MediaCore) + AEGP (app Plug-ins) ----
     plugin_src = os.path.join(ROOT, "plugin", "build", "minColorCST.plugin")
     aegp_src = os.path.join(ROOT, "plugin", "build", "minColorAEGP.plugin")
-    # config-master-*.ocio are OCIO-2.5 QCView/Blender/tooling masters, NOT AE presets. They
-    # must NOT reach AE's MediaCore config store: AE's OCIO (<=2.4) can abort loading a 2.5
-    # config, and it's unpinned by any preset anyway (RESULTS §40, 2026-09-03).
-    AE_STORE_SKIP = shutil.ignore_patterns("config-master-*.ocio")
     if os.path.isdir(plugin_src):
         mac_root = os.path.join(OUT, "plugin-macOS", "minColor")
         shutil.copytree(plugin_src, os.path.join(mac_root, "minColorCST.plugin"))
         shutil.copytree(DIST, os.path.join(mac_root, "configs"), ignore=AE_STORE_SKIP)
-        if os.path.isdir(aegp_src):                     # the AEGP sits BESIDE the MediaCore dir in
+        if os.path.isdir(aegp_src):
             shutil.copytree(aegp_src, os.path.join(OUT, "plugin-macOS", "minColorAEGP.plugin"))
-    win_src = os.path.join(ROOT, "plugin", "prebuilt", "windows")   # Windows session commits Release .aex + version.txt here
+
+    # ---- Windows engine: effect .aex (MediaCore) + AEGP .aex (app Plug-ins) from prebuilt ----
+    win_src = os.path.join(ROOT, "plugin", "prebuilt", "windows")   # Windows session commits Release .aex(es) + version.txt
+    win_ver = "none"
     if os.path.isdir(win_src):
-        win_root = os.path.join(OUT, "plugin-windows", "minColor")
-        shutil.copytree(win_src, win_root)
-        shutil.copytree(DIST, os.path.join(win_root, "configs"), ignore=AE_STORE_SKIP)
-    pay = os.path.join(OUT, "minColor-data")
-    os.makedirs(os.path.join(pay, "settings"))
-    cfgs = os.path.join(pay, "configs")
-    os.makedirs(cfgs)
-    for name in os.listdir(DIST):
-        srcp = os.path.join(DIST, name)
-        if os.path.isdir(srcp):
-            shutil.copytree(srcp, os.path.join(cfgs, name))
-        else:
-            shutil.copy(srcp, cfgs)
-    shutil.copy(os.path.join(ROOT, "config", "extension-defaults.json"), os.path.join(pay, "settings"))
-    shutil.copy(os.path.join(ROOT, "config", "render-presets.json"), os.path.join(pay, "settings"))
+        vt = os.path.join(win_src, "version.txt")
+        win_ver = open(vt, encoding="utf-8").read().strip() if os.path.exists(vt) else "none"
+        win_media = os.path.join(OUT, "plugin-windows", "minColor")   # -> MediaCore\minColor
+        os.makedirs(win_media)
+        for name in ("minColorCST.aex", "version.txt"):
+            p = os.path.join(win_src, name)
+            if os.path.exists(p): shutil.copy(p, win_media)
+        shutil.copytree(DIST, os.path.join(win_media, "configs"), ignore=AE_STORE_SKIP)
+        aegp_aex = os.path.join(win_src, "minColorAEGP.aex")          # -> app Plug-ins (once the port lands)
+        if os.path.exists(aegp_aex):
+            shutil.copy(aegp_aex, os.path.join(OUT, "plugin-windows"))
+
+    open(os.path.join(OUT, "README.txt"), "w", encoding="utf-8").write(
+        "minColor " + ver + " — install\n"
+        "engine: " + ver + " (mac) / " + win_ver + " (windows prebuilt)\n"
+        "requires: After Effects 2025 or later\n\n"
+        "The same three pieces on both platforms — effect, ceremonies (AEGP), and the panel.\n"
+        "The old minColor-data payload is gone; the 2.0 shell doesn't use it (delete any you find).\n\n"
+        "macOS (prefer the .pkg). By hand:\n"
+        "1) EFFECT      plugin-macOS/minColor -> /Library/Application Support/Adobe/Common/Plug-ins/7.0/MediaCore/\n"
+        "2) CEREMONIES  plugin-macOS/minColorAEGP.plugin -> /Applications/Adobe After Effects <ver>/Plug-ins/ (admin)\n"
+        "3) PANEL       minColor.jsx -> ~/Library/Preferences/Adobe/After Effects/<ver>/Scripts/ScriptUI Panels/\n\n"
+        "Windows (by hand):\n"
+        "1) EFFECT      plugin-windows/minColor -> C:\\Program Files\\Adobe\\Common\\Plug-ins\\7.0\\MediaCore\\\n"
+        "2) CEREMONIES  plugin-windows/minColorAEGP.aex -> C:\\Program Files\\Adobe\\Adobe After Effects <ver>\\Support Files\\Plug-ins\\\n"
+        "3) PANEL       minColor.jsx -> %APPDATA%\\Adobe\\After Effects\\<ver>\\Scripts\\ScriptUI Panels\\\n\n"
+        "Restart After Effects. The panel appears under Window > minColor.jsx.\n\n"
+        "Your choices and settings live outside the install and survive updates:\n"
+        "   macOS:   /Users/Shared/minColor/settings/\n"
+        "   Windows: C:\\ProgramData\\minColor\\settings\\\n")
+
     zpath = os.path.join(OUT, "minColor-v%s.zip" % ver)
     with zipfile.ZipFile(zpath, "w", zipfile.ZIP_DEFLATED) as z:
         for dp, _, fs in os.walk(OUT):

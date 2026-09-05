@@ -21,10 +21,14 @@ function Mirror($From, $To) { robocopy $From $To /MIR /NFL /NDL /NJH /NJS /NP | 
 Mirror "$Root\config\dist" "$Stage\configs-central"
 Mirror "$Root\config\dist" "$Stage\configs-shared"
 foreach ($ae in "2025", "2026") {
-  Mirror "$Root\dist-panel\minColor-data" "$Stage\panel-$ae\minColor-data"
-  # dist-panel\minColor.jsx is the 2.0 mac shell; Windows ships the legacy panel until the AEGP lands (M4)
-  Copy-Item "$Root\dist-panel\windows-panel\minColor.jsx" "$Stage\panel-$ae\minColor.jsx" -Force
+  # lean-v3: ONE shell for both platforms (the 0.9.2 windows-panel + minColor-data are retired).
+  Copy-Item "$Root\dist-panel\minColor.jsx" "$Stage\panel-$ae\minColor.jsx" -Force
 }
+# AEGP .aex (ceremonies) — staged for the installer's AEGP component (see minColor.wxs). Built by
+# the Windows CMake WIN32 minColorAEGP target and committed to plugin\prebuilt\windows.
+if (Test-Path "$Root\plugin\prebuilt\windows\minColorAEGP.aex") {
+  Copy-Item "$Root\plugin\prebuilt\windows\minColorAEGP.aex" "$Stage\minColorAEGP.aex" -Force
+} else { Write-Warning "minColorAEGP.aex not in plugin\prebuilt\windows — the .msi will install the effect + panel but NO ceremonies, and the panel will stay gated. Build the WIN32 AEGP target first (plugin\WINDOWS.md §3)." }
 $Out = "$Root\dist-panel\minColor-$Ver.msi"
 wix build "$PSScriptRoot\minColor.wxs" -ext WixToolset.Util.wixext -arch x64 `
   -d "Version=$Ver" -d "EngineVersion=$EngineVer" -d "Prebuilt=$Root\plugin\prebuilt\windows" -d "Config=$Root\config" `
