@@ -48,6 +48,21 @@ PiPLtool → .rc` path as the effect.
 + `std::filesystem` via `MincFs.h` + platform-aware paths). This session only added the embedded
 metadata + self-seed, wired into the existing WIN32 target. So this is a plain rebuild.
 
+## 2b. Dev iteration without the MSI (counterpart of dev-install-both.sh)
+
+For a quick build→test loop, use the batch installers instead of cutting an MSI:
+
+```
+plugin\scripts\dev-install.bat          rem effect -> MediaCore, AEGP -> each AE's Plug-ins (self-elevates)
+plugin\scripts\dev-install-panel.bat    rem 2.0 shell -> per-user ScriptUI Panels (no elevation)
+```
+
+Both were 0.9.2-era and are fixed for lean-v3: `dev-install.bat` now also installs the AEGP and ships
+NO config store; `dev-install-panel.bat` installs the 2.0 shell and **purges the old 0.9.x panel**
+(`minColor-data` + `minColor Panel.jsx`) so AE stops loading it. If AE still shows the old panel, an
+old **MSI** left a per-machine copy — uninstall it, or delete
+`…\Adobe After Effects <ver>\Support Files\Scripts\ScriptUI Panels\minColor*.jsx`.
+
 ## 3. Refresh the prebuilt AEGP (what the installer ships)
 
 `build.ps1` installs the AEGP from `plugin\prebuilt\windows` (it throws if it's missing). After the
