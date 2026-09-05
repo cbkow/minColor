@@ -22,7 +22,7 @@ Download `minColor-<version>.pkg` from [Releases](https://github.com/cbkow/minCo
 
 Download `minColor-<version>.msi` from [Releases](https://github.com/cbkow/minColor/releases/latest), quit After Effects, and run it. The installer is unsigned, so Windows will ask for permission to run it.
 
-The installer places two plug-ins and the panel — nothing else. minColor's color configs are baked into the plug-in, so there is no config folder to manage and projects render correctly even on a machine (or a render farm) that has never seen the configs.
+The installer places two plug-ins and the panel — nothing else. minColor's color configs are baked into the plug-in, so there is no config folder to manage, and projects render correctly even on a machine (or a render farm) that has never seen the configs.
 
 ---
 
@@ -65,7 +65,7 @@ To be extra clear, except for the macOS flavors, these are all aliases for commo
 
 #### ***How minColor sets your color management***
 
-The AE SDK doesn't expose what's needed to manage color space programmatically, so minColor sets the project's OCIO config for you through After Effects' own scripting bridge. **Migrate** switches it live — no reopen — and writes a small `_minColor` folder next to your project (the lean config AE pins, plus a timestamped backup of the `.aep` taken before it made any change). Backups are always there, just in case.
+The AE SDK doesn't expose what you need to manage color space programmatically, so minColor sets the project's OCIO config for you through After Effects' own scripting bridge. **Migrate** switches it live — no reopen — and writes a small `_minColor` folder next to your project (the lean config AE pins, plus a timestamped backup of the `.aep` taken before it made any change). Backups are always there, just in case.
 
 The minColor effect carries its own copy of every color transform, so it renders the same wherever the project lands — in the app and in `aerender` — with no config files to chase and no broken config paths.
 
