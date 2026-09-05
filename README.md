@@ -44,7 +44,7 @@ minColor provides:
 
 The Effects layers work just like OCIO native plugins in AE but bypass AE’s color management. When you `migrate` a project, it loads a dummy OCIO profile that simply assigns a working and media default space to the same profile value. Meaning every item in an `ACEScg` project will, by default, be interpreted as `ACEScg` without additional transformations.
 
-This is a hack to effectively tell AE to ***stop thinking about what you are doing!***
+This is a hack to effectively tell AE to ***stop thinking about what you are doing!*** The real OCIO profiles are embedded in the plugins and are not dependent on file paths.
 
 You can then use the minColor effects as a substitute for AE’s default OCIO effects, and mimic a similar OCIO workflow as the classic fnord plugin.
 
