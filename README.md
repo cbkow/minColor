@@ -4,13 +4,13 @@
 
 > minColor's approach is inspired by **Brendan Bolles' [fnordware OpenColorIO plug-in](https://www.fnord.com) for After Effects**. See [Credits & third-party notices](THIRD-PARTY-NOTICES.md).
 
-**Two OCIO-based workflows are included:**
-- **Linear** workflows with common `ACES` and `Blender` staples. These have familiar settings for anyone comfortable with `ACES` or `Blender` setups.
+**OCIO-based workflows:**
+- Several **Linear** workflows with common `ACES` and `Blender` staples (ACEScg, ACES AP0, linear rec.709, linear rec.2020). These have familiar settings for anyone comfortable with `ACES` or `Blender` setups.
 - An **SDR** workflow meant to supplement Adobe's legacy ICC/ICM workflow for daily SDR work. The SDR config is based on a `Rec. 709, Gamma 2.2` working space, with easy transforms to `sRGB` and `Rec. 1886` for viewing and output.
+- All profiles use the working space and default media space as `scene_linear` so no more ACEScg vs ACES2065-1 dancing.
 
 Windows- and macOS-flavored view transforms are provided to counteract differences in how After Effects handles color management in each OS. Use this workaround for proper viewport colors on macOS until Adobe fixes it.
 
-![mC_001.png](images/mC_001.png)
 
 ---
 
@@ -28,13 +28,49 @@ Download `minColor-<version>.msi` from [Releases](https://github.com/cbkow/minCo
 
 ## The Basics
 
-Since 2.0, minColor is plugin-first on both macOS and Windows: every operation is a native After Effects menu command, the effects on your layers are the interface (each has a **Space** dropdown in Effect Controls), and the panel is a thin dashboard over both.
+minColor provides:
 
-1. **Migrate a project** by selecting a working color space. If you pick ACEScg, the working space and default media space are ACEScg. 
-2. **Interpret Timeline** is the most useful part of this plugin. It walks the active comp and every precomp under it, matching all files to color spaces based on presets. Edit these presets with the **Matches** button.
-   ![mC_009.png](images/mC_009.png)
-3. Use **Interpret Footage** to manually set chosen layers' color spaces, or change any minColor effect's **Space** dropdown in Effect Controls to set it in place.
-4. Set your **View** adjustment layer to what you want to see while working, and your **Render** adjustment layer to what you want to output. Use the buttons to quickly toggle between working and rendering.
+#### A scriptUI control panel for daily usage.
+
+![mC_001.png](images/mC_001.png)
+
+#### And OCIO effects
+
+![mC_001.png](images/mC_011.png)
+
+---
+
+## Usage
+
+The Effects layers work just like OCIO native plugins in AE but bypass AE’s color management. When you `migrate` a project, it loads a dummy OCIO profile that simply assigns a working and media default space to the same profile value. Meaning every item in an `ACEScg` project will, by default, be interpreted as `ACEScg` without additional transformations.
+
+This is a hack to effectively tell AE to ***stop thinking about what you are doing!***
+
+You can then use the minColor effects as a substitute for AE’s default OCIO effects, and mimic a similar OCIO workflow as the classic fnord plugin.
+
+---
+
+## Using the panel
+
+#### **Migrate a project** by selecting a working color space. If you pick ACEScg, the working space and default media space are ACEScg. 
+
+![mC_001.png](images/mC_012.png)
+
+#### **Interpret Timeline** walks the active comp and every precomp under it, matching all files to color spaces based on presets. 
+
+![mC_009.png](images/mC_014.png)
+
+#### Edit these presets with the **Matches** button.
+
+![mC_009.png](images/mC_013.png)
+
+#### Use **Interpret Footage** to manually set the chosen layers' color spaces, or change any minColor effect's **Space** dropdown in Effect Controls to set it in place.
+
+![mC_009.png](images/mC_015.png)
+
+#### Set your **View** adjustment layer to what you want to see while working, and your **Render** adjustment layer to what you want to output. Use the buttons to quickly toggle between working and rendering.
+
+![mC_001.png](images/mC_016.png)
 
 ---
 
