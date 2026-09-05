@@ -36,5 +36,13 @@
   var r1 = MincBase.readJson(SETTINGS + "/reports/interpret-selected-last.json");
   if (r1) MincBase.dumpReport("explicit", r1); else MincBase.log("NATIVE REPORT MISSING");
   MincBase.dumpComp("after", comp);
+  // re-assign: the PNG now carries a minColor CST — an explicit pick must WIN (re-author in place,
+  // NOT skip as "already interpreted"). Regression guard for the 2.0.1 explicit-apply fix.
+  lyPng.selected = true; lyMov.selected = false;
+  writeArgs('{ "command": "minColor: Interpret Selected", "space": "sRGB" }');
+  app.executeCommand(id);
+  var r2 = MincBase.readJson(SETTINGS + "/reports/interpret-selected-last.json");
+  if (r2) MincBase.dumpReport("reassign", r2);
+  MincBase.dumpComp("after-reassign", comp);
   MincBase.finish(N);
 } catch (e) { MincBase.fail(N, e); } })();

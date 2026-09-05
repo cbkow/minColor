@@ -144,7 +144,17 @@ static void DoLayer(IEnv &e, AEGP_CompH compH, AEGP_LayerH ly, const std::string
     if (haveIdx > 0) {                                       /* self-heal (:976-993) */
         MincFxName pr0 = MincParseFxName(fx[haveIdx - 1].name);
         MincRemap r0;
-        if (pr0.valid && pr0.kind == "input") r0 = MincRemapSpace("input", pr0.space, e.ctx);
+        if (!e.explicitSpace.empty()) {
+            /* explicit re-assignment (panel Apply / Interpret Selected): the user's pick WINS over
+               an existing CST — re-author it in place, never skip as "already interpreted". */
+            if (!MincSpaceInPin(e.explicitSpace, e.pin)) {
+                e.rep->failed.push_back(label + " \xe2\x80\x94 Error: '" + e.explicitSpace + "' is not in this project's pinned config");
+                return;
+            }
+            r0.space = e.explicitSpace;
+            r0.changed = !(pr0.valid && pr0.kind == "input" && pr0.space == e.explicitSpace);
+            r0.note = "to " + e.explicitSpace;
+        } else if (pr0.valid && pr0.kind == "input") r0 = MincRemapSpace("input", pr0.space, e.ctx);
         else { r0.changed = true; r0.note = "(unparsed CST name)"; }
         if (r0.changed) {
             bool wl0 = MincLayerLocked(e.bp, ly);
