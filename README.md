@@ -80,12 +80,12 @@ Regular `sRGB, rec.709, rec.1886, ACES`, and `Blender` workflows are supported, 
 
 To make things easier and reduce inconsistencies between AE on macOS and Windows, minColor provides common-name aliases for its View and Render options. Any **Desktop-labeled** View or Render option is an alias for `sRGB` flows—typical in web/social/direct/tech branding work. Any View or Render option labeled **"Video”** is better suited for broadcast delivery and standard commercial post-production workflows; they are aliases for `Rec. 709 gamma 2.4 / Rec. 1886 / BT. 1886`.
 
-### Web/Tech/Direct Motion Graphics
+#### Web/Tech/Direct Motion Graphics
 If you work for tech/web/direct, this will most likely match your normal workflow:
 - **Windows Desktop View** or **macOS Desktop View** — depending on what machine you are currently sitting in front of.
 - **Desktop Render**
 
-### Commercial and Broadcast
+#### Commercial and Broadcast
 If you are working in post-production in an offline/online flow, you will most likely want:
 - **Windows or macOS Desktop View** is what viewers will see on a TV or a professional broadcast monitor in an Online room.
 - **Windows or macOS Video Views** are what people will see when they watch videos online or via a desktop video player. *Pick your poison (and lament the state of video today).*
@@ -101,7 +101,7 @@ To be extra clear, except for the macOS flavors, these are all aliases for commo
 
 #### ***How minColor sets your color management***
 
-The AE SDK doesn't expose what you need to manage color space programmatically, so minColor sets the project's OCIO config for you through After Effects' own scripting bridge. **Migrate** writes a small `_minColor` folder next to your project (the lean config AE pins). It's a live, in-app change — minColor never edits or backs up your `.aep`; undo it before you save if you want to revert.
+The AE SDK doesn't expose what you need to manage color space programmatically, so minColor sets the project's OCIO config for you through After Effects' own scripting bridge. **Migrate** writes a small `_minColor` folder next to your project that includes these OCIO configs.
 
 The minColor effect carries its own copy of every color transform, so it renders the same wherever the project lands — in the app and in `aerender` — with no config files to chase and no broken config paths.
 
@@ -116,6 +116,6 @@ The minColor effect carries its own copy of every color transform, so it renders
 ## Credits
 
 Inspired by Brendan Bolles' fnordware OpenColorIO plug-in for After Effects. Built on
-[OpenColorIO](https://opencolorio.org) (BSD-3-Clause) and colour transforms from the Blender project
+[OpenColorIO](https://opencolorio.org) (BSD-3-Clause) and color transforms from the Blender project
 (AgX / Filmic, Troy Sobotka) and [ACES](https://acescentral.com) (A.M.P.A.S.). Full attributions and
-licences: [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+licenses: [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
