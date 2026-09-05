@@ -1,112 +1,97 @@
 # minColor plugin — Windows build (lean-v3)
 
-STATUS: the **effect** (`minColorCST.aex`) builds on Windows and now **embeds its OCIO configs +
-LUTs** in the binary (zero-filesystem render). The **AEGP** (ceremonies bundle) is still built
-ONLY in the CMake `if(APPLE)` branch — **porting it is the open Windows milestone** (bottom of
-this doc). Until it lands, Windows is effect-only and the lean-v3 workflow/panel don't run there.
+STATUS: **both bundles build on Windows and both are self-contained.** The **effect**
+(`minColorCST.aex`) embeds its OCIO configs + LUTs; the **AEGP** (`minColorAEGP.aex`, ceremonies +
+handshake) embeds `presets.json` + `extension-defaults.json` + `render-presets.json` + the config
+text, and **seeds `C:\ProgramData\minColor\settings` from those on first launch**. The installer
+ships **only the two binaries + the shell** — no config store, no settings seed. Verified store-less
+on the mac (baseline suite green with no config store on disk); Windows should behave the same.
 
-## 0. Sync first — this is a different codebase than the last Windows build
+If you last built before this, your panel "couldn't see the OCIO profiles" because the AEGP read
+`presets.json` off disk and a bundles-only install had no store. That's fixed: the AEGP now carries
+the metadata and seeds what the shell reads. **Rebuild the AEGP and the symptom goes away.**
 
-Pull the lean-v3 rebuild (merged to `main`):
+## 0. Sync first
 
 ```
 git checkout main
-git pull
+git pull                     # need cb28783 + 623ca22 (AEGP embed + self-seed + slim installers)
 ```
-
-What changed since Windows last built (all on `main` now):
-- The effect is **self-contained**: colour lives in a saved param (native **Space popup** in
-  Effect Controls — the old clickable "badge" is gone), read at render.
-- The effect **embeds every preset config + its LUTs** (zlib) and renders from the binary — no
-  filesystem, no dead config pins. AE pins a lean per-preset "interface" config; the effect
-  ignores it and uses its own embedded config.
-- The ceremonies (Migrate, Interpret, Utility, Apply Look, Render Preset, Strip, Doctor/Repair)
-  and the handshake the panel gates on live in the **AEGP**. Set Up / Archive / Package / Adopt
-  were retired; Migrate is the single managed-project entry.
 
 ## 1. Prereqs
 
 - Visual Studio 2022 (C++ workload), CMake 3.24+, git — "x64 Native Tools Command Prompt for VS".
-- **Python 3 on PATH — NEW.** The build runs `plugin/cmake/gen_embedded_configs.py` to bake the
-  configs + LUTs into the effect. `find_program(... python3 python REQUIRED)` — configure FAILS
-  without it.
+- **Python 3 on PATH.** The build runs TWO codegens (both `find_program(... python3 python REQUIRED)`
+  — configure FAILS without Python):
+  - `cmake/gen_embedded_configs.py` → bakes configs + LUTs into the **effect** (~18 MB source).
+  - `cmake/gen_embedded_meta.py` → bakes `presets.json` + `extension-defaults.json` +
+    `render-presets.json` + config text into the **AEGP** (~0.9 MB, raw — no zlib needed).
+- Windows AE SDK unzipped so `plugin\sdk\<x>\Examples\Headers\AE_Effect.h` exists (copy from
+  `private/sdk/` on the mac; the SDK doesn't travel with the repo).
+- Static OCIO 2.5.2: `plugin\external\build.bat` → `external\install` (also builds zlib into
+  `external\build\ext\dist`, which the effect's embed decompressor links).
 
-## 2. Build the effect
+## 2. Build both bundles
 
-1. SDK: unzip the Windows AE SDK so `plugin\sdk\<x>\Examples\Headers\AE_Effect.h` exists
-   (the SDK archive doesn't travel with the repo — copy from `private/sdk/` on the mac).
-2. Static OCIO 2.5.2: `plugin\external\build.bat` → `external\install` (built /MD;
-   `CMAKE_MSVC_RUNTIME_LIBRARY MultiThreadedDLL` matches AE). This also builds **zlib** into
-   `external\build\ext\dist` — the embed decompressor links it (`libz`/`zlib*.lib` via the
-   `OCIO_EXT_LIBS` glob) and the effect CMake adds `ext/dist/include` for `zlib.h`.
-3. Build:
-   ```
-   cmake -S plugin -B plugin\build
-   cmake --build plugin\build --config Release      -> minColorCST.aex
-   ```
-   The embed codegen runs automatically (`add_custom_command` → `gen/MincEmbeddedConfigs.cpp`,
-   ~18 MB generated source; regenerates when `config\dist` changes). PiPL as before
-   (`MinColorCST_PiPL.r` → `cl /EP` → PiPLtool → `.rc`, via `cmake/BuildPiPL.cmake`); the five
-   effects build on Windows (legacy `MINC CST` is `#ifdef AE_OS_WIN`).
-4. Install: copy `minColorCST.aex` to
-   `C:\Program Files\Adobe\Common\Plug-ins\7.0\MediaCore\minColor\`.
-   The `configs` folder beside it is **no longer required for rendering** (embedded) — keep it
-   only for the AEGP's disk reads once that lands.
-5. Verify: restart AE → apply a minColor effect → its **Space popup** populates and a render
-   transforms. Log: `%TEMP%\minColorCST_authority.log`. AE-free engine check:
-   `plugin\tools\build-probe.bat` (verify vs PyOpenColorIO).
+```
+cmake -S plugin -B plugin\build
+cmake --build plugin\build --config Release
+```
 
-## 3. The AEGP on Windows — shared C++ is now portable; toolchain bits remain
+Produces `minColorCST.aex` (effect) and `minColorAEGP.aex` (ceremonies). Both codegens run
+automatically and regenerate when `config\dist` / `config\*.json` change. The AEGP target is the
+`elseif(WIN32)` branch — it links the OCIO static libs (same as the effect), uses `MincPicker.cpp`
+(not the `.mm`), and builds the embedded-meta cpp; its PiPL goes through the same `.r → cl /EP →
+PiPLtool → .rc` path as the effect.
 
-Everything workflow-side (Migrate/Interpret/Utility/Doctor, `MincWriteMenus`, the
-`settings/aegp-api.json` handshake the panel requires) is in `minColorAEGP`, which the CMake
-still builds only under `if(APPLE)`. **The shared C++ was made Windows-ready** (this is done, on
-`main`):
-- POSIX file ops (`mkdir`/`opendir`-`readdir`/`unlink`/`localtime_r`, `<dirent.h>`/`<unistd.h>`)
-  in the ceremony code are now `std::filesystem` via `src/ceremony/MincFs.h` (`mfs::mkdirs`,
-  `copyTree`, `removeFile`, `listFiles`, `localTime` — the last is the only `#ifdef _WIN32`,
-  `localtime_s` vs `localtime_r`). C++17, compiles on both. `stat()` (existence checks) stays —
-  MSVC provides it with `_CRT_SECURE_NO_WARNINGS` (already defined for the effect target).
-- The preset picker is split: `MincPicker.mm` (mac, NSAlert) and **`MincPicker.cpp` (Windows,
-  already written)** — the portable shell-args/quiet-answers tiers, no dialog (panel-driven use
-  needs none; a menu-invoked command with no panel returns false).
+**Nothing else in the C++ changed this session** — the AEGP was already cross-platform (WIN32 target
++ `std::filesystem` via `MincFs.h` + platform-aware paths). This session only added the embedded
+metadata + self-seed, wired into the existing WIN32 target. So this is a plain rebuild.
 
-So the Windows session only needs the **toolchain wiring**:
+## 3. Refresh the prebuilt AEGP (what the installer ships)
 
-1. **CMake `elseif(WIN32)` — add the `minColorAEGP` target** mirroring the mac one: sources =
-   `src/aegp/AegpMain.cpp` + `src/ceremony/*.cpp` (**use `MincPicker.cpp`, NOT `MincPicker.mm`**)
-   + `${MINC_CORE_SOURCES}`; include dirs `${MINC_COMMON_INCLUDES}`; link the OCIO static libs
-   (same as the effect) — **no `-framework AppKit`**. Compile-def `MINC_LOG_BASENAME="minColorAEGP"`.
-   Build as a DLL renamed `.aex`; the AEGP entry (`MincAegpEntry`) is the one `__declspec(dllexport)`.
-2. **Windows AEGP PiPL** — `src/aegp/MinColorAEGP_PiPL.r` through the same `.r → cl /EP → PiPLtool
-   → .rc` path as the effect (Kind `AEGP`, entry `MincAegpEntry`), linked into the `.aex`.
-3. **Install:** AEGP `.aex` → each `Adobe After Effects <ver>\Plug-ins\`; shell panel
-   `src/minColor Shell.jsx` → `%APPDATA%\Adobe\After Effects\<ver>\Scripts\ScriptUI Panels\minColor.jsx`;
-   ship `config\dist` (configs + LUT trees) to
-   `C:\Program Files\Adobe\Common\Plug-ins\7.0\MediaCore\minColor\configs\` for the AEGP's disk
-   reads (the effect is embedded and doesn't need them).
-4. **Verify:** restart AE → the minColor menu commands exist (About, Doctor, Migrate, Interpret…);
-   the panel loads past its handshake gate; Migrate + Interpret a project.
+`build.ps1` installs the AEGP from `plugin\prebuilt\windows` (it throws if it's missing). After the
+rebuild, refresh it and commit:
 
-Portability rules unchanged: platform code behind `#ifdef AE_OS_WIN` (defined by the Windows CMake
-branch alongside `MSWindows`); never fork shared logic.
+```
+copy /Y plugin\build\Release\minColorAEGP.aex plugin\prebuilt\windows\minColorAEGP.aex
+copy /Y plugin\build\Release\minColorCST.aex  plugin\prebuilt\windows\minColorCST.aex
+copy /Y plugin\build\Release\version.txt      plugin\prebuilt\windows\version.txt
+git add plugin\prebuilt\windows & git commit -m "Windows: refresh prebuilt (AEGP embeds metadata)"
+```
 
-## 4. The panel/installer — Windows is on the 2.0 shell now (the 0.9.2 lane is retired)
+(The effect binary didn't change logically this session, but refresh it too so the prebuilt set is
+one coherent build. `version.txt` is the DefaultVersion the MSI compares against.)
 
-There is **one panel**: `src/minColor Shell.jsx` (mac and Windows). The old `minColor Panel.jsx`
-(from `private/attic`) and its `minColor-data` payload are gone from the build. `build/build.py`
-and `packaging/windows/build.ps1` are already updated (they ship `dist-panel/minColor.jsx` for
-Windows and stage `minColorAEGP.aex` for the installer). The shell **gates on the AEGP handshake**
-(`settings/aegp-api.json`), so it does nothing until the Windows AEGP (§3) is installed — that's
-why a lean-v3 Windows install needs the AEGP, not just the effect.
+## 4. Build the installer — ships ONLY the two binaries + the shell
 
-**`packaging/windows/minColor.wxs` still needs two edits (WiX, build+test on Windows):**
-1. **Drop `minColor-data`:** remove the `AE2025DATA`/`AE2026DATA` directories and the
-   `<Files Include="…\minColor-data\**" …>` lines from `Panel2025`/`Panel2026`. The `minColor.jsx`
-   component stays (now the 2.0 shell).
-2. **Add the AEGP component:** install the staged `minColorAEGP.aex` into each AE's
-   `…\Adobe After Effects <ver>\Support Files\Plug-ins\` (a new per-AE `Plug-ins` Directory +
-   Component, feature-gated like the panels). Without it the panel installs but stays gated.
+`packaging\windows\build.ps1` and `packaging\windows\minColor.wxs` are **already updated** on `main`:
+no config store (`ConfigsCentral`/`ConfigsShared` gone), no settings seed — the effect embeds its
+configs+LUTs and the AEGP seeds `ProgramData\minColor\settings` on launch. Just build it:
 
-`build.ps1` warns if `plugin\prebuilt\windows\minColorAEGP.aex` is missing, so build the WIN32 AEGP
-target (§3) and commit it to `plugin\prebuilt\windows` before cutting the .msi.
+```
+python build\build.py                                          # stages dist-panel\minColor.jsx (the shell)
+powershell -ExecutionPolicy Bypass -File packaging\windows\build.ps1
+```
+
+→ `dist-panel\minColor-<ver>.msi`. It lays down `minColorCST.aex` (MediaCore), and per installed AE
+≥2025 the `minColorAEGP.aex` (Support Files\Plug-ins) + `minColor.jsx` (ScriptUI Panels). That's the
+whole payload.
+
+## 5. Verify (store-less is the point)
+
+Restart AE, then:
+- minColor menu commands exist (About, Doctor, Migrate, Interpret…).
+- The **panel loads past its handshake gate** and its **dropdowns populate** — this is the fix; it
+  works with no `configs` folder on disk anywhere.
+- Migrate a saved project → OCIO on, a `_minColor\config-<preset>-interface.ocio` written beside the
+  `.aep`, effect renders (its **Space popup** populates and transforms).
+- Logs: `%TEMP%\minColorAEGP.log` (should say `presets: <embedded>/presets.json` when no store is on
+  disk) and `%TEMP%\minColorCST_authority.log`.
+
+To prove store-less explicitly: there should be **no**
+`C:\Program Files\Adobe\Common\Plug-ins\7.0\MediaCore\minColor\configs\` and no
+`C:\ProgramData\minColor\configs\` after a clean MSI install — only
+`C:\ProgramData\minColor\settings\` (seeded by the AEGP at launch).
+
+Portability rule unchanged: platform code behind `#ifdef AE_OS_WIN` / `_WIN32`; never fork shared logic.
