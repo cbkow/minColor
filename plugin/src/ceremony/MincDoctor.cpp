@@ -1,5 +1,6 @@
 #include "MincDoctor.h"
 #include "MincPresets.h"
+#include "MincEmbeddedMeta.h"
 #include "MincJson.h"
 #include "../core/MincRifx.h"
 #include <sys/stat.h>
@@ -221,7 +222,8 @@ MincDoctorResult MincDoctorDiagnose(SPBasicSuite *bp, AEGP_PluginID id) {
     }
     r.status = "yellow";
     r.text = std::string(!cmsOk ? "engine fell back to Adobe mode; " : "") + (!cfgOk ? "config path needs re-pointing" : "");
-    r.canRepair = !info.configPath.empty() || !MincFindConfigByName(info.config, projPath).empty();
+    r.canRepair = !info.configPath.empty() || !MincFindConfigByName(info.config, projPath).empty()
+                  || (!info.preset.empty() && MincEmbeddedMetaHas(info.config));   /* store-less: rebuild from the embed */
     if (r.canRepair) {                                   /* the heal's target (panel repair :275) */
         /* Path 2: repair restores the PORTABLE lean INTERFACE pin in _minColor (the neutralizer AE
            pins) — never the full config. Repair regenerates it from the preset before patching, so

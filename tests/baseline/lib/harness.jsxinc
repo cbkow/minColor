@@ -48,7 +48,8 @@ var MincBase = (function () {
     try { var m = app.project.xmpPacket.match(/<minColor:engine>([^<]*)<\/minColor:engine>/); return m ? m[1] : null; } catch (e) { return null; }
   }
   function seedStickyPref(presetKey) {                 // fresh-project determinism: AE inherits its
-    var pj = readJson(CONFIGS + "/presets.json");      // last-project sticky prefs — seed them
+    var pj = readJson(SETTINGS + "/presets.json") ||   // last-project sticky prefs — seed them (the
+             readJson(CONFIGS + "/presets.json");      // AEGP seeds settings/presets.json from embedded; store is optional)
     var pr = pj && pj.presets ? pj.presets[presetKey] : null;
     if (!pr) throw new Error("unknown preset " + presetKey);
     var SEC = "After Effects Sticky Prefs", KEY = "AE Last Project Settings";

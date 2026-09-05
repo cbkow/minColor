@@ -20,16 +20,16 @@ STAGE="$(mktemp -d)"; trap 'rm -rf "$STAGE"' EXIT
 MC="$STAGE/root/Library/Application Support/Adobe/Common/Plug-ins/7.0/MediaCore/minColor"
 mkdir -p "$MC"
 ditto "$PLUGIN" "$MC/minColorCST.plugin"
-ditto "$ROOT/config/dist" "$MC/configs"
-# panel + settings seed staged under the shared store; postinstall fans the panel out per AE version
+# NO config store on disk: the effect embeds its configs+LUTs and the AEGP embeds presets.json +
+# extension-defaults.json + render-presets.json + config text, seeding settings/ from those on launch.
+# The package is the two binaries + the shell — nothing else ships (verified store-less: suite green).
+# panel staged under the shared store; postinstall fans it out per AE version
 SH="$STAGE/root/Users/Shared/minColor"
-mkdir -p "$SH/panel" "$SH/configs" "$SH/settings-seed" "$SH/engine"
+mkdir -p "$SH/panel" "$SH/engine"
 # the ceremonies AEGP goes into each AE version's own Plug-ins folder — per-version paths, so it
 # stages under the shared store and postinstall fans it out to every installed AE
 ditto "$AEGP" "$SH/engine/minColorAEGP.plugin"
 cp "$DIST/minColor.jsx" "$SH/panel/"   # 2.0 shell only — minColor-data was the 0.9.x payload
-ditto "$ROOT/config/dist" "$SH/configs"
-cp "$ROOT/config/extension-defaults.json" "$ROOT/config/render-presets.json" "$SH/settings-seed/"
 # ---- component pkg ----
 mkdir -p "$STAGE/pkgs"
 pkgbuild --analyze --root "$STAGE/root" "$STAGE/components.plist" >/dev/null

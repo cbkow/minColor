@@ -43,7 +43,8 @@ set(MINC_ZLIB_INCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/external/build/ext/dist/inclu
 #     are disk-FIRST, embedded-fallback (a real store still wins). Regenerates when config changes. ---
 set(MINC_META_CPP "${MINC_GEN_DIR}/MincEmbeddedMeta.cpp")
 file(GLOB MINC_META_DEPS "${MINC_CONFIG_DIST}/presets.json" "${MINC_CONFIG_DIST}/config-*.ocio"
-  "${CMAKE_CURRENT_SOURCE_DIR}/../config/extension-defaults.json")
+  "${CMAKE_CURRENT_SOURCE_DIR}/../config/extension-defaults.json"
+  "${CMAKE_CURRENT_SOURCE_DIR}/../config/render-presets.json")
 add_custom_command(
   OUTPUT "${MINC_META_CPP}"
   COMMAND "${MINC_PYTHON}" "${CMAKE_CURRENT_SOURCE_DIR}/cmake/gen_embedded_meta.py"

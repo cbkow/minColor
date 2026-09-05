@@ -2,6 +2,7 @@
 #include "MincCore.h"
 #include "MincMenus.h"
 #include "MincFs.h"
+#include "MincEmbeddedMeta.h"
 #include <cstdio>
 #include <sys/stat.h>
 
@@ -42,6 +43,21 @@ std::string MincReadTextFile(const std::string &path) {
     while ((n = fread(buf, 1, sizeof(buf), f)) > 0) s.append(buf, n);
     fclose(f);
     return s;
+}
+
+/* Seed the shell's disk JSON from the AEGP's EMBEDDED copies. The shell is ExtendScript and can't
+   read the binary's embedded store, so the AEGP writes what the shell reads (preset labels, render
+   recipes, extension rules) into the settings dir at launch — the installer ships none of it. Seed-
+   if-absent: never clobber a user's edited extension-defaults.json (the shell writes that one). */
+void MincSeedSettings(void) {
+    const char *files[] = { "presets.json", "render-presets.json", "extension-defaults.json" };
+    for (const char *f : files) {
+        std::string path = MincSettingsDir() + "/" + f;
+        if (mfs::exists(path)) continue;
+        std::string data = MincEmbeddedMetaText(f);
+        if (!data.empty() && MincWriteTextFile(path, data))
+            MincLog("seed: %s written from embedded", f);
+    }
 }
 
 bool MincWriteReport(const char *ceremony, const std::string &json) {

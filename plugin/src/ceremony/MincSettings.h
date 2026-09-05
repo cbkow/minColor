@@ -9,6 +9,7 @@ bool        MincQuietMode(void);                      /* settings/quiet-mode mar
 bool        MincWriteTextFile(const std::string &path, const std::string &content);
 std::string MincReadTextFile(const std::string &path);/* "" when absent */
 bool        MincWriteReport(const char *ceremony, const std::string &json);  /* settings/reports/<c>-last.json */
+void        MincSeedSettings(void);   /* write the shell's disk JSON from embedded copies (seed-if-absent) */
 
 /* settings/aegp-api.json — the M3 shell's hard gate. Rewritten whenever the command set
    changes so the commands[] list is always truthful. */

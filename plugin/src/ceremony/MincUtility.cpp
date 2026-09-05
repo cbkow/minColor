@@ -331,10 +331,12 @@ std::string MincEnsureUtilityLayers(SPBasicSuite *bp, AEGP_PluginID id,
    (view ends enabled), recipe look set or — absent — REMOVED (pr.look || null semantics).
    Recipes from settings/render-presets.json (user-editable, seeded by the installer).     */
 #include "MincJson.h"
+#include "MincEmbeddedMeta.h"
 #include "MincSettings.h"
 std::string MincApplyRenderPreset(SPBasicSuite *bp, AEGP_PluginID id, const std::string &name) {
     if (name.empty()) return "{ \"error\": \"no preset name given\" }\n";
     MincJsonPtr j = MincJsonParseFile(MincSettingsDir() + "/render-presets.json");
+    if (!j) j = MincJsonParse(MincEmbeddedMetaText("render-presets.json"));   /* no seed on disk -> embedded */
     MincJsonPtr presets = j ? j->get("presets") : nullptr;
     MincJsonPtr pr = presets ? presets->get(name) : nullptr;
     if (!pr) return "{ \"error\": " + UJ("unknown render preset '" + name + "'") + " }\n";   /* :1349 verbatim */

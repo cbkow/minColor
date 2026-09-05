@@ -321,9 +321,7 @@
     var r1 = dlg.add("group"); r1.add("statictext", undefined, "Working-space preset:");
     var dd = r1.add("dropdownlist", undefined, []);
     var pj = readJSON(SETTINGS + "/plugin-menus.json");            // labels: presets.json isn't shell-readable; keys come from the engine's presets
-    var pcfg = readJSON((($.os.indexOf("Windows") >= 0) ? "C:/Program Files/Adobe/Common/Plug-ins/7.0/MediaCore/minColor" :
-                        "/Library/Application Support/Adobe/Common/Plug-ins/7.0/MediaCore/minColor") + "/configs/presets.json") ||
-               readJSON((($.os.indexOf("Windows") >= 0) ? "C:/ProgramData/minColor" : "/Users/Shared/minColor") + "/configs/presets.json");
+    var pcfg = readJSON(SETTINGS + "/presets.json");               // the AEGP seeds this from its embedded copy at launch (no config store on disk)
     var pkeys = [];
     if (pcfg && pcfg.presets) { for (var pk2 in pcfg.presets) pkeys.push(pk2); }
     for (var pi = 0; pi < pkeys.length; pi++) {

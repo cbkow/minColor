@@ -15,11 +15,9 @@ if (-not $WixVer.StartsWith("5.")) { throw "wix $WixVer found; this build needs 
 if (-not ((& wix extension list -g) -match 'WixToolset\.Util\.wixext')) {
   wix extension add -g "WixToolset.Util.wixext/$WixVer"; if ($LASTEXITCODE) { throw "wix extension add failed" }
 }
-# WiX harvests each source path once, so trees delivered to two places get their own staged copy (mirrored, so stale files drop out).
+# The MSI ships NO config store and NO settings seed — the effect embeds its configs+LUTs and the
+# AEGP embeds the metadata, seeding ProgramData\minColor\settings on first launch (see minColor.wxs).
 $Stage = "$Root\dist-panel\msi-stage"
-function Mirror($From, $To) { robocopy $From $To /MIR /NFL /NDL /NJH /NJS /NP | Out-Null; if ($LASTEXITCODE -ge 8) { throw "robocopy $From -> $To failed ($LASTEXITCODE)" } }
-Mirror "$Root\config\dist" "$Stage\configs-central"
-Mirror "$Root\config\dist" "$Stage\configs-shared"
 # AEGP .aex (ceremonies) — built by the Windows CMake WIN32 minColorAEGP target and committed to
 # plugin\prebuilt\windows. Staged per-AE beside the shell (distinct staged paths, same rule as the
 # config trees) for the installer's per-AE Plug-ins components (see minColor.wxs).
@@ -33,8 +31,7 @@ foreach ($ae in "2025", "2026") {
 }
 $Out = "$Root\dist-panel\minColor-$Ver.msi"
 wix build "$PSScriptRoot\minColor.wxs" -ext WixToolset.Util.wixext -arch x64 `
-  -d "Version=$Ver" -d "EngineVersion=$EngineVer" -d "Prebuilt=$Root\plugin\prebuilt\windows" -d "Config=$Root\config" `
-  -d "ConfigsCentral=$Stage\configs-central" -d "ConfigsShared=$Stage\configs-shared" `
+  -d "Version=$Ver" -d "EngineVersion=$EngineVer" -d "Prebuilt=$Root\plugin\prebuilt\windows" `
   -d "Panel2025=$Stage\panel-2025" -d "Panel2026=$Stage\panel-2026" -o $Out
 if ($LASTEXITCODE) { throw "wix build failed ($LASTEXITCODE)" }
 Write-Host "-> $Out"

@@ -22,6 +22,7 @@ def add(path):
 
 add(os.path.join(dist, "presets.json"))
 add(os.path.join(root, "extension-defaults.json"))
+add(os.path.join(root, "render-presets.json"))
 cfgs = sorted(f for f in os.listdir(dist) if f.startswith("config-") and f.endswith(".ocio"))
 if not cfgs: die("no config-*.ocio in " + dist)
 for c in cfgs: add(os.path.join(dist, c))

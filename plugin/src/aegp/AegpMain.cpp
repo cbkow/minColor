@@ -278,6 +278,7 @@ extern "C" DllExport A_Err MincAegpEntry(struct SPBasicSuite *pica_basicP, A_lon
                                                             crashed at launch, 2026-09-03) */
             for (int i = 0; i < g_nCommands; ++i) labels.push_back(g_commands[i].label);
             MincWriteHandshake(labels.data(), g_nCommands);   /* AFTER registration — never lies */
+            MincSeedSettings();   /* write the shell's disk JSON from embedded — installer ships none */
         } else { MincLog("command registration FAILED"); out = A_Err_GENERIC; }
     } catch (...) { MincLog("AegpEntry: exception"); out = A_Err_GENERIC; }
     return out;

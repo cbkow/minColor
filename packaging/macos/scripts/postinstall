@@ -36,9 +36,10 @@ for APP in "/Applications/Adobe After Effects "*/; do
   echo "AEGP -> $APP/Plug-ins"; aegp=$((aegp+1))
 done
 [ "$aegp" -gt 0 ] || echo "WARNING: no Adobe After Effects >= 2025 app found in /Applications"
-# settings: seed only what is missing (user choices survive every update)
+# settings: the AEGP seeds settings/ from its embedded copies on first launch (presets.json,
+# extension-defaults.json, render-presets.json) — seed-if-absent, so user edits survive. Nothing
+# to seed here anymore (no settings-seed payload ships).
 mkdir -p "$SHARED/settings"
-for f in "$SHARED/settings-seed/"*; do [ -e "$SHARED/settings/$(basename "$f")" ] || cp "$f" "$SHARED/settings/"; done
 chown -R "$USER_NAME" "$SHARED" 2>/dev/null || true
 chmod -R a+rX "$SHARED" "/Library/Application Support/Adobe/Common/Plug-ins/7.0/MediaCore/minColor" 2>/dev/null || true
 # quarantine never applies to pkg payloads, but be explicit for the plug-in bundle
