@@ -3,12 +3,11 @@
 #include "MincSettings.h"
 #include "MincJson.h"
 #include "../core/MincRifx.h"
+#include "MincFs.h"
 #include <cstdio>
-#include <dirent.h>
 #include <sys/stat.h>
 
 static bool AExists(const std::string &p) { struct stat st; return !p.empty() && stat(p.c_str(), &st) == 0; }
-static bool AIsDir(const std::string &p) { struct stat st; return stat(p.c_str(), &st) == 0 && (st.st_mode & S_IFDIR); }
 static std::string AJStr(const std::string &s) {
     std::string o = "\"";
     for (char c : s) { if (c == '"' || c == '\\') o += '\\'; o += c; }
@@ -24,20 +23,8 @@ static bool ACopy(const std::string &from, const std::string &to) {
     fclose(a); fclose(b);
     return ok;
 }
-static void ACopyTree(const std::string &from, const std::string &to) {   /* copyTree port: skip existing files */
-    if (!AIsDir(from)) return;
-    mkdir(to.c_str(), 0777);
-    DIR *d = opendir(from.c_str());
-    if (!d) return;
-    struct dirent *de;
-    while ((de = readdir(d)) != nullptr) {
-        std::string n = de->d_name;
-        if (n == "." || n == "..") continue;
-        std::string src = from + "/" + n, dst = to + "/" + n;
-        if (AIsDir(src)) ACopyTree(src, dst);
-        else if (!AExists(dst)) ACopy(src, dst);
-    }
-    closedir(d);
+static void ACopyTree(const std::string &from, const std::string &to) {   /* copyTree: recursive, skip existing */
+    mfs::copyTree(from, to);
 }
 
 bool MincEnsureSidecar(const std::string &projPath, const std::string &preset,
@@ -48,7 +35,7 @@ bool MincEnsureSidecar(const std::string &projPath, const std::string &preset,
     std::string projDir = projPath.substr(0, sl);
     std::string projName = projPath.substr(sl + 1);
     std::string sd = projDir + "/_minColor";
-    mkdir(sd.c_str(), 0777);
+    mfs::mkdirs(sd);
     std::string root = MincCentralConfigsDir();
     const char *trees[] = { "luts", "filmic", "icc" };
     for (int i = 0; i < 3; ++i) ACopyTree(root + "/" + trees[i], sd + "/" + trees[i]);
@@ -89,7 +76,7 @@ bool MincWriteInterfaceConfig(const std::string &projPath, const std::string &pr
     size_t sl = projPath.find_last_of('/');
     if (sl == std::string::npos) { if (errOut) *errOut = "bad project path"; return false; }
     std::string sd = projPath.substr(0, sl) + "/_minColor";
-    mkdir(sd.c_str(), 0777);
+    mfs::mkdirs(sd);
     std::string ws = pr.working;                          /* the ONE space AE composites in */
     bool display = (pr.family == "Display");
     const char *alloc = display ? "uniform" : "lg2";

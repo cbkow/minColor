@@ -15,8 +15,7 @@
 #include <set>
 #include <vector>
 #include <sys/stat.h>
-#include <dirent.h>
-#include <unistd.h>
+#include "MincFs.h"
 
 /* ---------------- small utilities ---------------- */
 static std::string JStr(const std::string &s) {
@@ -86,11 +85,11 @@ static bool Reopen(PEnv &e, const std::string &path) {
 }
 static std::string BackupCopy(const std::string &projPath, const char *tag, std::string *err) {
     std::string dir = Dirname(projPath) + "/_minColor";
-    mkdir(dir.c_str(), 0777);
+    mfs::mkdirs(dir);
     dir += "/backups";
-    mkdir(dir.c_str(), 0777);
+    mfs::mkdirs(dir);
     time_t t = time(nullptr);
-    struct tm tmv; localtime_r(&t, &tmv);
+    struct tm tmv; mfs::localTime(&t, &tmv);
     char stamp[32];
     snprintf(stamp, sizeof(stamp), "%04d%02d%02d-%02d%02d%02d",
              tmv.tm_year + 1900, tmv.tm_mon + 1, tmv.tm_mday, tmv.tm_hour, tmv.tm_min, tmv.tm_sec);
@@ -105,7 +104,7 @@ static std::string BackupCopy(const std::string &projPath, const char *tag, std:
 }
 static std::string ProvenanceRecord(const std::string &preset, const std::string &config) {
     time_t t = time(nullptr);
-    struct tm tmv; localtime_r(&t, &tmv);
+    struct tm tmv; mfs::localTime(&t, &tmv);
     char date[16];
     snprintf(date, sizeof(date), "%04d-%02d-%02d", tmv.tm_year + 1900, tmv.tm_mon + 1, tmv.tm_mday);
     return std::string("{\"tool\":\"minColor\",\"panel\":\"") + MINC_VERSION_STR +
@@ -136,7 +135,7 @@ static bool BuildSyncRows(PEnv &e, const std::string &projPath, std::vector<Sync
     if (!SaveTo(e, tmp)) return false;
     MincAssignments a;
     bool ok = MincRifxReadAssignments(tmp.c_str(), &a);
-    unlink(tmp.c_str());
+    mfs::removeFile(tmp);
     if (!ok) return false;
     std::map<int32_t, const MincAssignItem *> byId;
     for (auto &it2 : a.items) if (it2.id) byId[it2.id] = &it2;
@@ -554,18 +553,9 @@ std::string MincMigrateProject(SPBasicSuite *bp, AEGP_PluginID id, const std::st
     int bcount = 0; double bmb = 0;
     {
         std::string bdir = Dirname(projPath) + "/_minColor/backups";
-        DIR *dd = opendir(bdir.c_str());
-        if (dd) {
-            struct dirent *de;
-            while ((de = readdir(dd)) != nullptr) {
-                std::string n = de->d_name;
-                if (n.size() > 4 && n.compare(n.size() - 4, 4, ".aep") == 0) {
-                    ++bcount;
-                    struct stat st;
-                    if (stat((bdir + "/" + n).c_str(), &st) == 0) bmb += st.st_size / 1048576.0;
-                }
-            }
-            closedir(dd);
+        for (auto &e : mfs::listFiles(bdir)) {
+            const std::string &n = e.name;
+            if (n.size() > 4 && n.compare(n.size() - 4, 4, ".aep") == 0) { ++bcount; bmb += e.size / 1048576.0; }
         }
         bmb = (double)((long)(bmb * 10 + 0.5)) / 10.0;
     }

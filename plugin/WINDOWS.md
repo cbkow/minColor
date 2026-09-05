@@ -56,22 +56,37 @@ What changed since Windows last built (all on `main` now):
    transforms. Log: `%TEMP%\minColorCST_authority.log`. AE-free engine check:
    `plugin\tools\build-probe.bat` (verify vs PyOpenColorIO).
 
-## 3. Open milestone — the AEGP on Windows
+## 3. The AEGP on Windows — shared C++ is now portable; toolchain bits remain
 
 Everything workflow-side (Migrate/Interpret/Utility/Doctor, `MincWriteMenus`, the
-`settings/aegp-api.json` handshake the panel requires) is in `minColorAEGP`, built only under
-`if(APPLE)` today. To ship lean-v3 on Windows:
+`settings/aegp-api.json` handshake the panel requires) is in `minColorAEGP`, which the CMake
+still builds only under `if(APPLE)`. **The shared C++ was made Windows-ready** (this is done, on
+`main`):
+- POSIX file ops (`mkdir`/`opendir`-`readdir`/`unlink`/`localtime_r`, `<dirent.h>`/`<unistd.h>`)
+  in the ceremony code are now `std::filesystem` via `src/ceremony/MincFs.h` (`mfs::mkdirs`,
+  `copyTree`, `removeFile`, `listFiles`, `localTime` — the last is the only `#ifdef _WIN32`,
+  `localtime_s` vs `localtime_r`). C++17, compiles on both. `stat()` (existence checks) stays —
+  MSVC provides it with `_CRT_SECURE_NO_WARNINGS` (already defined for the effect target).
+- The preset picker is split: `MincPicker.mm` (mac, NSAlert) and **`MincPicker.cpp` (Windows,
+  already written)** — the portable shell-args/quiet-answers tiers, no dialog (panel-driven use
+  needs none; a menu-invoked command with no panel returns false).
 
-- Add a `WIN32` branch that builds `minColorAEGP` as a Kind-AEGP `.aex`/DLL, mirroring the mac
-  target (same `MINC_CORE_SOURCES` + `src/ceremony/*` + `src/aegp/AegpMain.cpp`), with a Windows
-  AEGP PiPL.
-- The mac target links `-framework AppKit` for the NSAlert preset picker (`MincPicker.mm`).
-  Replace/stub it: `MincPickPreset` reads `shell-args.json`/`quiet-answers.json` FIRST, so
-  panel-driven use needs no native picker — only menu-invoked commands do. `#ifdef AE_OS_WIN`
-  the Objective-C++ picker and provide a Win32 dialog (or a no-op that relies on the panel).
-- Install: AEGP → each `Adobe After Effects <ver>\Plug-ins\`; shell panel `src/minColor Shell.jsx`
-  → `%APPDATA%\Adobe\After Effects\<ver>\Scripts\ScriptUI Panels\minColor.jsx`; ship `config\dist`
-  to the store for the AEGP's disk reads.
+So the Windows session only needs the **toolchain wiring**:
 
-Portability rules unchanged: platform code behind `#ifdef AE_OS_WIN` (defined by the Windows
-CMake branch alongside `MSWindows`); never fork shared logic.
+1. **CMake `elseif(WIN32)` — add the `minColorAEGP` target** mirroring the mac one: sources =
+   `src/aegp/AegpMain.cpp` + `src/ceremony/*.cpp` (**use `MincPicker.cpp`, NOT `MincPicker.mm`**)
+   + `${MINC_CORE_SOURCES}`; include dirs `${MINC_COMMON_INCLUDES}`; link the OCIO static libs
+   (same as the effect) — **no `-framework AppKit`**. Compile-def `MINC_LOG_BASENAME="minColorAEGP"`.
+   Build as a DLL renamed `.aex`; the AEGP entry (`MincAegpEntry`) is the one `__declspec(dllexport)`.
+2. **Windows AEGP PiPL** — `src/aegp/MinColorAEGP_PiPL.r` through the same `.r → cl /EP → PiPLtool
+   → .rc` path as the effect (Kind `AEGP`, entry `MincAegpEntry`), linked into the `.aex`.
+3. **Install:** AEGP `.aex` → each `Adobe After Effects <ver>\Plug-ins\`; shell panel
+   `src/minColor Shell.jsx` → `%APPDATA%\Adobe\After Effects\<ver>\Scripts\ScriptUI Panels\minColor.jsx`;
+   ship `config\dist` (configs + LUT trees) to
+   `C:\Program Files\Adobe\Common\Plug-ins\7.0\MediaCore\minColor\configs\` for the AEGP's disk
+   reads (the effect is embedded and doesn't need them).
+4. **Verify:** restart AE → the minColor menu commands exist (About, Doctor, Migrate, Interpret…);
+   the panel loads past its handshake gate; Migrate + Interpret a project.
+
+Portability rules unchanged: platform code behind `#ifdef AE_OS_WIN` (defined by the Windows CMake
+branch alongside `MSWindows`); never fork shared logic.

@@ -11,7 +11,7 @@
 #include <cstring>
 #include <map>
 #include <set>
-#include <unistd.h>
+#include "MincFs.h"
 
 static std::string JsonArr(const std::vector<std::string> &v) {
     std::string o = "[";
@@ -304,7 +304,7 @@ MincInterpretReport MincInterpretTimeline(SPBasicSuite *bp, AEGP_PluginID id) {
                         for (auto &kv : items->obj)
                             if (kv.second) e.harvest[(int32_t)atol(kv.first.c_str())] = kv.second->str("name");
                 }
-                unlink(tmp.c_str());
+                mfs::removeFile(tmp);
             }
         }
     }
@@ -397,7 +397,7 @@ MincInterpretReport MincInterpretSelection(SPBasicSuite *bp, AEGP_PluginID id, c
                         for (auto &kv : hitems->obj)
                             if (kv.second) e.harvest[(int32_t)atol(kv.first.c_str())] = kv.second->str("name");
                 }
-                unlink(tmp.c_str());
+                mfs::removeFile(tmp);
             }
         }
     }

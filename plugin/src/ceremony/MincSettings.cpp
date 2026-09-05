@@ -1,12 +1,12 @@
 #include "MincSettings.h"
 #include "MincCore.h"
+#include "MincFs.h"
 #include <cstdio>
 #include <sys/stat.h>
 
 static bool EnsureDir(const std::string &p) {
-    struct stat st;
-    if (stat(p.c_str(), &st) == 0) return (st.st_mode & S_IFDIR) != 0;
-    return mkdir(p.c_str(), 0777) == 0;
+    mfs::mkdirs(p);
+    return mfs::exists(p);
 }
 
 std::string MincSettingsDir(void) {
