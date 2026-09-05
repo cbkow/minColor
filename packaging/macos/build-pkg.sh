@@ -45,9 +45,14 @@ if [ -n "$INSTALLER_ID" ]; then
   productbuild --distribution "$STAGE/distribution.xml" --package-path "$STAGE/pkgs" --sign "$INSTALLER_ID" --timestamp "$PKG" >/dev/null
   echo "signed with: $INSTALLER_ID"
   PROFILE="${NOTARY_PROFILE:-notary}"                              # your notarytool keychain profile (see plugin/scripts/notarize.sh)
-  xcrun notarytool submit "$PKG" --keychain-profile "$PROFILE" --wait | tail -2
-  xcrun stapler staple "$PKG" && xcrun stapler validate "$PKG" | tail -1
-  spctl --assess --type install --verbose=2 "$PKG" 2>&1 | tail -1
+  if xcrun notarytool history --keychain-profile "$PROFILE" >/dev/null 2>&1; then
+    xcrun notarytool submit "$PKG" --keychain-profile "$PROFILE" --wait | tail -2
+    xcrun stapler staple "$PKG" && xcrun stapler validate "$PKG" | tail -1
+    spctl --assess --type install --verbose=2 "$PKG" 2>&1 | tail -1
+  else
+    echo "WARNING: notary profile '$PROFILE' not found — SIGNED but NOT notarized (fine for local"
+    echo "  testing; for distribution: xcrun notarytool store-credentials $PROFILE --apple-id <you> --team-id <TEAMID>, then re-run)"
+  fi
 else
   productbuild --distribution "$STAGE/distribution.xml" --package-path "$STAGE/pkgs" "$PKG" >/dev/null
   echo "UNSIGNED (no 'Developer ID Installer' identity in the keychain) — fine for local testing only"
