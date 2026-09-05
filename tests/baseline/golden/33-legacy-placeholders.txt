@@ -1,6 +1,4 @@
 [walk] sync: instances=5 wrote=0 unparsed=0 reminted=0 placeholders=5 christened=0
-[migrate] backup=<dir>/legacy-minc_premigrate_STAMP.aep
-[migrate] backups=[object Object]
 [migrate] bitsPerChannel=32
 [migrate] config=<dir>/config-acescg-interface.ocio
 [migrate] effectConfig=config-acescg.ocio

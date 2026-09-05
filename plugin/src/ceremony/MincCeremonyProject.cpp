@@ -34,20 +34,6 @@ static std::string Dirname(const std::string &p) {
     size_t s = p.find_last_of('/');
     return s == std::string::npos ? std::string() : p.substr(0, s);
 }
-static std::string Basename2(const std::string &p) {
-    size_t s = p.find_last_of('/');
-    return s == std::string::npos ? p : p.substr(s + 1);
-}
-static bool CopyFileBytes(const std::string &from, const std::string &to) {
-    FILE *a = fopen(from.c_str(), "rb");
-    if (!a) return false;
-    FILE *b = fopen(to.c_str(), "wb");
-    if (!b) { fclose(a); return false; }
-    char buf[65536]; size_t n; bool ok = true;
-    while ((n = fread(buf, 1, sizeof(buf), a)) > 0) if (fwrite(buf, 1, n, b) != n) { ok = false; break; }
-    fclose(a); fclose(b);
-    return ok;
-}
 
 /* ---------------- AE-side helpers ---------------- */
 struct PEnv {
@@ -73,44 +59,6 @@ static bool SaveTo(PEnv &e, const std::string &path) {
     A_UTF16Char u16[1024];
     MincU8ToU16(path.c_str(), u16, 1024);
     return e.pjs->AEGP_SaveProjectToPath(projH, u16) == A_Err_NONE;
-}
-static bool Reopen(PEnv &e, const std::string &path) {
-    A_UTF16Char u16[1024];
-    MincU8ToU16(path.c_str(), u16, 1024);
-    AEGP_ErrReportState errState;                         /* OUT struct — nullptr here CRASHED AE */
-    if (e.uts) e.uts->AEGP_StartQuietErrors(&errState);   /* missing-footage etc. on reopen */
-    AEGP_ProjectH nh = nullptr;
-    A_Err err = e.pjs->AEGP_OpenProjectFromPath(u16, &nh);
-    if (e.uts) e.uts->AEGP_EndQuietErrors(FALSE, &errState);
-    return err == A_Err_NONE;
-}
-static std::string BackupCopy(const std::string &projPath, const char *tag, std::string *err) {
-    std::string dir = Dirname(projPath) + "/_minColor";
-    mfs::mkdirs(dir);
-    dir += "/backups";
-    mfs::mkdirs(dir);
-    time_t t = time(nullptr);
-    struct tm tmv; mfs::localTime(&t, &tmv);
-    char stamp[32];
-    snprintf(stamp, sizeof(stamp), "%04d%02d%02d-%02d%02d%02d",
-             tmv.tm_year + 1900, tmv.tm_mon + 1, tmv.tm_mday, tmv.tm_hour, tmv.tm_min, tmv.tm_sec);
-    std::string name = Basename2(projPath);
-    if (name.size() > 4 && name.compare(name.size() - 4, 4, ".aep") == 0) name = name.substr(0, name.size() - 4);
-    std::string base = dir + "/" + name + "_" + tag + "_" + stamp;
-    std::string bpath = base + ".aep";
-    int n = 2;
-    while (PathExists(bpath)) { char sfx[16]; snprintf(sfx, sizeof(sfx), "-%d", n++); bpath = base + sfx + ".aep"; }
-    if (!CopyFileBytes(projPath, bpath)) { if (err) *err = "backup copy failed"; return ""; }
-    return bpath;
-}
-static std::string ProvenanceRecord(const std::string &preset, const std::string &config) {
-    time_t t = time(nullptr);
-    struct tm tmv; mfs::localTime(&t, &tmv);
-    char date[16];
-    snprintf(date, sizeof(date), "%04d-%02d-%02d", tmv.tm_year + 1900, tmv.tm_mon + 1, tmv.tm_mday);
-    return std::string("{\"tool\":\"minColor\",\"panel\":\"") + MINC_VERSION_STR +
-           "\",\"plugin\":\"" + MINC_VERSION_STR + "\",\"ocioEngine\":\"native\",\"preset\":\"" + preset +
-           "\",\"config\":\"" + config + "\",\"date\":\"" + date + "\"}";
 }
 static void SetBitDepth(PEnv &e, const std::string &family, int *out) {
     AEGP_ProjectH projH = nullptr;
@@ -472,9 +420,9 @@ std::string MincMigrateProject(SPBasicSuite *bp, AEGP_PluginID id, const std::st
     std::string ifacePath, ierr;
     if (!MincWriteInterfaceConfig(projPath, presetKey, &ifacePath, &ierr))
         return "{ \"error\": " + JStr(ierr) + " }\n";
-    if (!SaveTo(e, projPath)) return "{ \"error\": \"save failed\" }\n";
-    std::string berr, bpath = BackupCopy(projPath, "premigrate", &berr);
-    if (bpath.empty()) return "{ \"error\": " + JStr(berr) + " }\n";
+    /* No forced save, no backup: migrate is a LIVE, in-app operation now (config switch + effect
+       rebuild via AE's own API), so AE's undo covers it until the user chooses to save. minColor no
+       longer writes a _minColor/backups copy or edits the .aep file. */
 
     /* PRE-SWITCH SAFETY (2026-09-03): when the project is in OCIO FALLBACK (ocioOn == false — its
        pinned config didn't load: unmounted volume / deleted config), its native OCIO effects are
@@ -551,26 +499,13 @@ std::string MincMigrateProject(SPBasicSuite *bp, AEGP_PluginID id, const std::st
     MincAuthoritySnapshot snap = {}; MincAuthorityGet(&snap);   /* MEASURED working, not a claim */
     std::string wsNow = snap.workingSpace[0] ? std::string(snap.workingSpace) : std::string("None (neutralized)");
     std::string locus = "sidecar (project-local)";       /* embrace-None always pins the _minColor copy */
-    /* backups stats (:658-666) */
-    int bcount = 0; double bmb = 0;
-    {
-        std::string bdir = Dirname(projPath) + "/_minColor/backups";
-        for (auto &e : mfs::listFiles(bdir)) {
-            const std::string &n = e.name;
-            if (n.size() > 4 && n.compare(n.size() - 4, 4, ".aep") == 0) { ++bcount; bmb += e.size / 1048576.0; }
-        }
-        bmb = (double)((long)(bmb * 10 + 0.5)) / 10.0;
-    }
     char nums[256];
     snprintf(nums, sizeof(nums),
              ", \"effectsRebuilt\": %d, \"viewRenderRetargeted\": %d, \"bitsPerChannel\": %d",
              (int)rb.rebuilt.size(), rb.viewRender, bpc);
-    char bstats[64];
-    snprintf(bstats, sizeof(bstats), "{ \"count\": %d, \"mb\": %.1f }", bcount, bmb);
     return "{ \"preset\": " + JStr(presetKey) + ", \"working\": " + JStr(wsNow) +
            ", \"config\": " + JStr(ifacePath) + ", \"effectConfig\": " + JStr(pr.config) +
            ", \"pinLocus\": " + JStr(locus) + nums +
-           ", \"backup\": " + JStr(bpath) +
            ", \"effectsFailed\": " + JArr(rb.failed) +
            ", \"effectsRemapped\": " + JArr(rb.remapped) +
            ", \"effectsRemoved\": " + JArr(rb.removed) +
@@ -578,8 +513,7 @@ std::string MincMigrateProject(SPBasicSuite *bp, AEGP_PluginID id, const std::st
            ", \"effectsForeign\": " + JArr(rb.foreign) +
            ", \"strippedPipeline\": " + JArr(rb.strippedPipeline) +
            ", \"gradesLeft\": " + JArr(rb.gradesLeft) +
-           ", \"orphanLayers\": " + JArr(rb.orphans) +
-           ", \"backups\": " + bstats + " }\n";
+           ", \"orphanLayers\": " + JArr(rb.orphans) + " }\n";
 }
 
 
@@ -603,26 +537,35 @@ std::string MincRepairProject(SPBasicSuite *bp, AEGP_PluginID id) {
     if (d.status == "green") return "{ \"status\": \"green\", \"action\": \"none\" }\n";
     if (d.repairTarget.empty())
         return "{ \"error\": " + JStr("cannot repair (" + d.status + ": " + d.text + ") \xe2\x80\x94 run Migrate") + " }\n";
-    if (!SaveTo(e, projPath)) return "{ \"error\": \"save failed\" }\n";
-    std::string berr, bpath = BackupCopy(projPath, "prerepair", &berr);
-    if (bpath.empty()) return "{ \"error\": " + JStr(berr) + " }\n";
-    /* Path 2: (re)generate the portable lean interface config so d.repairTarget resolves, then pin
-       THAT — AE only ever pins the neutralizer; the effect renders from its own (embedded) config. */
+    /* LIVE re-pin (2026-09-05): no .aep surgery, no reopen, no backup. Regenerate the portable lean
+       interface config (handles a deleted sidecar), then switch the pin live via the same bridge
+       Migrate uses — AE only ever pins the neutralizer; the effect renders from its own embedded
+       config. AE's undo covers this until the user saves. */
+    std::string ifacePath = d.repairTarget;
     if (!d.preset.empty()) {
         std::string ifp, ierr;
         if (!MincWriteInterfaceConfig(projPath, d.preset, &ifp, &ierr))
             return "{ \"error\": " + JStr("cannot rebuild interface config: " + ierr + " \xe2\x80\x94 run Migrate") + " }\n";
+        ifacePath = ifp;                                 /* the freshly-written config is authoritative */
     }
-    std::vector<MincFootagePatch> none;
-    std::vector<MincXmpUpsert> noXmp;
-    std::string perr;
-    if (!MincRifxPatchProject(projPath.c_str(), d.repairTarget.c_str(), nullptr, none, noXmp, &perr))
-        return "{ \"error\": " + JStr("patch failed: " + perr) + " }\n";
-    if (!Reopen(e, projPath)) return "{ \"error\": \"reopen failed\" }\n";
+    std::string js = "app.project.colorManagementSystem=1; app.project.ocioConfigurationFile=" + JStr(ifacePath) + ";";
+    std::string scriptErr;
+    if (uts) {
+        AEGP_MemHandle resH = nullptr, errH = nullptr;
+        uts->AEGP_ExecuteScript(id, js.c_str(), FALSE, &resH, &errH);
+        if (errH) {
+            void *p = nullptr;
+            suites.MemorySuite1()->AEGP_LockMemHandle(errH, &p);
+            if (p && ((char *)p)[0]) scriptErr = (char *)p;
+            suites.MemorySuite1()->AEGP_UnlockMemHandle(errH);
+            suites.MemorySuite1()->AEGP_FreeMemHandle(errH);
+        }
+        if (resH) suites.MemorySuite1()->AEGP_FreeMemHandle(resH);
+    }
+    if (!scriptErr.empty()) return "{ \"error\": " + JStr("config switch failed: " + scriptErr) + " }\n";
     MincAuthorityRefreshBp(bp, id);
     MincWriteMenus(bp, id);
-    MincSyncFromNames(bp, id);                           /* panel repair's syncPluginNames */
+    MincSyncFromNames(bp, id);                           /* refresh effects against the healed authority */
     MincDoctorResult after = MincDoctorDiagnose(bp, id);
-    return "{ \"status\": " + JStr(after.status) + ", \"repairedTo\": " + JStr(d.repairTarget) +
-           ", \"backup\": " + JStr(bpath) + " }\n";
+    return "{ \"status\": " + JStr(after.status) + ", \"repairedTo\": " + JStr(ifacePath) + " }\n";
 }

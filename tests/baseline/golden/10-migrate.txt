@@ -1,5 +1,3 @@
-[migrate] backup=<dir>/mig10_premigrate_STAMP.aep
-[migrate] backups=[object Object]
 [migrate] bitsPerChannel=32
 [migrate] config=<dir>/config-lin709-interface.ocio
 [migrate] effectConfig=config-lin709.ocio

@@ -335,7 +335,7 @@
     if (dd.items.length) dd.selection = 0;
     bindDD(dd, "setupPreset");
     dlg.add("statictext", undefined, "Pins the OCIO config live (no restart) and rebuilds minColor effects.");
-    dlg.add("statictext", undefined, "Footage assignments are harvested as suggestions. Backs up first.");
+    dlg.add("statictext", undefined, "Footage assignments are harvested as suggestions. Live — undo before you save to revert.");
     var r2 = dlg.add("group"); r2.alignment = ["right", "top"];
     var bMig = flatButton(r2, "Migrate Current", { width: 124, primary: true });
     var bCxl = flatButton(r2, "Cancel", { width: 72, outline: true });
@@ -355,8 +355,7 @@
       return "working=" + r.working + (r.bitsPerChannel ? " \u00b7 " + r.bitsPerChannel + " bpc" : "") +
              " | pin: " + (r.pinLocus || "?") + " rebuilt=" + (r.effectsRebuilt || 0) +
              " remapped=" + (r.effectsRemapped ? r.effectsRemapped.length : 0) +
-             " view/render=" + (r.viewRenderRetargeted || 0) +
-             " | backups: " + (r.backups ? r.backups.count + " (" + r.backups.mb + " MB)" : "?");
+             " view/render=" + (r.viewRenderRetargeted || 0);
     });
   };
 

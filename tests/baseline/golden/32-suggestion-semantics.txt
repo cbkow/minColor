@@ -11,8 +11,6 @@
     fx 1 [MINC XFORM] 'minColor: Rec.1886 → working'
   layer 2 'ramp_prores_nclc111.mov' enabled=true guide=false adj=false
     fx 1 [MINC XFORM] 'minColor: Rec.1886 → working'
-[migrate] backup=<dir>/sem32mig_premigrate_STAMP.aep
-[migrate] backups=[object Object]
 [migrate] bitsPerChannel=16
 [migrate] config=<dir>/config-sdr22-interface.ocio
 [migrate] effectConfig=config-sdr22.ocio

@@ -7,7 +7,6 @@
 [broken] repairTarget=<dir>/config-acescg-interface.ocio
 [broken] status=yellow
 [broken] text=config path needs re-pointing
-[repaired] backup=<dir>/rep30_prerepair_STAMP.aep
 [repaired] repairedTo=<dir>/config-acescg-interface.ocio
 [repaired] status=green
 [after] canRepair=false
