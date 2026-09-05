@@ -15,6 +15,8 @@ namespace fs = std::filesystem;
 inline void mkdirs(const std::string &p) { std::error_code ec; fs::create_directories(p, ec); }
 inline bool removeFile(const std::string &p) { std::error_code ec; return fs::remove(p, ec); }
 inline bool exists(const std::string &p) { std::error_code ec; return fs::exists(p, ec); }
+/* atomic-ish replace: POSIX rename() overwrites, Windows rename() fails with EEXIST; fs::rename does both */
+inline bool replaceFile(const std::string &from, const std::string &to) { std::error_code ec; fs::rename(from, to, ec); return !ec; }
 
 /* recursive copy, skipping files that already exist (copyTree port) */
 inline void copyTree(const std::string &from, const std::string &to) {

@@ -127,7 +127,7 @@ MincMenuLists MincMenuListsFor(const std::string &presetKey, const std::string &
     MincMenuLists m;
     m.preset = presetKey;
     m.family = MincFamilyFor(presetKey);
-#ifdef AE_OS_WIN
+#if defined(AE_OS_WIN) || defined(_WIN32)             /* no AE header here: AE_OS_WIN alone is never set */
     m.defView = "Windows Video View";
 #else
     m.defView = "macOS Video View";                              /* platform video view (:874) */
