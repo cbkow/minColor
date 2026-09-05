@@ -2,6 +2,8 @@
 
 **minColor** is an OCIO-based color setup and a workflow plugin for Adobe After Effects. It manages your media and timeline color spaces —  bypassing AE's "Interpret Media" workflow.
 
+> minColor's approach — assigning color per layer with OCIO effects on the timeline — follows the trail blazed by **Brendan Bolles' [fnordware OpenColorIO plug-in](https://www.fnord.com) for After Effects**. No fnordware code is used; the debt is one of ideas, gratefully acknowledged. See [Credits & third-party notices](THIRD-PARTY-NOTICES.md).
+
 **Two OCIO-based workflows are included:**
 - **Linear** workflows with common `ACES` and `Blender` staples — a hybrid of ACES 2.0 and Blender 5.2 configs made compatible with After Effects' current legacy OCIO 2.4 setup. These have familiar settings for anyone comfortable with `ACES` or `Blender` setups.
 - An **SDR** workflow meant to supplement Adobe's legacy ICC/ICM workflow for daily SDR work. The SDR config is based on a `Rec. 709, Gamma 2.2` working space, with easy transforms to `sRGB` and `Rec. 1886` for viewing and output.
@@ -76,3 +78,10 @@ The minColor effect carries its own copy of every color transform, so it renders
 - [Using minColor](docs/using.md)
 - [Technical overview](docs/overview.md)
 - [Building and releasing](docs/building.md)
+
+## Credits
+
+Inspired by Brendan Bolles' fnordware OpenColorIO plug-in for After Effects. Built on
+[OpenColorIO](https://opencolorio.org) (BSD-3-Clause) and colour transforms from the Blender project
+(AgX / Filmic, Troy Sobotka) and [ACES](https://acescentral.com) (A.M.P.A.S.). Full attributions and
+licences: [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
