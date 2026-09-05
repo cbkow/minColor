@@ -41,6 +41,9 @@
          DefaultVersion (= prebuilt version.txt) makes MSI compare versions instead and lay the engine down. -->
     <ComponentGroup Id="Engine" Directory="MINCOLORDIR">
       <Component><File Source="$(var.Prebuilt)\minColorCST.aex" DefaultVersion="$(var.EngineVersion)" /></Component>
+      <!-- licence + third-party notices travel with the install (BSD/MIT deps require it) -->
+      <Component><File Source="$(var.Root)\LICENSE" Name="LICENSE.txt" /></Component>
+      <Component><File Source="$(var.Root)\THIRD-PARTY-NOTICES.md" /></Component>
       <Component><File Source="$(var.Prebuilt)\version.txt" DefaultVersion="$(var.EngineVersion)" />
         <!-- folders a dev-install / zip created before the MSI owned them are not MSI's to remove; sweep them if empty -->
         <RemoveFolder Id="RmMinConfigs" Directory="MINCONFIGS" On="uninstall" />

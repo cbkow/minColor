@@ -20,6 +20,7 @@ STAGE="$(mktemp -d)"; trap 'rm -rf "$STAGE"' EXIT
 MC="$STAGE/root/Library/Application Support/Adobe/Common/Plug-ins/7.0/MediaCore/minColor"
 mkdir -p "$MC"
 ditto "$PLUGIN" "$MC/minColorCST.plugin"
+cp "$ROOT/LICENSE" "$ROOT/THIRD-PARTY-NOTICES.md" "$MC/"   # licence + notices travel with the install (BSD/MIT deps require it)
 # NO config store on disk: the effect embeds its configs+LUTs and the AEGP embeds presets.json +
 # extension-defaults.json + render-presets.json + config text, seeding settings/ from those on launch.
 # The package is the two binaries + the shell — nothing else ships (verified store-less: suite green).

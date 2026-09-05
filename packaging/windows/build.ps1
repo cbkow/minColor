@@ -31,7 +31,7 @@ foreach ($ae in "2025", "2026") {
 }
 $Out = "$Root\dist-panel\minColor-$Ver.msi"
 wix build "$PSScriptRoot\minColor.wxs" -ext WixToolset.Util.wixext -arch x64 `
-  -d "Version=$Ver" -d "EngineVersion=$EngineVer" -d "Prebuilt=$Root\plugin\prebuilt\windows" `
+  -d "Version=$Ver" -d "EngineVersion=$EngineVer" -d "Prebuilt=$Root\plugin\prebuilt\windows" -d "Root=$Root" `
   -d "Panel2025=$Stage\panel-2025" -d "Panel2026=$Stage\panel-2026" -o $Out
 if ($LASTEXITCODE) { throw "wix build failed ($LASTEXITCODE)" }
 Write-Host "-> $Out"

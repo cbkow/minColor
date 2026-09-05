@@ -42,6 +42,11 @@ def main():
     shell = open(os.path.join(SRC, "minColor Shell.jsx"), encoding="utf-8").read()
     open(os.path.join(OUT, "minColor.jsx"), "w", encoding="utf-8").write(inline(shell, SRC))
 
+    # ---- licence + third-party notices travel with the binaries (BSD/MIT deps require it) ----
+    for lic in ("LICENSE", "THIRD-PARTY-NOTICES.md"):
+        src = os.path.join(ROOT, lic)
+        if os.path.exists(src): shutil.copy(src, OUT)
+
     # ---- macOS engine: effect (MediaCore) + AEGP (app Plug-ins) ----
     plugin_src = os.path.join(ROOT, "plugin", "build", "minColorCST.plugin")
     aegp_src = os.path.join(ROOT, "plugin", "build", "minColorAEGP.plugin")
