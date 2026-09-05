@@ -65,7 +65,7 @@ To be extra clear, except for the macOS flavors, these are all aliases for commo
 
 #### ***How minColor sets your color management***
 
-The AE SDK doesn't expose what you need to manage color space programmatically, so minColor sets the project's OCIO config for you through After Effects' own scripting bridge. **Migrate** writes a small `_minColor` folder next to your project and saves a time-stamped backup.
+The AE SDK doesn't expose what you need to manage color space programmatically, so minColor sets the project's OCIO config for you through After Effects' own scripting bridge. **Migrate** writes a small `_minColor` folder next to your project (the lean config AE pins). It's a live, in-app change — minColor never edits or backs up your `.aep`; undo it before you save if you want to revert.
 
 The minColor effect carries its own copy of every color transform, so it renders the same wherever the project lands — in the app and in `aerender` — with no config files to chase and no broken config paths.
 

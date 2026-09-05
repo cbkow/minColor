@@ -45,4 +45,4 @@ No config store is installed — the configs live in the binaries. The settings 
 
 ## The `_minColor` sidecar
 
-Migrate writes a `_minColor` folder beside the project: the lean interface config AE pins, and a timestamped `.aep` backup taken before any change. It travels with the project, and holds no LUTs or full configs — the effect carries those.
+Migrate writes a `_minColor` folder beside the project: the lean interface config AE pins (plus a small `minColor.json`). It travels with the project, and holds no LUTs, no full configs, and no backups — Migrate and Repair are live, in-app changes (undo before saving to revert), and the effect carries its own configs.
