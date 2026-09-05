@@ -5,7 +5,7 @@
 > minColor's approach is inspired by **Brendan Bolles' [fnordware OpenColorIO plug-in](https://www.fnord.com) for After Effects**. See [Credits & third-party notices](THIRD-PARTY-NOTICES.md).
 
 **Two OCIO-based workflows are included:**
-- **Linear** workflows with common `ACES` and `Blender` staples — a hybrid of ACES 2.0 and Blender 5.2 configs made compatible with After Effects' current legacy OCIO 2.4 setup. These have familiar settings for anyone comfortable with `ACES` or `Blender` setups.
+- **Linear** workflows with common `ACES` and `Blender` staples. These have familiar settings for anyone comfortable with `ACES` or `Blender` setups.
 - An **SDR** workflow meant to supplement Adobe's legacy ICC/ICM workflow for daily SDR work. The SDR config is based on a `Rec. 709, Gamma 2.2` working space, with easy transforms to `sRGB` and `Rec. 1886` for viewing and output.
 
 Windows- and macOS-flavored view transforms are provided to counteract differences in how After Effects handles color management in each OS. Use this workaround for proper viewport colors on macOS until Adobe fixes it.
