@@ -264,12 +264,14 @@
     if (d) d.__fresh = changed;                       // heal only on TRANSITION, never every tick
     return d;
   }
-  function liveHeal(d) {                              // the panel's auto-heal, engine-computed target
+  function liveHeal(d) {                              // the panel's auto-heal (after a panel command on yellow)
+    /* Through the NATIVE Repair (2026-09-06): it regenerates the _minColor interface config from the
+       embedded preset, re-pins live, rewrites the menus and syncs the effects. The old shell-side
+       re-pin only set the path — with the _minColor folder missing it pinned a file that did not
+       exist and the lamp stayed yellow. */
     var oldPin = app.project.ocioConfigurationFile || "(empty)";
-    app.project.colorManagementSystem = 1;            // (CMS enum: OCIO)
-    app.project.ocioConfigurationFile = d.repairTarget;
+    runCmd("minColor: Repair", {}, "repair");
     app.purge(PurgeTarget.ALL_CACHES);                // cached frames predate the heal
-    runCmd("minColor: Sync From Names", {});          // refresh the effects against the healed authority
     var after = doctorNow();
     if (after && after.status === "green") {
       log("auto-repaired config pin");
@@ -339,9 +341,12 @@
   }
   bRepair.onClick = function () {
     guard("Repair", function () {
-      var d = doctorNow();
-      if (d && d.repairTarget) { liveHeal(d); return "healed"; }
-      var r = runCmd("minColor: Repair", {}, "repair");   // shell-less twin as fallback (reopens)
+      /* ALWAYS the native command (2026-09-06): it regenerates the _minColor interface config from
+         the embedded preset before re-pinning, so a project that arrived WITHOUT its _minColor
+         folder still heals. The shell-side liveHeal only re-points the pin — on a missing file
+         it pinned a path that did not exist and the lamp stayed yellow. (Native Repair has been a
+         live re-pin, no reopen, since 2026-09-05 — the old reason to avoid it is gone.) */
+      var r = runCmd("minColor: Repair", {}, "repair");
       return r.status + (r.repairedTo ? " \u2190 " + r.repairedTo : "");
     });
   };
