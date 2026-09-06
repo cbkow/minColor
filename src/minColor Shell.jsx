@@ -78,10 +78,13 @@
     return r;
   }
   function cap(a) { return a.length <= 14 ? a.join("\n  ") : a.slice(0, 14).join("\n  ") + "\n  \u2026 and " + (a.length - 14) + " more"; }
+  var busy = false;                                     /* a command is running: focus refresh must not re-enter */
   function guard(label, fn) {
+    busy = true;
     try { log(label + "\u2026"); unstick(); } catch (eB) {}
     try { var r = fn(); log(label + ": " + (r === undefined ? "ok" : r)); refreshDoctor(); }
     catch (e) { log(label + " FAILED: " + e.toString()); unstick(); }   /* status line only \u2014 no popups */
+    finally { busy = false; }
   }
 
   // ---- dropdown feeds: plugin-menus.json (AEGP-written; menus follow the pin) ----
@@ -230,7 +233,7 @@
   var rowDoc = hrow(win); rowDoc.alignChildren = ["left", "center"];
   var dot = rowDoc.add("iconbutton", undefined, undefined, { style: "toolbutton" });
   dot.preferredSize = [18, 18]; dot.dotColor = [0.6, 0.6, 0.6, 1];
-  dot.helpTip = "minColor Doctor \u2014 click to re-check now (auto-checks every 5 s)";
+  dot.helpTip = "minColor Doctor";                    /* a pure indicator: the action is the Check button */
   dot.onDraw = function () {
     var g = this.graphics;
     g.newPath(); g.ellipsePath(3, 3, 12, 12);
@@ -240,6 +243,7 @@
     g.fillPath(g.newBrush(g.BrushType.SOLID_COLOR, [1, 1, 1, 0.28]));
   };
   var docText = rowDoc.add("statictext", undefined, "\u2026", { truncate: "end" }); docText.alignment = ["fill", "center"];
+  var bCheck = flatButton(rowDoc, "Check", { width: 60, tip: "Run Doctor now" });
   var bRepair = flatButton(rowDoc, "Repair", { width: 60 }); bRepair.visible = false;
   bRepair.helpTip = "One-click fix: re-point the engine at this project's local config copy";
 
@@ -281,27 +285,27 @@
   function currentProjPath() {                        // "" when unsaved / no project (matches the AEGP)
     try { return app.project.file ? String(app.project.file.fsName).replace(/\\/g, "/") : ""; } catch (eP) { return ""; }
   }
-  function showUnchecked(why) {                       // grey lamp: an honest "not checked yet"
-    dot.dotColor = [0.55, 0.55, 0.55, 1];
-    dot.helpTip = "Doctor: " + why + "  (click to check)";
-    docText.text = "click the lamp to check";
+  function showUnchecked() {                          // grey lamp: NOT a fault — nothing has asked yet.
+    dot.dotColor = [0.55, 0.55, 0.55, 1];             // Doctor runs on Check, on panel focus and after
+    dot.helpTip = "Doctor hasn\u2019t looked at this project yet";   // every command; there is no background loop.
+    docText.text = "not checked yet";
     if (bRepair.visible) { bRepair.visible = false; fitRow(rowDoc); }
   }
-  function refreshDoctor(passive) {
+  function refreshDoctor(passive, noHeal) {
     try {
       var d = doctorNow(passive);
-      if (!d) { if (!passive) docText.text = "no doctor report"; else showUnchecked("no report yet"); return; }
+      if (!d) { if (!passive) docText.text = "no doctor report"; else showUnchecked(); return; }
       /* a passive read is only trustworthy for the project it was written about */
-      if (passive && (d.projPath || "") !== currentProjPath()) { showUnchecked("last report was for another project"); return; }
-      /* heal ONLY on a user-initiated check — NEVER from the heartbeat: a background
-         executeCommand collides with open modals ("can't run the script while a modal is
-         going") and mutates the project unbidden. Path 2's interface pin makes auto-heal moot. */
-      if (!passive && d.status === "yellow" && d.repairTarget) { try { d = liveHeal(d); } catch (eAR) {} }
+      if (passive && (d.projPath || "") !== currentProjPath()) { showUnchecked(); return; }
+      /* heal ONLY after a panel command (guard) — never from a passive read, never from Check, and never from the
+         focus refresh (noHeal): re-pinning the project because the user clicked INTO the panel
+         would mutate it unbidden. Path 2's interface pin makes auto-heal moot anyway. */
+      if (!passive && !noHeal && d.status === "yellow" && d.repairTarget) { try { d = liveHeal(d); } catch (eAR) {} }
       var pk = d.preset || null, pin = d.pin || null;
       if (pk !== currentPreset || pin !== currentPin) { try { repopulateMenus(); currentPreset = pk; currentPin = pin; } catch (eRp) {} }
       var colors = { green: [0.28, 0.82, 0.4, 1], yellow: [0.95, 0.78, 0.18, 1], red: [0.94, 0.32, 0.28, 1], unmanaged: [0.55, 0.55, 0.55, 1] };
       dot.dotColor = colors[d.status] || colors.unmanaged;
-      dot.helpTip = "Doctor: " + d.status + " \u2014 " + d.text + "  (click to re-check)";
+      dot.helpTip = "Doctor: " + d.status + " \u2014 " + d.text;
       docText.text = d.text;
       var showRepair = (d.status === "yellow" && d.canRepair);
       if (bRepair.visible !== showRepair) { bRepair.visible = showRepair; fitRow(rowDoc); }
@@ -309,7 +313,30 @@
     } catch (e) { docText.text = "status unavailable: " + e; }
     unstick();
   }
-  dot.onClick = function () { try { this.active = false; } catch (eA) {} refreshDoctor(); };
+  /* Check = a check, nothing more: it never heals. Repair is its own button whenever the lamp is
+     yellow, so the two verbs stay separate (the old clickable lamp healed on yellow, which surprised). */
+  bCheck.onClick = function () {
+    if (busy) return;
+    busy = true;
+    try { this.active = false; } catch (eA) {}
+    try { log("Check\u2026"); unstick(); refreshDoctor(false, true); log("Check: " + docText.text); }
+    catch (eK) { log("Check FAILED: " + eK.toString()); }
+    finally { busy = false; }
+    unstick();
+  };
+  /* FOCUS REFRESH (2026-09-06): when the user clicks into the panel, re-read the last report; if it
+     is not about the open project (cross-OS arrival, project swap), run Doctor — the same
+     user-driven moment as pressing Check, NOT a timer, so it cannot fire under an AE modal the way
+     the scheduled heartbeat did. Never heals. If AE refuses executeCommand anyway (a modal was
+     up), the lamp simply stays in its unchecked state. */
+  function refreshOnActivate() {
+    if (busy) return;
+    var d = null;
+    try { d = doctorNow(true); } catch (eR) {}
+    var stale = !d || (d.projPath || "") !== currentProjPath();
+    try { refreshDoctor(!stale, true); }
+    catch (eF) { showUnchecked(); }
+  }
   bRepair.onClick = function () {
     guard("Repair", function () {
       var d = doctorNow();
@@ -555,11 +582,11 @@
      while a modal is already going", and the AEGP no longer diagnoses on idle either. The
      panel is fully PASSIVE-until-clicked. Seed the lamp once from the AEGP's last
      doctor-last.json (a plain file read, never executeCommand -> safe at init) when that
-     report is about THIS project, else show the grey "click to check" state; it then
-     refreshes on click (dot.onClick) and after every command (guard). Also cancel any
+     report is about THIS project, else show the grey "not checked yet" state; it then
+     refreshes on Check, on panel focus (refreshOnActivate) and after every command (guard). Also cancel any
      heartbeat a previous panel build left scheduled. */
   try { if ($.global.__minColorTask) { app.cancelTask($.global.__minColorTask); $.global.__minColorTask = null; } } catch (eC) {}
-  try { refreshDoctor(true); } catch (eSeed) { docText.text = "click the lamp to check"; }
+  try { refreshDoctor(true); } catch (eSeed) { docText.text = "not checked yet"; }
   /* EVENT-DRIVEN redraw (no timer — a scheduled script would collide with AE's modals). AE
      reflows a docked panel on project load / workspace swaps without firing onResize, leaving it
      blank; re-lay-out whenever the panel resizes, is shown, or regains focus. onActivate is the
@@ -567,7 +594,7 @@
   function relayout() { try { win.layout.layout(true); win.layout.resize(); fitRows(); unstick(); } catch (eRL) {} }
   win.layout.layout(true); fitRows();
   win.onResizing = win.onResize = function () { relayout(); };
-  try { win.onActivate = function () { relayout(); }; } catch (eOA) {}
+  try { win.onActivate = function () { relayout(); try { refreshOnActivate(); } catch (eFR) {} }; } catch (eOA) {}
   try { win.onShow = function () { relayout(); }; } catch (eOS) {}
   if (win instanceof Window) { win.center(); win.show(); }
  } catch (eTop) {
