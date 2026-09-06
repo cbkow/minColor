@@ -11,30 +11,34 @@ If you last built before this, your panel "couldn't see the OCIO profiles" becau
 `presets.json` off disk and a bundles-only install had no store. That's fixed: the AEGP now carries
 the metadata and seeds what the shell reads. **Rebuild the AEGP and the symptom goes away.**
 
-## Updating to 2.0.2 (do this now)
+## Updating to 2.0.3 (do this now)
 
-Since the last Windows prebuilt (**2.0.1 @ee04c3b**), BOTH the **plugin** and the **script** changed —
+Since the last Windows prebuilt (**2.0.2 @affc937**), BOTH the **plugin** and the **script** changed —
 so rebuild the bundles *and* refresh the shell. What landed on `main`:
-- **`f35e681` — Repair goes live + all `.aep` backups removed (AEGP change).** Repair no longer
-  RIFX-patches the project file and reopens — it does a **live re-pin** via the same
-  `AEGP_ExecuteScript` bridge Migrate uses. And Migrate + Repair no longer force-save or write a
-  `_minColor\backups` copy: **nothing edits or backs up the `.aep` anymore** (both are live, AE-undo
-  covered until the user saves). This is in the **AEGP**, so it must be rebuilt.
-- **`src/minColor Shell.jsx` (the SCRIPT) changed with it.** The Migrate dialog now reads *"Live —
-  undo before you save to revert"* (was "Backs up first") and the migrate summary drops the backups
-  count. The MSI ships the shell, so it must be refreshed too.
-- **Version → 2.0.2** — rebuild both bundles so `version.txt` reads 2.0.2 (the MSI's DefaultVersion).
+- **`e66e3ca` — the AEGP has NO idle hook any more (AEGP change).** It used to diagnose the doctor
+  every ~5 s on idle, re-parsing the saved `.aep` from disk each tick, purely to seed the panel lamp.
+  Now the command hook runs the installed-effect scan lazily on the first command, refreshes the
+  authority snapshot before every handler, and writes `reports\doctor-last.json` after every
+  ceremony. The doctor report carries `projPath`. This is in the **AEGP**, so it must be rebuilt.
+- **`07e159c` — `src/minColor Shell.jsx` (the SCRIPT) changed with it.** The lamp is a pure indicator; a
+  quiet **Check** button runs Doctor on demand (never heals — **Repair** is its own button on yellow);
+  clicking into the panel refreshes the lamp for the open project (runs Doctor only when the last
+  report is about another project — the cross-OS arrival case); the grey state reads "not checked
+  yet". The MSI ships the shell, so it must be refreshed too.
+- **Version → 2.0.3** — rebuild both bundles so `version.txt` reads 2.0.3 (the MSI's DefaultVersion).
 
 **Update checklist (details in the numbered sections below):**
 1. `git checkout main && git pull`.
 2. Rebuild **both** bundles: `cmake --build plugin\build --config Release` (§2). Confirm
-   `plugin\build\Release\version.txt` reads **2.0.2**.
+   `plugin\build\Release\version.txt` reads **2.0.3**.
 3. Refresh the prebuilt + commit (§3): copy `minColorCST.aex`, `minColorAEGP.aex`, `version.txt`
    from `plugin\build\Release` to `plugin\prebuilt\windows\`.
 4. Rebuild the MSI (§4): `python build\build.py` (re-inlines the updated shell into
    `dist-panel\minColor.jsx`, which the MSI ships) then `build.ps1`.
-5. Verify (§5): version **2.0.2**; **Repair** re-points a broken pin live (no reopen); and neither
-   Migrate nor Repair creates a `_minColor\backups` folder.
+5. Verify (§5): version **2.0.3**; `%TEMP%\minColorAEGP.log` boot line reads
+   `commands registered=12 hook=0 menuhook=0` (no `idle=`); the panel's Doctor row shows the lamp +
+   **Check**; open a project Migrated on the mac and click into the panel → lamp goes yellow with
+   **Repair** showing, without pressing Check; Repair re-points the pin live (no reopen).
 
 For a quick dev loop instead of the MSI: `dev-install.bat` (both bundles) + `dev-install-panel.bat`
 (the updated shell) — §2b.
@@ -43,7 +47,7 @@ For a quick dev loop instead of the MSI: `dev-install.bat` (both bundles) + `dev
 
 ```
 git checkout main
-git pull                     # need through the 2.0.2 bump (Repair live + backups removed; also 2.0.1 interpret fix + panel theme)
+git pull                     # need through the 2.0.3 bump (idle doctor removed; panel Check button + focus refresh)
 ```
 
 ## 1. Prereqs
