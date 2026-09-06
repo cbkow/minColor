@@ -79,11 +79,9 @@
   }
   function cap(a) { return a.length <= 14 ? a.join("\n  ") : a.slice(0, 14).join("\n  ") + "\n  \u2026 and " + (a.length - 14) + " more"; }
   function guard(label, fn) {
-    $.global.__minColorBusy = true;                     /* the heartbeat yields while a command runs */
     try { log(label + "\u2026"); unstick(); } catch (eB) {}
     try { var r = fn(); log(label + ": " + (r === undefined ? "ok" : r)); refreshDoctor(); }
     catch (e) { log(label + " FAILED: " + e.toString()); unstick(); }   /* status line only \u2014 no popups */
-    finally { $.global.__minColorBusy = false; }
   }
 
   // ---- dropdown feeds: plugin-menus.json (AEGP-written; menus follow the pin) ----
@@ -248,9 +246,11 @@
   var currentPreset = null, currentPin = null;
   function doctorNow(passive) {
     if (!passive) return runCmd("minColor: Doctor", {}, "doctor");   // user-initiated: run the command
-    /* heartbeat is READ-ONLY: the AEGP diagnoses on idle and writes doctor-last.json on
-       change — a panel timer must NEVER executeCommand (AE dispatch mid-startup or
-       mid-project-load throws script errors and can kill the panel's drawing).         */
+    /* passive = a plain file read of the AEGP's LAST report (written by the Doctor command
+       and after every ceremony — there is no idle loop). Safe at panel init, where an
+       executeCommand mid-startup / mid-project-load throws script errors and can kill the
+       panel's drawing. The report may describe an earlier project: refreshDoctor checks
+       its projPath against the open project before trusting it.                         */
     var f = new File(SETTINGS + "/reports/doctor-last.json");
     if (!f.exists || !f.open("r")) return null;
     var s = f.read(); f.close();
@@ -278,10 +278,21 @@
     }
     return after || d;
   }
+  function currentProjPath() {                        // "" when unsaved / no project (matches the AEGP)
+    try { return app.project.file ? String(app.project.file.fsName).replace(/\\/g, "/") : ""; } catch (eP) { return ""; }
+  }
+  function showUnchecked(why) {                       // grey lamp: an honest "not checked yet"
+    dot.dotColor = [0.55, 0.55, 0.55, 1];
+    dot.helpTip = "Doctor: " + why + "  (click to check)";
+    docText.text = "click the lamp to check";
+    if (bRepair.visible) { bRepair.visible = false; fitRow(rowDoc); }
+  }
   function refreshDoctor(passive) {
     try {
       var d = doctorNow(passive);
-      if (!d) { if (!passive) docText.text = "no doctor report"; return; }
+      if (!d) { if (!passive) docText.text = "no doctor report"; else showUnchecked("no report yet"); return; }
+      /* a passive read is only trustworthy for the project it was written about */
+      if (passive && (d.projPath || "") !== currentProjPath()) { showUnchecked("last report was for another project"); return; }
       /* heal ONLY on a user-initiated check — NEVER from the heartbeat: a background
          executeCommand collides with open modals ("can't run the script while a modal is
          going") and mutates the project unbidden. Path 2's interface pin makes auto-heal moot. */
@@ -539,11 +550,13 @@
   status.alignment = ["fill", "center"];
   status.helpTip = "minColor engine " + (ENGINE.version || "?") + " \u00b7 " + (ENGINE.buildStamp || "?");
 
-  /* NO background heartbeat: a scheduled script fires even while AE has its OWN modal up
-     (project load/save, missing footage, colour prompts) -> "can't run the script while a
-     modal is already going". The panel is fully PASSIVE-until-clicked. Seed the lamp once from
-     the AEGP's doctor-last.json (a plain file read, never executeCommand -> safe at init); it
-     then refreshes on click (dot.onClick) and after every command (guard). Also cancel any
+  /* NO background heartbeat anywhere: a scheduled script fires even while AE has its OWN
+     modal up (project load/save, missing footage, colour prompts) -> "can't run the script
+     while a modal is already going", and the AEGP no longer diagnoses on idle either. The
+     panel is fully PASSIVE-until-clicked. Seed the lamp once from the AEGP's last
+     doctor-last.json (a plain file read, never executeCommand -> safe at init) when that
+     report is about THIS project, else show the grey "click to check" state; it then
+     refreshes on click (dot.onClick) and after every command (guard). Also cancel any
      heartbeat a previous panel build left scheduled. */
   try { if ($.global.__minColorTask) { app.cancelTask($.global.__minColorTask); $.global.__minColorTask = null; } } catch (eC) {}
   try { refreshDoctor(true); } catch (eSeed) { docText.text = "click the lamp to check"; }

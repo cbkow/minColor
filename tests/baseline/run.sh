@@ -27,6 +27,9 @@ rm -rf "$OUT"; mkdir -p "$OUT"
 ae_quit
 # settings snapshot (repair/heal and ui-state writes must not leak between runs)
 rm -rf "$SETTINGS_BAK"
+# quiet-mode is a SUITE-ONLY marker: if a previous run leaked it into live state, snapshotting it
+# here would restore it at exit and silence every ceremony dialog for the user (found 2026-09-06)
+rm -f "$SETTINGS/quiet-mode"
 [ -d "$SETTINGS" ] && cp -R "$SETTINGS" "$SETTINGS_BAK" || true
 # M1 quiet-mode: ceremonies must show no dialogs during automation (restore removes the marker)
 mkdir -p "$SETTINGS"

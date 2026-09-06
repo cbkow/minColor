@@ -48,6 +48,7 @@ std::string MincDoctorResult::toJson(void) const {
     if (!pin.empty()) j += ", \"pin\": " + JsonStr(pin);
     if (behind) j += ", \"pinBehind\": { \"pinned\": " + JsonStr(behindPinned) + ", \"current\": " + JsonStr(behindCurrent) + " }";
     if (!repairTarget.empty()) j += ", \"repairTarget\": " + JsonStr(repairTarget);
+    if (!projPath.empty()) j += ", \"projPath\": " + JsonStr(projPath);
     return j + " }\n";
 }
 
@@ -122,6 +123,8 @@ MincDoctorResult MincDoctorDiagnose(SPBasicSuite *bp, AEGP_PluginID id) {
         }
     }
 
+    r.projPath = projPath;
+
     /* live colour state (same getters the snapshot uses) */
     bool cmsOk = false;
     std::string pin, workingBare;
@@ -135,7 +138,7 @@ MincDoctorResult MincDoctorDiagnose(SPBasicSuite *bp, AEGP_PluginID id) {
             /* OCIO-OFF GUARD (2026-09-03): only touch the OCIO getters when OCIO is actually
                on. On an Adobe-managed (ICC) project the working-space getter is the same
                non-OCIO-state call that crashed at the Home screen (§f2f4329) — and even when
-               it doesn't crash, poking it every 5s is minColor competing with a flow it isn't
+               it doesn't crash, poking it on every doctor run is minColor competing with a flow it isn't
                part of. OCIO off → empty pin/working → "unmanaged", the correct calm status. */
             if (cmsOk) {
                 AEGP_MemHandle pH = nullptr, wH = nullptr;

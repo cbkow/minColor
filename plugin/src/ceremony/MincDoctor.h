@@ -11,6 +11,9 @@ struct MincDoctorResult {
     std::string preset;        /* "" == null */
     std::string family = "Linear";
     std::string pin;           /* basename */
+    std::string projPath;      /* saved project path the report describes ("" = unsaved/none);
+                                  the panel compares it with app.project.file before trusting a
+                                  report written earlier — emitted only when non-empty */
     bool        behind = false;
     std::string behindPinned, behindCurrent;
     std::string repairTarget;  /* same-hash local config the heal re-points to; emitted only

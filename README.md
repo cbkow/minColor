@@ -76,7 +76,7 @@ You can then use the minColor effects as a substitute for AE’s default OCIO ef
 
 ## Healing
 
-The status line at the top of the panel is minColor's **Doctor** — it watches your project's OCIO pin. Green means the project is set up and pointing at the right config; yellow means something drifted; red spells out anything you need to fix by hand.
+The status line at the top of the panel is minColor's **Doctor** — it checks your project's OCIO pin when the panel opens, when you click the lamp, and after every minColor command (there is no background polling). Green means the project is set up and pointing at the right config; yellow means something drifted; red spells out anything you need to fix by hand.
 
 The common drift is a project made on **another machine** (or moved), where the stored config path no longer resolves. minColor **heals that automatically** — it re-points the project at its own local config, live, with no restart. You can also hit **Repair** (or run `minColor: Repair`) to do it on demand, and yellow "update available" means a newer config exists for your preset — a Migrate to the same preset refreshes it.
 
