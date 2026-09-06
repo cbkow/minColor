@@ -98,11 +98,23 @@ static void CmdAbout(void) {
     suites.UtilitySuite6()->AEGP_ReportInfoUnicode(g_id, u16);
 }
 
+/* The panel's dropdowns come from plugin-menus.json, which only ceremonies wrote. On a fresh machine
+   a project whose pin already resolves is green with no ceremony ever run — so the file never
+   appeared and the dropdowns stayed empty (found on a new install, 2026-09-06). Now the menus
+   follow the DOCTOR: whenever it identifies a preset and the file is missing or names another
+   preset, write it. Idempotent, so a matching file costs one small JSON read. */
+static void MenusFollowDoctor(const MincDoctorResult &d) {
+    if (d.preset.empty() || MincMenusFileIsFor(d.preset)) return;
+    MincLog("menus: doctor identified '%s' but plugin-menus.json is missing/other - writing", d.preset.c_str());
+    MincWriteMenusForPreset(d.preset);
+}
+
 static void CmdDoctor(void) {
     MincArgsConsume("minColor: Doctor");
     MincAuthorityRefreshBp(g_pica, g_id);
     MincDoctorResult d = MincDoctorDiagnose(g_pica, g_id);
     MincWriteReport("doctor", d.toJson());
+    MenusFollowDoctor(d);
     MincLog("doctor: %s — %s", d.status.c_str(), d.text.c_str());
     if (MincQuietMode() || MincArgsTakeSilent()) return;
     std::string msg = d.status + " \xe2\x80\x94 " + d.text;
@@ -211,6 +223,7 @@ static void DoctorAfterCommand(const char *label) {
     MincAuthorityRefreshBp(g_pica, g_id);
     MincDoctorResult d = MincDoctorDiagnose(g_pica, g_id);
     MincWriteReport("doctor", d.toJson());
+    MenusFollowDoctor(d);
     MincLog("doctor (after '%s'): %s", label, d.status.c_str());
 }
 

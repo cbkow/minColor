@@ -304,7 +304,13 @@
          would mutate it unbidden. Path 2's interface pin makes auto-heal moot anyway. */
       if (!passive && !noHeal && d.status === "yellow" && d.repairTarget) { try { d = liveHeal(d); } catch (eAR) {} }
       var pk = d.preset || null, pin = d.pin || null;
-      if (pk !== currentPreset || pin !== currentPin) { try { repopulateMenus(); currentPreset = pk; currentPin = pin; } catch (eRp) {} }
+      /* Reload the dropdowns when the preset/pin changed — OR when the loaded menus aren't for this
+         preset yet. On a fresh machine plugin-menus.json does not exist until Repair/Migrate writes
+         it; a broken-pin project reports the SAME preset + pin basename before and after Repair, so
+         the change test alone never fired and the healed project sat with empty dropdowns
+         (found on a new install, 2026-09-06). */
+      var menusStale = !!pk && (MENUS.preset || null) !== pk;
+      if (pk !== currentPreset || pin !== currentPin || menusStale) { try { repopulateMenus(); currentPreset = pk; currentPin = pin; } catch (eRp) {} }
       var colors = { green: [0.28, 0.82, 0.4, 1], yellow: [0.95, 0.78, 0.18, 1], red: [0.94, 0.32, 0.28, 1], unmanaged: [0.55, 0.55, 0.55, 1] };
       dot.dotColor = colors[d.status] || colors.unmanaged;
       dot.helpTip = "Doctor: " + d.status + " \u2014 " + d.text;
