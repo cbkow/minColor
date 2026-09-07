@@ -79,7 +79,7 @@ Windows- and macOS-flavored view transforms are provided to counteract differenc
 
 ![mC_009.png](images/mC_014.png)
 
-3. Edit these presets with the **Matches** button.
+3. Edit these presets with the **Matches** button. **Strip OCIO** removes all OCIO effects in the comp and all nested precomps recursively. It cleans up both minColor and native OCIO effects.
 
 ![mC_009.png](images/mC_013.png)
 
@@ -103,7 +103,7 @@ A yellow "update available" means a newer config exists for your preset. Running
 
 ---
 
-## The Extras
+## The Extras:
 
 To make things easier and reduce inconsistencies between AE on macOS and Windows, minColor provides common-name aliases for its View and Render options. Any **Desktop-labeled** View or Render option is an alias for `sRGB` flows—typical in web/social/direct/tech branding work. Any View or Render option labeled **"Video”** is better suited for broadcast delivery and standard commercial post-production workflows; they are aliases for `Rec. 709 gamma 2.4 / Rec. 1886 / BT. 1886`.
 
