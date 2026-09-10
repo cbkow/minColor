@@ -463,11 +463,18 @@
     dlg.add("statictext", undefined, "Extension \u2192 colour space the Interpret passes assume. \"working\" = leave as is.");
     var lb = dlg.add("listbox", undefined, [], { numberOfColumns: 2, showHeaders: true, columnTitles: ["ext", "space"], columnWidths: [70, 200] });
     lb.preferredSize = [300, 180];
-    function extMap() { var j = readJSON(SETTINGS + "/extension-defaults.json"); return (j && j.defaults) ? j.defaults : {}; }
+    /* the AEGP merges new seed rows into this file at launch and records them under "seeded"
+       (2026-09-10) so a row the user removes stays removed — every write here carries that
+       history through, or the next launch would resurrect the deleted rows.                */
+    function extDoc() { var j = readJSON(SETTINGS + "/extension-defaults.json"); return (j && j.defaults) ? j : { defaults: {} }; }
+    function extMap() { return extDoc().defaults; }
     function saveExtMap(m) {
-      var parts = [], k, ks = []; for (k in m) ks.push(k); ks.sort();
+      var doc = extDoc(), parts = [], k, ks = []; for (k in m) ks.push(k); ks.sort();
       for (var i = 0; i < ks.length; i++) parts.push(jstr(ks[i]) + ": " + jstr(m[ks[i]]));
-      writeText(SETTINGS + "/extension-defaults.json", '{ "defaults": { ' + parts.join(", ") + " } }\n");
+      var seeded = [], sd = doc.seeded;
+      if (sd && sd.length !== undefined) for (var si = 0; si < sd.length; si++) seeded.push(jstr(sd[si]));
+      writeText(SETTINGS + "/extension-defaults.json", '{ "defaults": { ' + parts.join(", ") + " }" +
+                (seeded.length ? ', "seeded": [' + seeded.join(", ") + "]" : "") + " }\n");
     }
     function refreshMap() {
       lb.removeAll();
@@ -478,23 +485,43 @@
     var et = row.add("edittext", undefined, ""); et.characters = 6;
     var dds = row.add("dropdownlist", undefined, ["working (identity)"].concat(MENUS.inputSpaces || [])); dds.selection = 0; dds.preferredSize.width = 200;
     bindDD(dds, "matchesSpace");
+    /* dirty = the user touched the field or the dropdown since the last row click / save. Done
+       used to write whenever the dropdown differed from the stored value — which it always did
+       for a value the list cannot show (a space outside this preset's menu) — so clicking such a
+       row and pressing Done silently rewrote it to identity. Now Done writes only on a real edit,
+       and a stored value missing from the list is added to it so the row round-trips as is.  */
+    var dirty = false;
+    var ddsChanged = dds.onChange;
+    dds.onChange = function () { dirty = true; if (ddsChanged) ddsChanged(); };
+    et.onChanging = function () { dirty = true; };
+    et.onChange = function () { dirty = true; };
     var row2 = dlg.add("group"); row2.alignment = ["right", "top"];
     var bSet = flatButton(row2, "Add / Update", { width: 104, primary: true });
     var bDel = flatButton(row2, "Remove", { width: 76, outline: true });
     var bDone = flatButton(row2, "Done", { width: 64 });
     try { dlg.defaultElement = bDone; } catch (eDe) {}
-    lb.onChange = function () { if (lb.selection) { et.text = lb.selection.text; var want = lb.selection.subItems[0].text; dds.selection = 0; for (var i = 1; i < dds.items.length; i++) if (dds.items[i].text === want) dds.selection = i; } };
+    lb.onChange = function () {
+      if (!lb.selection) return;
+      et.text = lb.selection.text;
+      var want = lb.selection.subItems[0].text, found = -1;
+      for (var i = 1; i < dds.items.length; i++) if (dds.items[i].text === want) { found = i; break; }
+      if (found < 0 && want !== "working") { dds.add("item", want); found = dds.items.length - 1; }
+      dds.selection = (found < 0) ? 0 : found;
+      dirty = false;
+    };
     function applyRule(quiet) {
       try { var ext = et.text.replace(/^\./, "").toLowerCase(); if (!ext) { if (quiet) return; throw new Error("type an extension"); }
         var m = extMap(); m[ext] = (dds.selection.index === 0) ? "working" : dds.selection.text;
-        saveExtMap(m); refreshMap(); } catch (e) { alert(String(e)); }
+        saveExtMap(m); refreshMap(); dirty = false; } catch (e) { alert(String(e)); }
     }
     bSet.onClick = function () { applyRule(false); };
     bDone.onClick = function () {
       try {
-        var ext = et.text.replace(/^\./, "").toLowerCase();
-        if (ext) { var m = extMap(); var want = (dds.selection.index === 0) ? "working" : dds.selection.text;
-          if (m[ext] !== want) applyRule(true); }
+        if (dirty) {
+          var ext = et.text.replace(/^\./, "").toLowerCase();
+          if (ext) { var m = extMap(); var want = (dds.selection.index === 0) ? "working" : dds.selection.text;
+            if (m[ext] !== want) applyRule(true); }
+        }
       } catch (eD) {}
       dlg.close(1);
     };

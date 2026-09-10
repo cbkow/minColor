@@ -49,6 +49,8 @@ static std::map<std::string, bool> ConfigSpaces(const std::string &path) {
     return set;
 }
 
+std::map<std::string, bool> MincConfigSpaces(const std::string &pinPath) { return ConfigSpaces(pinPath); }
+
 /* ---- legacy maps + family defaults (:859-877; AEGP is mac -> macOS Video View) ---- */
 struct KV { const char *k, *v; };
 static const KV LEG_LINEAR[] = {
@@ -83,6 +85,14 @@ static std::string NormalizeSpace(const std::string &name, const std::map<std::s
     std::string m = LegacyMap(family.empty() ? "Linear" : family, name);
     if (m == "working") return "working";
     return (!m.empty() && valid.count(m)) ? m : "";
+}
+/* ctx-aware normalize (2026-09-10): a name that resolves to the preset's OWN working space is
+   identity — "Linear Rec.709 → working" in a Linear Rec.709 project is a no-op effect, so the
+   table can carry one literal name per extension and still mean "leave as is" where it fits. */
+static std::string NormCtx(const std::string &name, const MincSuggestCtx &ctx) {
+    std::string n = NormalizeSpace(name, ctx.validInput, ctx.family);
+    if (!n.empty() && n != "working" && !ctx.working.empty() && n == ctx.working) return "working";
+    return n;
 }
 
 /* ---- menuLists port (:57-73) via presets.json arrays + pin-behind filtering ---- */
@@ -179,6 +189,7 @@ MincSuggestCtx MincBuildSuggestCtx(const std::string &presetKey, const std::stri
     ctx.preset = presetKey;
     ctx.family = MincFamilyFor(presetKey);
     ctx.defView = "macOS Video View"; ctx.defRender = "Video Render";
+    ctx.working = MincPresetMeta(presetKey).working;
     /* 709 VIDEO target (REVISED 2026-09-01, Chris): Display family maps to Rec.1886 — the
        BT.1886/G2.4 encoding — NOT "working" (sdr22 works in G2.2). Identity only when a
        preset's working space genuinely IS that space.                                    */
@@ -233,46 +244,38 @@ MincPick MincSuggestionFor(const MincItemFacts &item,
                            const std::map<int32_t, std::string> &detected,
                            const std::map<int32_t, std::string> &harvestNames,
                            const MincSuggestCtx &ctx) {
+    /* ORDER (REVISED 2026-09-10, Chris): previously assigned, then AE-detected metadata, then
+       the extension row, then skip. Every extension row is the FALLBACK tier — the table is a
+       prior for untagged media, never an override of what the file itself says (a P3-tagged
+       png is P3, not the png row's sRGB). The 2026-09-01 container sentinel "video709" already
+       behaved this way; it survives only as a legacy alias for tables seeded 09-02..09-10 —
+       the shipped table now carries literal names (the Display legacy map turns the G2.4
+       name into Rec.1886, NormCtx turns a name equal to the working space into identity). */
     MincPick out;
-    std::string containerFallback;                           /* "video709" sentinel: fallback-priority */
-    if (!item.fileName.empty()) {                            /* extension rule outranks (:907-912) */
-        std::string e = Ext(item.fileName);
-        auto it = e.empty() ? ctx.extMap.end() : ctx.extMap.find(e);
-        if (it != ctx.extMap.end()) {
-            const std::string &ed = it->second;
-            if (ed == "video709") {
-                /* container rule (2026-09-01, Chris): a container says nothing about encoding,
-                   so this rule DEFERS — detection/harvest keep winning; it fires only when
-                   they found nothing (untagged video finally gets the family 709 default). */
-                containerFallback = ctx.video709;
-            } else {
-                if (ed == "working") { out.why = "extension rule: identity"; return out; }
-                std::string en = NormalizeSpace(ed, ctx.validInput, ctx.family);
-                if (en == "working") { out.why = "extension rule: identity"; return out; }
-                if (!en.empty()) { out.space = en; out.why = "extension rule"; return out; }
-                out.why = "extension rule '" + ed + "' not in config \xe2\x80\x94 skipped"; return out;
-            }
-        }
-    }
     auto h = harvestNames.find(item.id);
-    if (h != harvestNames.end() && !h->second.empty()) {     /* harvest (:913-920) */
+    if (h != harvestNames.end() && !h->second.empty()) {     /* previously assigned */
         std::string raw = AfterSlash2(h->second);
-        std::string norm = NormalizeSpace(raw, ctx.validInput, ctx.family);
+        std::string norm = NormCtx(raw, ctx);
         if (norm == "working") { out.why = "previously assigned '" + raw + "' is working-native here: identity"; return out; }
         if (!norm.empty()) { out.space = norm; out.why = (norm == raw) ? "previously assigned" : "previously assigned: '" + raw + "' mapped"; return out; }
         out.why = "previously assigned '" + raw + "' has no equivalent in this config \xe2\x80\x94 skipped"; return out;
     }
-    auto d = detected.find(item.id);                          /* detected metadata (:921-924) */
-    std::string det = NormalizeSpace(SuggestFromDetected(d == detected.end() ? "" : d->second, item.isStill, ctx),
-                                     ctx.validInput, ctx.family);
-    if (det == "working") { out.why = "detected metadata: identity (video is working-native here)"; return out; }
+    auto d = detected.find(item.id);                          /* detected metadata */
+    std::string det = NormCtx(SuggestFromDetected(d == detected.end() ? "" : d->second, item.isStill, ctx), ctx);
+    if (det == "working") { out.why = "detected metadata: identity (working-native here)"; return out; }
     if (!det.empty()) { out.space = det; out.why = "detected metadata"; return out; }
-    if (!containerFallback.empty()) {                        /* nothing tagged, nothing remembered */
-        if (containerFallback == "working") { out.why = "container fallback: identity"; return out; }
-        std::string cf = NormalizeSpace(containerFallback, ctx.validInput, ctx.family);
-        if (cf == "working") { out.why = "container fallback: identity"; return out; }
-        if (!cf.empty()) { out.space = cf; out.why = "container fallback (untagged video \xe2\x86\x92 " + cf + ")"; return out; }
-        out.why = "container fallback '" + containerFallback + "' not in config \xe2\x80\x94 skipped"; return out;
+    if (!item.fileName.empty()) {                            /* extension row: the fallback */
+        std::string e = Ext(item.fileName);
+        auto it = e.empty() ? ctx.extMap.end() : ctx.extMap.find(e);
+        if (it != ctx.extMap.end()) {
+            std::string ed = it->second;
+            if (ed == "video709") ed = ctx.video709;         /* legacy alias (2026-09-02 seed) */
+            if (ed == "working") { out.why = "extension rule: identity"; return out; }
+            std::string en = NormCtx(ed, ctx);
+            if (en == "working") { out.why = "extension rule: identity (working-native here)"; return out; }
+            if (!en.empty()) { out.space = en; out.why = "extension rule"; return out; }
+            out.why = "extension rule '" + ed + "' not in config \xe2\x80\x94 skipped"; return out;
+        }
     }
     out.why = "no suggestion \xe2\x80\x94 skipped";
     return out;

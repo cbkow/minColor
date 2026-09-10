@@ -47,7 +47,16 @@ struct IEnv {
     std::string explicitSpace;                    /* selection mode: bypass the suggestion engine */
     std::map<int32_t, std::string> detected, harvest;
     MincInterpretReport *rep;
+    std::map<std::string, bool> pinSpaces;        /* the pin's space set, read ONCE per pass */
+    bool pinSpacesLoaded = false;
 };
+/* MincSpaceInPin semantics (true = ok/unknown) without re-reading the 80 KB config per layer */
+static bool SpaceInPin(IEnv &e, const std::string &space) {
+    if (space.empty() || space == "default" || e.pin.empty()) return true;
+    if (!e.pinSpacesLoaded) { e.pinSpaces = MincConfigSpaces(e.pin); e.pinSpacesLoaded = true; }
+    if (e.pinSpaces.empty()) return true;                    /* unreadable pin: mirror pinnedSpaces() null */
+    return e.pinSpaces.count(space) != 0;
+}
 
 static std::string ItemName(IEnv &e, AEGP_ItemH it) {
     AEGP_MemHandle h = nullptr;
@@ -147,7 +156,7 @@ static void DoLayer(IEnv &e, AEGP_CompH compH, AEGP_LayerH ly, const std::string
         if (!e.explicitSpace.empty()) {
             /* explicit re-assignment (panel Apply / Interpret Selected): the user's pick WINS over
                an existing CST — re-author it in place, never skip as "already interpreted". */
-            if (!MincSpaceInPin(e.explicitSpace, e.pin)) {
+            if (!SpaceInPin(e, e.explicitSpace)) {
                 e.rep->failed.push_back(label + " \xe2\x80\x94 Error: '" + e.explicitSpace + "' is not in this project's pinned config");
                 return;
             }
@@ -204,7 +213,7 @@ static void DoLayer(IEnv &e, AEGP_CompH compH, AEGP_LayerH ly, const std::string
         else e.rep->skipped.push_back(label + " (" + pick.why + ")");
         return;
     }
-    if (!MincSpaceInPin(pick.space, e.pin)) {                /* assertSpaceInPin throw -> failed bucket (:1018) */
+    if (!SpaceInPin(e, pick.space)) {                        /* assertSpaceInPin throw -> failed bucket (:1018) */
         e.rep->failed.push_back(label + " \xe2\x80\x94 Error: '" + pick.space + "' is not in this project's pinned config");
         return;
     }

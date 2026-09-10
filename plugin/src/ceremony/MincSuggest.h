@@ -13,6 +13,7 @@ struct MincSuggestCtx {
     std::map<std::string, bool> validAll;        /* + view/render */
     std::map<std::string, std::string> extMap;   /* extension -> space ("working" = identity) */
     std::string defView, defRender, video709;    /* familyDefaults */
+    std::string working;                         /* the preset's working space: a pick equal to it is identity */
 };
 
 MincSuggestCtx MincBuildSuggestCtx(const std::string &presetKey, const std::string &pinPath);
@@ -52,3 +53,6 @@ struct MincFxName { bool valid = false; std::string kind, space; };  /* parseFxN
 MincFxName MincParseFxName(const std::string &name);
 
 bool MincSpaceInPin(const std::string &space, const std::string &pinPath);  /* assertSpaceInPin's test (true = ok/unknown) */
+/* names + aliases declared in a config (empty = unreadable). Callers that test many spaces
+   against one config cache this once — reading the file per test is the thing to avoid.  */
+std::map<std::string, bool> MincConfigSpaces(const std::string &pinPath);
