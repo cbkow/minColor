@@ -121,7 +121,7 @@ If you are working in post-production in an offline/online flow, you will most l
 To be extra clear, except for the macOS flavors, these are all aliases for common settings like `sRGB` but are helpful for artists who are unfamiliar. The macOS views counteract a bug in how After Effects communicates with macOS. What is this bug?
 
 > [!IMPORTANT]
-> AE's macOS viewport hands content to a Display P3 macOS surface without applying proper conversion — sRGB projects don't get the sRGB→P3 primary matrix applied, and P3 projects don't get the encoding curve adjusted to match what the macOS compositor actually decodes, producing wrong colors in the first case and wrong midtones in the second. **The included macOS Views counteract this bug.**
+> In OCIO projects, After Effects on macOS hands the viewer's pixels to the display without converting them to the monitor profile. Every other Mac app converts, and so does After Effects' own Adobe colour engine. On a Display P3 screen an sRGB or Rec.709 view is shown with P3 primaries and looks oversaturated. **The included macOS Views counteract this by encoding for the P3 panel directly.**
 
 ---
 
