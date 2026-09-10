@@ -11,33 +11,37 @@ If you last built before this, your panel "couldn't see the OCIO profiles" becau
 `presets.json` off disk and a bundles-only install had no store. That's fixed: the AEGP now carries
 the metadata and seeds what the shell reads. **Rebuild the AEGP and the symptom goes away.**
 
-## Updating to 2.0.4 (do this now)
+## Updating to 2.0.5 (do this now)
 
-Since the last Windows prebuilt (**2.0.3 @2692807**), BOTH the **plugin** and the **script** changed —
-so rebuild the bundles *and* refresh the shell. What landed on `main`:
-- **AEGP: the menus follow the Doctor.** `plugin-menus.json` (the panel's dropdown feed) was only
-  written by Migrate/Repair; on a fresh machine a project whose pin already resolved never got one, so
-  the dropdowns stayed empty. Now the Doctor command (and the post-ceremony doctor) writes it for the
-  preset it identifies whenever the file is missing or names another preset
-  (`MincWriteMenusForPreset`). This is in the **AEGP**, so it must be rebuilt.
-- **`src/minColor Shell.jsx` (the SCRIPT):** the panel reloads its dropdowns when the loaded menus
-  aren't for the Doctor's preset (a healed broken-pin project reports the same preset/pin before and
-  after Repair, so the old change-only test never fired); Repair button + the post-command auto-heal
-  go through the native `minColor: Repair` (regenerates `_minColor` first — heals a project that
-  arrived without its `_minColor` folder). The MSI ships the shell, so it must be refreshed too.
-- **Version → 2.0.4** — rebuild both bundles so `version.txt` reads 2.0.4 (the MSI's DefaultVersion).
+The Windows prebuilt is **already on 2.0.5 (@aab5508, committed dd46bd1)** — both `.aex` bundles and
+`version.txt` were refreshed on the Windows session. What is left on Windows is the **MSI** (§4),
+which also ships the updated shell. What landed on `main` for 2.0.5 (all in the AEGP + the shell):
+- **Suggestion order is now: previously assigned → AE-detected metadata → extension row → skipped.**
+  Every extension row is a prior for untagged media, never an override of what the file says (a
+  P3-tagged png is P3). A pick equal to the preset's working space is identity, so the table carries
+  one literal name per extension in every preset. (`MincSuggest`, in the **AEGP**.)
+- **Shipped extension defaults changed:** exr/hdr → Linear Rec.709 (was "working"); containers
+  (mov/mp4/m4v/mxf/avi) → Gamma 2.4 Encoded Rec.709. Embedded in the **AEGP** via
+  `config/extension-defaults.json`.
+- **Seed merge:** `MincSeedSettings` now merges embedded rows a machine's existing table lacks and
+  records every offered extension under `"seeded"`, so a row the user deletes stays deleted. The
+  **shell** carries the `"seeded"` list through its own writes — the MSI ships the shell, so it must
+  be refreshed too.
+- **Matches dialog (shell):** Done writes only after a real edit; a stored value missing from the
+  dropdown list is added to it so the row round-trips (before, clicking such a row + Done silently
+  rewrote it to identity).
+- **Version → 2.0.5** — `version.txt` reads 2.0.5 (the MSI's DefaultVersion).
 
 **Update checklist (details in the numbered sections below):**
-1. `git checkout main && git pull`.
-2. Rebuild **both** bundles: `cmake --build plugin\build --config Release` (§2). Confirm
-   `plugin\build\Release\version.txt` reads **2.0.4**.
-3. Refresh the prebuilt + commit (§3): copy `minColorCST.aex`, `minColorAEGP.aex`, `version.txt`
-   from `plugin\build\Release` to `plugin\prebuilt\windows\`.
-4. Rebuild the MSI (§4): `python build\build.py` (re-inlines the updated shell into
+1. `git checkout main && git pull` (through the 2.0.5 golden re-record on the Mac).
+2. Bundles: already rebuilt + committed on 2.0.5 — confirm `plugin\prebuilt\windows\version.txt`
+   reads **2.0.5**. Only rebuild (§2) if you change plugin source again.
+3. Rebuild the MSI (§4): `python build\build.py` (re-inlines the updated shell into
    `dist-panel\minColor.jsx`, which the MSI ships) then `build.ps1`.
-5. Verify (§5): version **2.0.4**; on a machine with NO `C:\ProgramData\minColor\settings\plugin-menus.json`,
-   open a project Migrated elsewhere, click into the panel → the dropdowns populate (green or yellow,
-   before any Repair); `%TEMP%\minColorAEGP.log` shows `menus: doctor identified '<preset>' … writing`.
+4. Verify (§5): version **2.0.5**; on a machine whose `C:\ProgramData\minColor\settings\extension-defaults.json`
+   predates 2.0.5, launch AE once → the table gains the `exr`/`hdr`/container rows and a `"seeded"`
+   list; Interpret a linear EXR in the SDR preset → it gets a Linear Rec.709 → working effect;
+   an sRGB-tagged png reports `[detected metadata]`, not `[extension rule]`.
 
 For a quick dev loop instead of the MSI: `dev-install.bat` (both bundles) + `dev-install-panel.bat`
 (the updated shell) — §2b.
@@ -46,7 +50,7 @@ For a quick dev loop instead of the MSI: `dev-install.bat` (both bundles) + `dev
 
 ```
 git checkout main
-git pull                     # need through the 2.0.4 bump (menus follow the Doctor; panel reload + native Repair)
+git pull                     # need through the 2.0.5 bump (suggestion tiers; seed merge; Matches dialog fix)
 ```
 
 ## 1. Prereqs
